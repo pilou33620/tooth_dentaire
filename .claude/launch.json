@@ -1,0 +1,18 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "serveur stock cabinet",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "serveur.py",
+        "--port",
+        "8150",
+        "--local",
+        "--sans-navigateur",
+        "--sans-pause"
+      ],
+      "port": 8150
+    }
+  ]
+}

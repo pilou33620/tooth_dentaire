@@ -1,0 +1,953 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🦷 Clinique Sourire — petite simulation</title>
+<style>
+  
+  :root{
+    --mur:#5d7386;
+    --mur-fonce:#4c6072;
+    --sol:#ffffff;
+    --sol-survol:#dfeaf2;
+    --arc:#8fa5b6;
+    --encre:#2e3d49;
+    --fond:#eef2f5;
+    --vitre:#cfe0ec;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:'Jost',sans-serif;
+    background:var(--fond);
+    color:var(--encre);
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    padding:24px 16px 48px;
+  }
+  header{max-width:1100px;width:100%;margin-bottom:14px;display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 20px}
+  h1{font-weight:500;font-size:clamp(20px,3vw,30px);letter-spacing:.14em;text-transform:uppercase}
+  header p{font-weight:300;font-size:14px;letter-spacing:.06em;color:#5c6f7e}
+  .plan-wrap{
+    background:var(--sol);
+    border:1px solid #d5dee5;
+    border-radius:10px;
+    box-shadow:0 12px 30px rgba(46,61,73,.10);
+    max-width:1100px;width:100%;
+    padding:clamp(8px,2vw,22px);
+  }
+  svg{display:block;width:100%;height:auto}
+  .piece{fill:var(--sol);transition:fill .18s ease;cursor:pointer}
+  .piece:hover,.piece.actif{fill:var(--sol-survol)}
+  .mur{fill:var(--mur)}
+  .porte-battant{stroke:var(--mur-fonce);stroke-width:5;stroke-linecap:round}
+  .porte-arc{stroke:var(--arc);stroke-width:1.6;fill:none;stroke-dasharray:none}
+  .fenetre-fond{fill:var(--vitre)}
+  .fenetre-trait{stroke:#ffffff;stroke-width:2.4}
+  .comptoir{fill:#e7eef4;stroke:var(--mur);stroke-width:2.5;pointer-events:none}
+  .etiquette{
+    font-family:'Jost',sans-serif;
+    fill:var(--encre);
+    letter-spacing:.18em;
+    text-anchor:middle;
+    font-weight:400;
+    pointer-events:none;
+  }
+  .etiquette.petite{letter-spacing:.14em;fill:#43535f}
+  .barre-info{
+    max-width:1100px;width:100%;
+    margin-top:14px;
+    display:flex;flex-wrap:wrap;gap:8px;align-items:center;
+  }
+  .barre-info .nom{
+    font-size:15px;letter-spacing:.1em;text-transform:uppercase;font-weight:500;
+    background:#fff;border:1px solid #d5dee5;border-radius:8px;padding:8px 14px;min-width:230px;
+  }
+  .legende{display:flex;flex-wrap:wrap;gap:6px}
+  .legende button{
+    font-family:'Jost',sans-serif;font-size:12.5px;letter-spacing:.08em;
+    padding:6px 11px;border-radius:999px;border:1px solid #c8d4dd;background:#fff;
+    color:#41525f;cursor:pointer;transition:all .15s ease;
+  }
+  .legende button:hover,.legende button.actif{background:var(--mur);border-color:var(--mur);color:#fff}
+  .legende button:focus-visible{outline:2px solid var(--mur-fonce);outline-offset:2px}
+  @media (prefers-reduced-motion: reduce){
+    .piece,.legende button{transition:none}
+  }
+
+  /* --- Personnages --- */
+  .personnage {
+    transition: transform 1.5s ease-in-out, opacity 0.5s ease;
+  }
+  .char-circle {
+    stroke-width: 2.5;
+    stroke: #ffffff;
+    filter: drop-shadow(0px 3px 3px rgba(0,0,0,0.15));
+  }
+  .char-text {
+    font-family: 'Jost', sans-serif;
+    font-size: 15px;
+    font-weight: 600;
+    fill: #ffffff;
+    text-anchor: middle;
+    dominant-baseline: central;
+    pointer-events: none;
+  }
+  /* Couleurs des rôles */
+  .char-secretaire .char-circle { fill: #27ae60; }
+  .char-dentiste .char-circle { fill: #2980b9; }
+  .char-assistante .char-circle { fill: #8e44ad; }
+  
+  /* Animation de respiration/attente */
+  @keyframes bob {
+    0% { transform: translateY(0px); }
+    50% { transform: translateY(-4px); }
+    100% { transform: translateY(0px); }
+  }
+  .anim-bob {
+    animation: bob 3s infinite ease-in-out;
+  }
+  .anim-bob-delayed {
+    animation: bob 3s infinite ease-in-out 1.5s;
+  }
+
+
+  /* Overrides / Additions for Simulation */
+  body {
+    min-height: 100vh;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: transparent;
+    padding: 0;
+    margin: 0;
+  }
+  #scene-wrap {
+    width: 100%; height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
+  }
+  #scene {
+    position: relative;
+    width: 1000px;
+    height: 1000px;
+    flex-shrink: 0;
+    transform-origin: center;
+  }
+  
+  /* SVG is absolute background */
+  #scene svg {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 0;
+  }
+
+  /* ---------- people ---------- */
+  .person {
+    position: absolute; width: 28px; height: 28px; margin: -14px 0 0 -14px;
+    z-index: 5; transition: none; will-change: transform, left, top;
+  }
+  .person .body {
+    position: absolute; inset: 0; border-radius: 50%;
+    background: var(--suit, #74c0fc);
+    box-shadow: 0 3px 5px rgba(0,0,0,.18), inset 0 -4px 0 rgba(0,0,0,.10);
+  }
+  .person .head {
+    position: absolute; left: 50%; top: 44%; transform: translate(-50%,-50%);
+    width: 18px; height: 18px; border-radius: 50%;
+    background: var(--skin, #ffd9b3);
+  }
+  .person .hair {
+    position: absolute; left: 50%; top: 44%; transform: translate(-50%,-62%);
+    width: 19px; height: 11px; border-radius: 10px 10px 4px 4px;
+    background: var(--hair, #5c4033);
+  }
+  .person .eye {
+    position: absolute; top: 46%; width: 3px; height: 4px; border-radius: 50%;
+    background: #33302e;
+  }
+  .person .eye.l { left: 36%; } .person .eye.r { right: 36%; }
+  .person .mouth {
+    position: absolute; left: 50%; top: 60%; transform: translateX(-50%);
+    width: 6.5px; height: 3.5px; border-bottom: 2px solid #b3564d; border-radius: 0 0 8px 8px;
+  }
+  .person .badge {
+    position: absolute; bottom: -3px; left: 50%; transform: translateX(-50%);
+    font-size: 9px; filter: drop-shadow(0 1px 1px rgba(0,0,0,.2));
+  }
+  .person .name {
+    position: absolute; top: -16px; left: 50%; transform: translateX(-50%);
+    font-size: 9px; font-weight: 800; background: rgba(255,255,255,.85);
+    padding: 1px 5px; border-radius: 999px; white-space: nowrap; opacity: 0;
+    transition: opacity .3s;
+  }
+  #scene:hover .person .name { opacity: 1; }
+
+  .person.walking { animation: walk .35s ease-in-out infinite; }
+  @keyframes walk {
+    0%,100% { transform: translateY(0) rotate(-3deg); }
+    50% { transform: translateY(-3px) rotate(3deg); }
+  }
+  .person.idle .body { animation: breathe 2.4s ease-in-out infinite; }
+  @keyframes breathe { 0%,100% { transform: scale(1); } 50% { transform: scale(1.045); } }
+
+  .person.lying { transform: rotate(-90deg) scale(1.05); }
+  .person.lying .eye { height: 1.5px; top: 50%; border-radius: 2px; }
+  .person.working { animation: lean .8s ease-in-out infinite; }
+  @keyframes lean {
+    0%,100% { transform: translate(0,0) rotate(-4deg); }
+    50% { transform: translate(2px,3px) rotate(5deg); }
+  }
+  .person.assisting { animation: assist 1.3s ease-in-out infinite; }
+  @keyframes assist {
+    0%,100% { transform: translateX(0); }
+    50% { transform: translateX(-5px); }
+  }
+  .person.typing { animation: typing 1s ease-in-out infinite; }
+  @keyframes typing {
+    0%,100% { transform: translateY(0); }
+    25% { transform: translateY(-1.5px) rotate(-2deg); }
+    75% { transform: translateY(-1.5px) rotate(2deg); }
+  }
+
+  /* speech bubble */
+  .bubble {
+    position: absolute; top: -32px; left: 50%; transform: translateX(-50%);
+    background: #fff; border: 2px solid #ced4da; border-radius: 10px;
+    padding: 3px 8px; font-size: 13px; font-weight: 700; white-space: nowrap;
+    animation: pop .25s ease-out; z-index: 8;
+  }
+  .bubble::after {
+    content: ""; position: absolute; bottom: -5px; left: 50%; margin-left: -4px;
+    width: 8px; height: 8px; background: #fff;
+    border-right: 2px solid #ced4da; border-bottom: 2px solid #ced4da;
+    transform: rotate(45deg);
+  }
+  @keyframes pop { from { transform: scale(0); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+  /* sparkles during treatment */
+  .sparkle {
+    position: absolute; font-size: 13px; pointer-events: none; z-index: 9;
+    animation: spark 1s ease-out forwards;
+  }
+  @keyframes spark {
+    0% { transform: translate(0,0) scale(.4); opacity: 0; }
+    30% { opacity: 1; }
+    100% { transform: translate(var(--dx,0),var(--dy,-24px)) scale(1.1); opacity: 0; }
+  }
+
+  /* controls */
+  #controls {
+    display: flex; gap: 10px; align-items: center; justify-content: center;
+    margin-top: 12px; flex-wrap: wrap; z-index: 100; position: absolute; bottom: 20px;
+  }
+  button {
+    font-family: inherit; font-weight: 800; font-size: 14px;
+    background: #ff8f7d; color: #fff; border: none;
+    padding: 8px 18px; border-radius: 999px; cursor: pointer;
+    box-shadow: 0 4px 0 #d96a58; transition: transform .1s;
+  }
+  button:active { transform: translateY(3px); box-shadow: 0 1px 0 #d96a58; }
+  label { font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 6px; }
+  input[type=range] { accent-color: #ff8f7d; }
+  #counter {
+    position: absolute; top: 10px; right: 10px; z-index: 1000;
+    font-size: 13px; font-weight: 800; background: #fff;
+    padding: 6px 14px; border-radius: 999px; box-shadow: 0 2px 6px rgba(0,0,0,.08);
+  }
+</style>
+</head>
+<body style="background:transparent;">
+
+<div id="scene-wrap">
+  <div id="scene">
+    <svg viewBox="0 0 1000 1000" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Plan du cabinet dentaire">
+
+  <!-- ======================= PIÈCES (zones interactives) ======================= -->
+  <g id="pieces">
+    <rect class="piece cabinet-5" data-nom="Cabinet 5" x="46" y="46" width="269" height="279"/>
+    <rect class="piece" data-nom="Zone stérilisation (Sté)" x="329" y="46" width="247" height="304"/>
+    <rect class="piece" data-nom="Zone panoramique (Pano)" x="590" y="46" width="110" height="304"/>
+    <rect class="piece cabinet-1" data-nom="Cabinet 1" x="714" y="46" width="240" height="314"/>
+    <rect class="piece" data-nom="Couloir transversal" x="46" y="339" width="269" height="61"/>
+    <rect class="piece" data-nom="Salle d'attente" x="46" y="414" width="239" height="276"/>
+    <rect class="piece" data-nom="Salle de repos" x="46" y="704" width="239" height="250"/>
+    <path class="piece" data-nom="Accueil"
+          d="M299,414 H329 V364 H700 V695 H649 V639 H374 V625 H299 Z"/>
+    <rect class="piece" data-nom="Dégagement / entrée arrière" x="299" y="639" width="61" height="315"/>
+    <rect class="piece" data-nom="Salle de chirurgie" x="714" y="409" width="240" height="286"/>
+    <rect class="piece cabinet-4" data-nom="Cabinet 4" x="374" y="639" width="247" height="315"/>
+    <rect class="piece cabinet-2" data-nom="Cabinet 2" x="649" y="709" width="305" height="245"/>
+  </g>
+
+  <!-- ======================= MURS EXTÉRIEURS (ép. 28) ======================= -->
+  <g class="mur">
+    <rect x="18" y="18"  width="964" height="28"/>          <!-- haut -->
+    <rect x="18" y="954" width="964" height="28"/>          <!-- bas -->
+    <rect x="18" y="18"  width="28"  height="964"/>          <!-- gauche -->
+    <rect x="954" y="18" width="28"  height="964"/>          <!-- droite -->
+  </g>
+
+  <!-- ======================= MURS INTÉRIEURS (ép. 14) ======================= -->
+  <g class="mur">
+    <!-- Cabinet 5 : mur droit + mur bas (porte x 245→305) -->
+    <rect x="315" y="46"  width="14"  height="293"/>
+    <rect x="46"  y="325" width="199" height="14"/>
+    <rect x="305" y="325" width="10"  height="14"/>
+
+    <!-- Zone Sté : ancienne zone ouverte, maintenant avec un mur séparatif (ex-comptoir) -->
+    <rect x="380" y="368" width="220" height="14"/>
+
+    <!-- Séparation Sté / Pano : mur plein, s'arrête au niveau du mur bas du Pano -->
+    <rect x="576" y="46" width="14" height="304"/>
+
+    <!-- Pano : mur bas avec porte dans l'ouverture x 590→650 (accès depuis l'accueil) -->
+    <rect x="650" y="350" width="50" height="14"/>
+
+    <!-- Pano : pièce ouverte, sans mur ni porte en bas
+         (entièrement ouverte sur l'accueil, x 590→700) -->
+
+    <!-- Cabinet 1 : mur gauche plein (plus de porte vers le Pano)
+         + mur bas avec porte (ouverture x 730→790, accès depuis l'accueil) -->
+    <rect x="700" y="46"  width="14"  height="314"/>
+    <rect x="700" y="360" width="30"  height="14"/>
+    <rect x="790" y="360" width="164" height="14"/>
+
+    <!-- Couloir transversal / salle d'attente : mur haut (porte x 215→275) -->
+    <rect x="46"  y="400" width="169" height="14"/>
+    <rect x="275" y="400" width="10"  height="14"/>
+
+    <!-- Salle d'attente : mur droit (passage ouvert y 455→530) -->
+    <rect x="285" y="400" width="14" height="55"/>
+    <rect x="285" y="530" width="14" height="160"/>
+
+    <!-- Séparation attente / repos -->
+    <rect x="46" y="690" width="253" height="14"/>
+
+    <!-- Salle de repos : mur droit (porte y 820→880) -->
+    <rect x="285" y="690" width="14" height="130"/>
+    <rect x="285" y="880" width="14" height="74"/>
+
+    <!-- Cabinet 4 : mur gauche, mur haut (porte x 384→444), mur droit -->
+    <rect x="360" y="625" width="14"  height="329"/>
+    <rect x="374" y="625" width="10"  height="14"/>
+    <rect x="444" y="625" width="191" height="14"/>
+    <rect x="635" y="625" width="14"  height="329"/>
+
+    <!-- Cabinet 2 : mur haut (porte x 649→700) -->
+    <rect x="700" y="695" width="254" height="14"/>
+
+    <!-- Salle de chirurgie : mur gauche (double porte y 490→590) + mur haut -->
+    <rect x="700" y="395" width="14" height="95"/>
+    <rect x="700" y="590" width="14" height="105"/>
+    <rect x="700" y="395" width="254" height="14"/>
+  </g>
+
+  <!-- Vitrages intérieurs de la salle de chirurgie (mur haut) -->
+  <g>
+    <rect class="fenetre-fond" x="740" y="395" width="52" height="14"/>
+    <line class="fenetre-trait" x1="740" y1="402" x2="792" y2="402"/>
+    <rect class="fenetre-fond" x="818" y="395" width="52" height="14"/>
+    <line class="fenetre-trait" x1="818" y1="402" x2="870" y2="402"/>
+    <rect class="fenetre-fond" x="892" y="395" width="52" height="14"/>
+    <line class="fenetre-trait" x1="892" y1="402" x2="944" y2="402"/>
+  </g>
+
+  <!-- ======================= FENÊTRES (murs extérieurs) ======================= -->
+  <g>
+    <!-- haut -->
+    <g id="f1"><rect class="fenetre-fond" x="90" y="18" width="80" height="28"/><line class="fenetre-trait" x1="90" y1="32" x2="170" y2="32"/></g>
+    <g><rect class="fenetre-fond" x="235" y="18" width="70" height="28"/><line class="fenetre-trait" x1="235" y1="32" x2="305" y2="32"/></g>
+    <g><rect class="fenetre-fond" x="390" y="18" width="70" height="28"/><line class="fenetre-trait" x1="390" y1="32" x2="460" y2="32"/></g>
+    <g><rect class="fenetre-fond" x="645" y="18" width="45" height="28"/><line class="fenetre-trait" x1="645" y1="32" x2="690" y2="32"/></g>
+    <g><rect class="fenetre-fond" x="760" y="18" width="70" height="28"/><line class="fenetre-trait" x1="760" y1="32" x2="830" y2="32"/></g>
+    <g><rect class="fenetre-fond" x="870" y="18" width="60" height="28"/><line class="fenetre-trait" x1="870" y1="32" x2="930" y2="32"/></g>
+    <!-- gauche (salle d'attente) -->
+    <g><rect class="fenetre-fond" x="18" y="500" width="28" height="70"/><line class="fenetre-trait" x1="32" y1="500" x2="32" y2="570"/></g>
+    <g><rect class="fenetre-fond" x="18" y="600" width="28" height="60"/><line class="fenetre-trait" x1="32" y1="600" x2="32" y2="660"/></g>
+    <!-- bas -->
+    <g><rect class="fenetre-fond" x="90" y="954" width="80" height="28"/><line class="fenetre-trait" x1="90" y1="968" x2="170" y2="968"/></g>
+    <g><rect class="fenetre-fond" x="430" y="954" width="70" height="28"/><line class="fenetre-trait" x1="430" y1="968" x2="500" y2="968"/></g>
+    <g><rect class="fenetre-fond" x="540" y="954" width="60" height="28"/><line class="fenetre-trait" x1="540" y1="968" x2="600" y2="968"/></g>
+    <g><rect class="fenetre-fond" x="710" y="954" width="70" height="28"/><line class="fenetre-trait" x1="710" y1="968" x2="780" y2="968"/></g>
+    <g><rect class="fenetre-fond" x="840" y="954" width="70" height="28"/><line class="fenetre-trait" x1="840" y1="968" x2="910" y2="968"/></g>
+    <!-- droite -->
+    <g><rect class="fenetre-fond" x="954" y="110" width="28" height="80"/><line class="fenetre-trait" x1="968" y1="110" x2="968" y2="190"/></g>
+    <g><rect class="fenetre-fond" x="954" y="490" width="28" height="100"/><line class="fenetre-trait" x1="968" y1="490" x2="968" y2="590"/></g>
+  </g>
+
+  <!-- ======================= COMPTOIR D'ACCUEIL =======================
+       (ancien comptoir haut remplacé par un mur) -->
+  <g>
+    <rect class="comptoir" x="400" y="434" width="165" height="32" rx="3"/>
+  </g>
+
+  <!-- ======================= PORTES (battant + arc) ======================= -->
+  <g>
+    <!-- Cabinet 5 → couloir (s'ouvre dans le cabinet) -->
+    <line class="porte-battant" x1="305" y1="325" x2="305" y2="265"/>
+    <path class="porte-arc" d="M245,325 A60,60 0 0 1 305,265"/>
+
+    <!-- Couloir → salle d'attente -->
+    <line class="porte-battant" x1="275" y1="414" x2="275" y2="474"/>
+    <path class="porte-arc" d="M215,414 A60,60 0 0 0 275,474"/>
+
+    <!-- Salle de repos -->
+    <line class="porte-battant" x1="285" y1="820" x2="225" y2="820"/>
+    <path class="porte-arc" d="M225,820 A60,60 0 0 0 285,880"/>
+
+    <!-- Porte extérieure (dégagement arrière) -->
+    <line class="porte-battant" x1="300" y1="954" x2="300" y2="898"/>
+    <path class="porte-arc" d="M356,954 A56,56 0 0 0 300,898"/>
+
+    <!-- Cabinet 4 -->
+    <line class="porte-battant" x1="384" y1="639" x2="384" y2="699"/>
+    <path class="porte-arc" d="M444,639 A60,60 0 0 1 384,699"/>
+
+    <!-- Cabinet 2 -->
+    <line class="porte-battant" x1="700" y1="709" x2="700" y2="760"/>
+    <path class="porte-arc" d="M649,709 A51,51 0 0 0 700,760"/>
+
+    <!-- Salle de chirurgie : double porte vers l'accueil -->
+    <line class="porte-battant" x1="700" y1="490" x2="650" y2="490"/>
+    <path class="porte-arc" d="M650,490 A50,50 0 0 0 700,540"/>
+    <line class="porte-battant" x1="700" y1="590" x2="650" y2="590"/>
+    <path class="porte-arc" d="M700,540 A50,50 0 0 0 650,590"/>
+
+    <!-- Pano → accueil (porte dans le mur bas, charnière à gauche, s'ouvre dans le Pano) -->
+    <line class="porte-battant" x1="590" y1="350" x2="590" y2="290"/>
+    <path class="porte-arc" d="M650,350 A60,60 0 0 0 590,290"/>
+
+    <!-- Accueil → Cabinet 1 (porte dans le mur bas, s'ouvre dans le cabinet) -->
+    <line class="porte-battant" x1="730" y1="360" x2="730" y2="300"/>
+    <path class="porte-arc" d="M790,360 A60,60 0 0 0 730,300"/>
+
+    <!-- Sté → accueil : zone ouverte, pas de porte -->
+
+    <!-- Pano → accueil : pièce ouverte, pas de porte -->
+  </g>
+
+  <!-- ======================= PERSONNAGES ======================= -->
+  <g id="personnages">
+    <!-- Les secrétaires sont fixes à l'accueil derrière le comptoir -->
+    <g transform="translate(440, 390)" class="char-dynamic-wrapper">
+      <g class="personnage anim-bob char-secretaire">
+        <circle class="char-circle" r="16" />
+        <text class="char-text">S1</text>
+        <title>Secrétaire 1</title>
+      </g>
+    </g>
+    <g transform="translate(510, 390)" class="char-dynamic-wrapper">
+      <g class="personnage anim-bob-delayed char-secretaire">
+        <circle class="char-circle" r="16" />
+        <text class="char-text">S2</text>
+        <title>Secrétaire 2</title>
+      </g>
+    </g>
+    <!-- Les dentistes et assistantes seront générés ici par JS -->
+  </g>
+
+  <!-- ======================= ÉTIQUETTES ======================= -->
+  <g id="etiquettes">
+    <text class="etiquette" x="180" y="140" font-size="30">CABINET 5</text>
+    <text class="etiquette" x="452" y="185" font-size="24">ZONE</text>
+    <text class="etiquette" x="452" y="218" font-size="24">STÉRILISATION</text>
+    <text class="etiquette" x="452" y="251" font-size="24">(STÉ)</text>
+    <text class="etiquette petite" x="645" y="200" font-size="16"
+          transform="rotate(-90 645 200)">ZONE PANORAMIQUE (PANO)</text>
+    <text class="etiquette" x="835" y="140" font-size="30">CABINET 1</text>
+    <text class="etiquette petite" x="180" y="378" font-size="19">COULOIR TRANSVERSAL</text>
+    <text class="etiquette" x="165" y="490" font-size="27">SALLE</text>
+    <text class="etiquette" x="165" y="524" font-size="27">D'ATTENTE</text>
+    <text class="etiquette" x="500" y="565" font-size="30">ACCUEIL</text>
+    <text class="etiquette" x="833" y="475" font-size="27">SALLE DE</text>
+    <text class="etiquette" x="833" y="509" font-size="27">CHIRURGIE</text>
+    <text class="etiquette" x="165" y="800" font-size="27">SALLE DE</text>
+    <text class="etiquette" x="165" y="834" font-size="27">REPOS</text>
+    <text class="etiquette" x="500" y="800" font-size="30">CABINET 4</text>
+    <text class="etiquette" x="805" y="800" font-size="30">CABINET 2</text>
+  </g>
+</svg>
+  </div>
+</div>
+
+<div id="controls">
+  <button id="btn-pause" style="display:none;">⏸️ Pause</button>
+  <label style="display:none;">Vitesse <input type="range" id="speed" min="0.5" max="2.5" step="0.1" value="1"></label>
+  <span id="counter">😁 Patients soignés : 0</span>
+</div>
+
+<script>
+const scene = document.getElementById('scene');
+
+function resizeScene() {
+  const wrap = document.getElementById('scene-wrap');
+  if (!wrap.clientWidth || !wrap.clientHeight) return;
+  const scale = Math.min(wrap.clientWidth / 1000, wrap.clientHeight / 1000) * 0.95;
+  scene.style.transform = `scale(${scale})`;
+}
+window.addEventListener('resize', resizeScene);
+if (window.ResizeObserver) {
+  new ResizeObserver(resizeScene).observe(document.getElementById('scene-wrap'));
+}
+resizeScene();
+
+const W = 1000, H = 1000;
+const px = (x)=> (x/W*100)+'%';
+const py = (y)=> (y/H*100)+'%';
+
+function el(cls, html=''){
+  const d = document.createElement('div');
+  d.className = cls;
+  d.innerHTML = html;
+  scene.appendChild(d);
+  return d;
+}
+function setPos(p, x, y){ p.style.left = px(x); p.style.top = py(y); p._x=x; p._y=y; }
+
+/* ---------- Coordinates ---------- */
+const RECEPTION_SPOT = {x: 475, y: 485};
+const SECRETARY_SPOT = {x: 440, y: 390};
+const SECRETARY_SPOT_2 = {x: 510, y: 390};
+const QUEUE_SPOTS = [ {x: 475, y: 525}, {x: 515, y: 525}, {x: 555, y: 525} ];
+
+const ENTRANCE = {x: 330, y: 920}; // Patients enter from "Dégagement / entrée arrière" door
+const DOOR_IN  = {x: 330, y: 660}; // Corrdior just before Accueil
+
+const WAIT_CHAIRS = [
+  {x: 100, y: 480}, {x: 150, y: 480}, {x: 200, y: 480},
+  {x: 100, y: 540}, {x: 150, y: 540}, {x: 200, y: 540}
+].map(p=>({...p, taken:false}));
+const WAIT_STAND_SPOT = {x: 240, y: 500};
+
+// Define real rooms based on the SVG coordinates
+const allRooms = [];
+allRooms.push({
+  id: "Cabinet 5",
+  busy: false, occupant: null,
+  chair: {x: 180, y: 180},
+  dentistHome: {x: 150, y: 150},
+  dentistWork: {x: 180, y: 150},
+  assistHome: {x: 210, y: 150},
+  assistWork: {x: 210, y: 180},
+  door: {x: 330, y: 295},
+  inside: {x: 280, y: 295},
+  pathFromWait: [{x: 310, y: 490}, {x: 310, y: 350}]
+});
+allRooms.push({
+  id: "Cabinet 1",
+  busy: false, occupant: null,
+  chair: {x: 835, y: 200},
+  dentistHome: {x: 800, y: 170},
+  dentistWork: {x: 835, y: 170},
+  assistHome: {x: 870, y: 170},
+  assistWork: {x: 870, y: 200},
+  door: {x: 700, y: 330},
+  inside: {x: 750, y: 330},
+  pathFromWait: [{x: 310, y: 490}, {x: 310, y: 350}, {x: 650, y: 350}]
+});
+allRooms.push({
+  id: "Salle de chirurgie",
+  busy: false, occupant: null,
+  chair: {x: 833, y: 500},
+  dentistHome: {x: 800, y: 470},
+  dentistWork: {x: 833, y: 470},
+  assistHome: {x: 860, y: 470},
+  assistWork: {x: 860, y: 500},
+  door: {x: 620, y: 540},
+  inside: {x: 730, y: 540},
+  pathFromWait: [{x: 310, y: 490}, {x: 550, y: 490}]
+});
+allRooms.push({
+  id: "Cabinet 2",
+  busy: false, occupant: null,
+  chair: {x: 805, y: 830},
+  dentistHome: {x: 770, y: 800},
+  dentistWork: {x: 805, y: 800},
+  assistHome: {x: 840, y: 800},
+  assistWork: {x: 840, y: 830},
+  door: {x: 670, y: 690},
+  inside: {x: 730, y: 730},
+  pathFromWait: [{x: 310, y: 490}, {x: 550, y: 490}, {x: 550, y: 640}]
+});
+allRooms.push({
+  id: "Cabinet 4",
+  busy: false, occupant: null,
+  chair: {x: 500, y: 800},
+  dentistHome: {x: 470, y: 770},
+  dentistWork: {x: 500, y: 770},
+  assistHome: {x: 530, y: 770},
+  assistWork: {x: 530, y: 800},
+  door: {x: 390, y: 620},
+  inside: {x: 450, y: 680},
+  pathFromWait: [{x: 310, y: 490}, {x: 310, y: 640}]
+});
+
+const steCoords = { x: 452, y: 200 };
+
+/* ---------- people factory ---------- */
+const SKINS = ['#ffd9b3','#f1c27d','#c68642','#8d5524','#ffe0bd'];
+const HAIRS = ['#5c4033','#2b2b2b','#c94f2e','#e0b13e','#7d7d7d','#4a2c8f'];
+const SUITS = ['#74c0fc','#ffa8a8','#8ce99a','#ffd43b','#e599f7','#63e6be','#ffc078'];
+const NAMES = ['Léa','Tom','Nina','Hugo','Emma','Sami','Inès','Noah','Lila','Malo','Zoé','Adam'];
+const pick = a => a[Math.floor(Math.random()*a.length)];
+
+function makePerson({suit, skin, hair, badge='', name=''}){
+  const p = el('person idle');
+  p.style.setProperty('--suit', suit);
+  p.style.setProperty('--skin', skin);
+  p.style.setProperty('--hair', hair);
+  p.innerHTML = `
+    <div class="body"></div>
+    <div class="head"></div>
+    <div class="hair"></div>
+    <div class="eye l"></div><div class="eye r"></div>
+    <div class="mouth"></div>
+    ${badge?`<div class="badge">${badge}</div>`:''}
+    ${name?`<div class="name">${name}</div>`:''}`;
+  return p;
+}
+
+function bubble(p, txt, ms=1600){
+  const b = document.createElement('div');
+  b.className='bubble'; b.textContent=txt;
+  p.appendChild(b);
+  setTimeout(()=>b.remove(), ms);
+}
+function sparkleAt(x, y){
+  const s = el('sparkle');
+  s.textContent = pick(['✨','⭐','💫','🦷']);
+  s.style.left = px(x + (Math.random()*40-20));
+  s.style.top  = py(y + (Math.random()*20-10));
+  s.style.setProperty('--dx', (Math.random()*30-15)+'px');
+  s.style.setProperty('--dy', (-15-Math.random()*20)+'px');
+  setTimeout(()=>s.remove(), 1000);
+}
+
+/* ---------- staff (synced with planning) ---------- */
+const secretaries = [
+  makePerson({suit:'#f76707', skin:pick(SKINS), hair:'#6f4518', badge:'📎', name:'S1 · Secrétaire'}),
+  makePerson({suit:'#f76707', skin:pick(SKINS), hair:'#4a2c8f', badge:'📎', name:'S2 · Secrétaire'})
+];
+setPos(secretaries[0], SECRETARY_SPOT.x, SECRETARY_SPOT.y);
+setPos(secretaries[1], SECRETARY_SPOT_2.x, SECRETARY_SPOT_2.y);
+
+let staff = []; // {dentist, assistant}
+let standaloneStaff = [];
+let activeRooms = [];
+
+async function syncPlanning() {
+  // Planning lu en base via le serveur (aucun nom dans le code).
+  let calendarData = null;
+  try {
+    const reponse = await fetch('/api/documents/planning');
+    const data = await reponse.json();
+    calendarData = data && data.valeur;
+  } catch (e) {
+    calendarData = null;
+  }
+
+  function getWeekNumber(d) {
+      d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+      d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay()||7));
+      var yearStart = new Date(Date.UTC(d.getUTCFullYear(),0,1));
+      return Math.ceil(( ( (d - yearStart) / 86400000) + 1)/7);
+  }
+
+  const today = new Date();
+  const dayOfWeek = today.getDay();
+  const isMorning = today.getHours() < 13;
+  const weekNo = getWeekNumber(today);
+  const parity = (weekNo % 2 === 0) ? 'even' : 'odd';
+  const daysArr = ["DIMANCHE", "LUNDI", "MARDI", "MERCREDI", "JEUDI", "VENDREDI", "SAMEDI"];
+  const currentDayStr = daysArr[dayOfWeek];
+
+  let dayData = [];
+  if (calendarData && calendarData[parity]) {
+      if (Array.isArray(calendarData[parity])) {
+          calendarData[parity].forEach(row => {
+              const d = row.days && row.days[currentDayStr];
+              if (d) {
+                  const amDentist = (d.am && d.am.trim() !== "Repos" && !d.am.toLowerCase().includes("ecole") && !d.am.toLowerCase().includes("école")) ? d.am.trim() : "-";
+                  const pmDentist = (d.pm && d.pm.trim() !== "Repos" && !d.pm.toLowerCase().includes("ecole") && !d.pm.toLowerCase().includes("école")) ? d.pm.trim() : "-";
+                  const activeDentist = isMorning ? amDentist : pmDentist;
+                  if (activeDentist && activeDentist !== "-") {
+                      dayData.push({
+                          name: activeDentist,
+                          am: row.assistant,
+                          pm: row.assistant
+                      });
+                  }
+              }
+          });
+      } else if (calendarData[parity][currentDayStr]) {
+          dayData = calendarData[parity][currentDayStr];
+      }
+  }
+  
+
+  let cabIndex = 0;
+  dayData.forEach((pair, idx) => {
+      let dentiste = pair.name;
+      let assistante = isMorning ? pair.am : pair.pm;
+      
+      if (dentiste && dentiste.trim() !== "-" && dentiste.trim() !== "") {
+          let room = allRooms[cabIndex % allRooms.length];
+          cabIndex++;
+          
+          let dentistPerson = makePerson({suit:'#4dabf7', skin:pick(SKINS), hair:pick(HAIRS), badge:'🩺', name: 'Dr ' + dentiste});
+          setPos(dentistPerson, room.dentistHome.x, room.dentistHome.y);
+          
+          let assistantPerson = null;
+          if (assistante && assistante.trim() !== "-" && assistante.trim() !== "") {
+              assistantPerson = makePerson({suit:'#63e6be', skin:pick(SKINS), hair:pick(HAIRS), badge:'🧤', name: assistante + ' · Assistante'});
+              setPos(assistantPerson, room.assistHome.x, room.assistHome.y);
+          }
+          
+          staff.push({dentist: dentistPerson, assistant: assistantPerson});
+          activeRooms.push(room);
+      } else if (assistante && assistante.trim() !== "-" && assistante.trim() !== "") {
+          let assistantPerson = makePerson({suit:'#63e6be', skin:pick(SKINS), hair:pick(HAIRS), badge:'🧤', name: assistante + ' (Sté)'});
+          setPos(assistantPerson, steCoords.x + (idx * 30 - 30), steCoords.y);
+          standaloneStaff.push(assistantPerson);
+      }
+  });
+}
+
+syncPlanning();
+
+/* ============================================================
+   Simulation
+============================================================ */
+let speedMul = 1, paused = false, healed = 0, simTime = 0;
+const patients = [];
+const receptionQueue = [];
+let receptionBusy = false;
+
+const WALK_SPEED = 95;
+
+class Patient {
+  constructor(){
+    this.name = pick(NAMES);
+    this.el = makePerson({suit:pick(SUITS), skin:pick(SKINS), hair:pick(HAIRS), name:this.name+' · Patient'});
+    setPos(this.el, ENTRANCE.x + (Math.random()*40-20), ENTRANCE.y);
+    this.path = [];
+    this.state = 'arriving';
+    this.timer = 0;
+    this.room = null;
+    this.chairIdx = -1;
+    this.goTo(DOOR_IN, ()=> this.joinReceptionQueue());
+  }
+  goTo(...args){
+    const done = (typeof args[args.length-1]==='function') ? args.pop() : null;
+    this.path = args.map(p=>({...p}));
+    this.onArrive = done;
+    this.el.classList.add('walking');
+    this.el.classList.remove('idle');
+  }
+  update(dt){
+    if(this.timer > 0){
+      this.timer -= dt;
+      if(this.timer <= 0 && this.afterTimer){ const f=this.afterTimer; this.afterTimer=null; f(); }
+      return;
+    }
+    if(this.path.length===0) return;
+    const t = this.path[0];
+    const dx = t.x - this.el._x, dy = t.y - this.el._y;
+    const dist = Math.hypot(dx,dy);
+    const step = WALK_SPEED * dt;
+    if(dist <= step){
+      setPos(this.el, t.x, t.y);
+      this.path.shift();
+      if(this.path.length===0){
+        this.el.classList.remove('walking');
+        this.el.classList.add('idle');
+        if(this.onArrive){ const f=this.onArrive; this.onArrive=null; f(); }
+      }
+    } else {
+      setPos(this.el, this.el._x + dx/dist*step, this.el._y + dy/dist*step);
+    }
+  }
+  wait(sec, then){ this.timer = sec; this.afterTimer = then; }
+
+  joinReceptionQueue(){
+    receptionQueue.push(this);
+    updateQueuePositions();
+  }
+  talkToSecretary(){
+    receptionBusy = true;
+    const secretary = secretaries[0]; // main secretary
+    this.goTo(RECEPTION_SPOT, ()=>{
+      bubble(this.el, '👋 Bonjour !');
+      setTimeout(()=>{ bubble(secretary, '🗓️ Un instant…'); secretary.classList.add('typing'); }, 900);
+      this.wait(2.6, ()=>{
+        secretary.classList.remove('typing');
+        bubble(secretary, '🛋️ Patientez !');
+        receptionBusy = false;
+        this.goSit();
+        updateQueuePositions();
+      });
+    });
+  }
+  goSit(){
+    const c = WAIT_CHAIRS.find(c=>!c.taken);
+    if(c){ 
+      c.taken = true; this.chairIdx = WAIT_CHAIRS.indexOf(c);
+      this.goTo({x:310, y:490}, {x:c.x, y:c.y}, ()=>{ this.state='waiting'; });
+    } else {
+      this.goTo({x:310, y:490}, WAIT_STAND_SPOT, ()=>{ this.state='waiting'; });
+    }
+  }
+  enterRoom(room){
+    this.state='toRoom';
+    room.busy = true;
+    room.occupant = this;
+    this.room = room;
+    if(this.chairIdx>=0){ WAIT_CHAIRS[this.chairIdx].taken=false; this.chairIdx=-1; }
+    bubble(this.el, '😬 À moi !');
+    this.goTo(...room.pathFromWait, room.door, room.inside, room.chair, ()=> this.startTreatment());
+  }
+  startTreatment(){
+    this.state='treated';
+    this.el.classList.remove('idle');
+    this.el.classList.add('lying');
+    const idx = activeRooms.indexOf(this.room);
+    const {dentist, assistant} = staff[idx];
+    
+    if (dentist) {
+        movePersonTo(dentist, this.room.dentistWork, ()=>{
+          dentist.classList.add('working');
+          bubble(dentist, '🪥 Ouvrez grand !');
+        });
+    }
+    if (assistant) {
+        movePersonTo(assistant, this.room.assistWork, ()=>{
+          assistant.classList.add('assisting');
+          setTimeout(()=> bubble(assistant, '💧 Aspiration…'), 1200);
+        });
+    }
+    
+    const dur = 5.5 + Math.random()*3;
+    this._sparkler = setInterval(()=>{
+      if(!paused) sparkleAt(this.room.chair.x, this.room.chair.y-10);
+    }, 450);
+    this.wait(dur, ()=> this.finishTreatment());
+  }
+  finishTreatment(){
+    clearInterval(this._sparkler);
+    const idx = activeRooms.indexOf(this.room);
+    const {dentist, assistant} = staff[idx];
+    
+    if(dentist) {
+        dentist.classList.remove('working');
+        bubble(dentist, '✅ Parfait !');
+        movePersonTo(dentist, this.room.dentistHome);
+    }
+    if(assistant) {
+        assistant.classList.remove('assisting');
+        movePersonTo(assistant, this.room.assistHome);
+    }
+    
+    this.el.classList.remove('lying');
+    this.el.classList.add('idle');
+    bubble(this.el, '😁 Merci !', 2000);
+    healed++;
+    document.getElementById('counter').textContent = '😁 Patients soignés : ' + healed;
+    
+    const room = this.room;
+    this.wait(1.4, ()=>{
+      this.goTo(room.inside, room.door, ...[...room.pathFromWait].reverse(), DOOR_IN, ENTRANCE, ()=>{
+        if(room.occupant === this){
+          room.busy = false;
+          room.occupant = null;
+        }
+        this.remove();
+      });
+    });
+  }
+  remove(){
+    this.el.remove();
+    const i = patients.indexOf(this);
+    if(i>=0) patients.splice(i,1);
+  }
+}
+
+function movePersonTo(p, target, done){
+  p._move = {target, done};
+  p.classList.add('walking'); p.classList.remove('idle');
+}
+function updateStaff(dt){
+  const all = [...secretaries, ...standaloneStaff];
+  staff.forEach(s => {
+      if(s.dentist) all.push(s.dentist);
+      if(s.assistant) all.push(s.assistant);
+  });
+  for(const p of all){
+    if(!p._move) continue;
+    const {target, done} = p._move;
+    const dx=target.x-p._x, dy=target.y-p._y, dist=Math.hypot(dx,dy);
+    const step = WALK_SPEED*dt;
+    if(dist<=step){
+      setPos(p,target.x,target.y);
+      p._move=null; p.classList.remove('walking'); p.classList.add('idle');
+      if(done) done();
+    } else setPos(p, p._x+dx/dist*step, p._y+dy/dist*step);
+  }
+}
+
+function updateQueuePositions(){
+  receptionQueue.forEach((pat,i)=>{
+    if(i===0 && !receptionBusy && pat.state==='arriving'){
+      pat.state='reception';
+      receptionQueue.shift();
+      pat.talkToSecretary();
+    } else if(pat.state==='arriving'){
+      const spot = QUEUE_SPOTS[Math.min(i-1<0?0:i-1, QUEUE_SPOTS.length-1)];
+      pat.goTo(spot);
+    }
+  });
+}
+
+/* ---------- main loop ---------- */
+let last = performance.now();
+let nextSpawn = 1.0;
+
+function tick(now){
+  const rawDt = Math.min((now-last)/1000, .05);
+  last = now;
+  if(!paused){
+    const dt = rawDt * speedMul;
+    simTime += dt;
+
+    nextSpawn -= dt;
+    if(nextSpawn<=0 && patients.length < (activeRooms.length * 2 + 6)){
+      patients.push(new Patient());
+      nextSpawn = 4.5 + Math.random()*4;
+    }
+
+    if(!receptionBusy && receptionQueue.length) updateQueuePositions();
+
+    const freeRoom = activeRooms.find(r=>!r.busy && !r.occupant);
+    if(freeRoom){
+      const next = patients.find(p=>p.state==='waiting');
+      if(next) next.enterRoom(freeRoom);
+    }
+
+    patients.forEach(p=>p.update(dt));
+    updateStaff(dt);
+
+    if(Math.random()<dt*0.15) bubble(secretaries[0], pick(['☎️','📋','🗓️','☕']), 1200);
+  }
+  requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick);
+
+/* ---------- controls ---------- */
+document.getElementById('btn-pause').addEventListener('click', e=>{
+  paused = !paused;
+  e.target.textContent = paused ? '▶️ Reprendre' : '⏸️ Pause';
+});
+document.getElementById('speed').addEventListener('input', e=>{
+  speedMul = parseFloat(e.target.value);
+});
+</script>
+</body>
+</html>

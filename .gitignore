@@ -1,0 +1,39 @@
+# ============================================================
+# Données du cabinet : JAMAIS dans git
+# (stock, planning, personnel, contacts, dosimètres... tout est en base)
+# ============================================================
+donnees/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+*.avant-import-*
+*.xlsx
+*.csv
+*.pdf
+
+# Ancienne application (stockage du navigateur intégré)
+webstorage/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+
+# JavaScript (tests)
+web/node_modules/
+web/coverage/
+
+# Divers
+*.log
+.env
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

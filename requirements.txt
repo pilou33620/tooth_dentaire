@@ -1,0 +1,7 @@
+# Le serveur (serveur.py) fonctionne avec la bibliothèque standard Python.
+# openpyxl est nécessaire pour les exports Excel : sans lui, le serveur démarre
+# quand même et les exports répondent « indisponible ».
+openpyxl>=3.1.5
+
+# Tests
+pytest>=7.4.0

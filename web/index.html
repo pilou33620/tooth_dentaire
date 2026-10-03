@@ -1,0 +1,2002 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; frame-src 'self'; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self';">
+    <link rel="icon" href="logo.ico">
+    <title>Gestion de Stock - Cabinet Médical (Général)</title>
+    <link rel="stylesheet" href="css/style.css">
+    <!-- PDF.js embarqué (vendor/) : l'import de factures fonctionne hors ligne et
+         ne dépend plus d'une URL externe. Build classique 3.11.174 : les builds 4.x
+         ne sont publiées qu'en module ES, que Chromium refuse de charger en file://. -->
+    <script src="vendor/pdf.min.js"></script>
+</head>
+<body>
+    <!-- BANDEAU MODE PERSONNALISATION -->
+    <div id="customization-banner" class="hidden" style="position: fixed; top: 0; left: 0; right: 0; background-color: #f39c12; color: white; text-align: center; padding: 10px; font-weight: bold; z-index: 9999; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">
+        🛠 Mode Personnalisation Actif : Déplacez les éléments où vous le souhaitez.
+        <button id="btn-exit-customization" class="btn" style="margin-left: 20px; background-color: #c0392b; border: none; color: white; padding: 5px 15px; border-radius: 4px; cursor: pointer;">Quitter le mode et sauvegarder</button>
+        <button id="btn-reset-customization" class="btn" style="margin-left: 10px; background-color: #2980b9; border: none; color: white; padding: 5px 15px; border-radius: 4px; cursor: pointer;">Réinitialiser les positions</button>
+    </div>
+
+    <!-- ============ FOND ANIME (CABINET DENTAIRE) ============ -->
+    <div id="background-animation" aria-hidden="true">
+        <iframe src="html/cabinet-dentaire.html" scrolling="no" tabindex="-1" title="Animation Cabinet Dentaire"></iframe>
+    </div>
+
+    <!-- ============ APPLICATION PRINCIPALE ============ -->
+    <div id="app">
+        <main class="main-layout">
+
+            <!-- ZONE UNIFIÉE -->
+        <div class="unified-workspace" style="position: relative; flex: 1; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-around; padding: 10px 20px; gap: 10px; background: transparent;">
+            
+            <!-- ============ CARNET D'ADRESSES ============ -->
+            <div id="btn-annuaire-container" style="position: relative; flex-shrink: 0; z-index: 10;">
+                <div id="btn-annuaire" class="notebook-widget" onclick="document.getElementById('annuaire-overlay').classList.remove('hidden'); const f = document.querySelector('#annuaire-overlay iframe'); if (f && f.contentWindow && f.contentWindow.rechargerContacts) f.contentWindow.rechargerContacts();">
+                    <div class="notebook-pages"></div>
+                    <div class="notebook-bookmark"></div>
+                    <div class="notebook-cover">
+                        <div class="notebook-label">Carnets<br>d'adresses</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ============ DOSIMÈTRES (ICÔNE RADIOACTIVE) ============ -->
+            <div id="btn-dosimetre-container" style="position: relative; flex-shrink: 0; z-index: 10;">
+                <div id="btn-dosimetre" class="dosimetre-widget" title="Gestion des Dosimètres">
+                    <div class="dosimetre-symbol-wrapper">
+                        <svg class="radioactive-icon" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                            <circle cx="50" cy="50" r="46" fill="#f1c40f" stroke="#2c3e50" stroke-width="4"/>
+                            <g fill="#2c3e50">
+                                <circle cx="50" cy="50" r="8"/>
+                                <path id="rad-blade" d="M 44 39.6 L 31 17.1 A 38 38 0 0 1 69 17.1 L 56 39.6 A 12 12 0 0 0 44 39.6 Z"/>
+                                <use href="#rad-blade" transform="rotate(120 50 50)"/>
+                                <use href="#rad-blade" transform="rotate(240 50 50)"/>
+                            </g>
+                            <circle cx="50" cy="50" r="3" fill="#f1c40f"/>
+                        </svg>
+                    </div>
+                    <div class="dosimetre-widget-label">
+                        <div class="dosimetre-title">Dosimètres</div>
+                        <span id="dosimetre-widget-badge" class="dosimetre-badge">0 suivi(s)</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ============ POST-IT RUPTURES ============ -->
+            <div id="postit-wrapper" style="position: relative; z-index: 10;">
+                <div id="postit-container" class="hidden">
+                    <div id="postit-rupture" class="postit">
+                        <div class="postit-legend-topright">❌ en rupture<br>⚠️ limite (HS)</div>
+                        <div class="postit-title">En rupture 📌</div>
+                        <ul id="postit-list"></ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PLAN DE TRAVAIL (ACTION AREA) -->
+            <div class="action-area" style="display: flex; flex-direction: column; gap: 10px; align-items: center; justify-content: center; z-index: 10;">
+                <input type="text" id="main-global-search" class="input" placeholder="🔍 Rechercher..." style="width: 300px; font-size: 1.1em; border-radius: 12px;">
+                <div style="display: flex; gap: 15px; flex-wrap: wrap; justify-content: center;">
+                    <div style="display: flex; flex-direction: column; gap: 10px; align-items: center;">
+                        <button id="btn-add-product-main" class="btn btn-green"
+                            style="font-size: 0.9em; padding: 6px 12px; width: max-content; flex: 0 0 auto; white-space: nowrap;">➕ Ajouter un produit</button>
+                        <button id="btn-import" class="btn btn-blue"
+                            style="font-size: 0.9em; padding: 6px 12px; width: max-content; flex: 0 0 auto; white-space: nowrap;">📄 MAJ <span>Stock</span></button>
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 10px; align-items: center;">
+                        <button id="btn-alertes-stock" class="btn btn-red hidden">🔔 STOCK</button>
+                        <button id="btn-alertes-peremp" class="btn btn-orange hidden">⚠️ Aucune Alerte Péremption</button>
+                        <div id="mire-alerts-container" class="hidden" style="display: flex; flex-direction: column; gap: 6px; align-items: center; width: 100%;">
+                            <button id="btn-alertes-mire" class="btn btn-red hidden" title="Rappel Mire">⚠️ Alerte Mire</button>
+                        </div>
+                        <div id="fauteuil-alerts-container" class="hidden" style="display: flex; flex-direction: column; gap: 6px; align-items: center; width: 100%;">
+                            <button id="btn-alertes-fauteuil" class="btn btn-red hidden" title="Rappel Maintenance Fauteuils">⚠️ Maint. Fauteuils</button>
+                        </div>
+                        <button id="btn-alertes-dosi" class="btn btn-red hidden" title="Rappel Dosimètres">⚠️ Alerte Dosimètres</button>
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 10px; align-items: center;">
+                        <button id="btn-settings" class="btn"
+                            style="font-size: 0.9em; padding: 6px 12px; width: max-content; flex: 0 0 auto; white-space: nowrap; background: #95a5a6; color: white;">⚙️ Réglages</button>
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 10px; align-items: center;">
+                        <button id="btn-export-main" class="btn btn-green"
+                            style="font-size: 0.9em; padding: 6px 12px; width: max-content; flex: 0 0 auto; white-space: nowrap;">📊 Export Stock</button>
+                        <button id="btn-stats-main" class="btn btn-blue"
+                            style="font-size: 0.9em; padding: 6px 12px; width: max-content; flex: 0 0 auto; white-space: nowrap;">📈 Stats Conso</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PLACARDS -->
+            <div class="bottom-zones" style="display: flex; gap: 15px; align-items: center; z-index: 10;">
+                <!-- PLACARD STOCK -->
+                <button id="btn-placard" class="placard" style="margin: 0; min-height: 160px; width: 220px;">
+                    <div class="placard-visual">
+                        <div class="placard-door left">
+                            <div class="placard-handle"></div>
+                        </div>
+                        <div class="placard-door right">
+                            <div class="placard-handle"></div>
+                        </div>
+                    </div>
+                    <div class="placard-text">OUVRIR LE PLACARD<br><small>(Stock)</small></div>
+                </button>
+
+                <!-- PLACARD MAINTENANCE -->
+                <button id="btn-maintenance-cabinet" class="placard" style="margin: 0; min-height: 160px; width: 220px;">
+                    <div class="placard-visual">
+                        <div class="placard-door left">
+                            <div class="placard-handle"></div>
+                        </div>
+                        <div class="placard-door right">
+                            <div class="placard-handle"></div>
+                        </div>
+                    </div>
+                    <div class="placard-text">OUVRIR LES PORTES<br><small>(Maintenance & Cabinet)</small></div>
+                </button>
+            </div>
+
+            <!-- HEURE ET PLANNING -->
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 10px;">
+                <div id="datetime-container" class="datetime-container" style="align-items: center;">
+                    <div id="date-display" class="date-display"></div>
+                    <div id="clock" class="clock">00:00:00</div>
+                </div>
+
+                <!-- ============ TEAM PLANNING ============ -->
+                <div id="team-planning-container" class="team-planning" style="position: relative; width: max-content;">
+                    <div id="calendar-card" style="background: rgba(255, 255, 255, 0.95); border: 2px solid #f39c12; border-radius: 12px; padding: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: transform 0.2s;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ddd; padding-bottom: 6px; margin-bottom: 6px; gap: 12px;">
+                            <span style="color: #2c3e50; font-weight: bold; font-size: 0.95em;">📅 Planning Binômes</span>
+                            <div id="parity-switch-container" style="display: inline-flex; align-items: center; background: #eaeded; border-radius: 14px; padding: 2px; gap: 2px; font-size: 0.75em;">
+                                <button type="button" id="btn-preview-even" style="border: none; border-radius: 11px; padding: 2px 8px; cursor: pointer; font-weight: bold; font-size: 0.85em; transition: all 0.2s;">Paire</button>
+                                <button type="button" id="btn-preview-odd" style="border: none; border-radius: 11px; padding: 2px 8px; cursor: pointer; font-weight: bold; font-size: 0.85em; transition: all 0.2s;">Impaire</button>
+                            </div>
+                        </div>
+                        <div id="calendar-preview-content" style="font-size: 0.85em; color: #34495e; line-height: 1.4; cursor: pointer;" title="Cliquez pour ouvrir le planning">
+                            <!-- Généré par JS -->
+                        </div>
+                        <div id="btn-open-calendar" style="text-align: center; margin-top: 5px; font-size: 0.75em; color: #7f8c8d; font-style: italic; cursor: pointer;" onmouseover="this.style.color='#e67e22'" onmouseout="this.style.color='#7f8c8d'">
+                            Cliquez pour modifier ✏️
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ============ TASKS TABLE ============ -->
+                <div id="tasks-planning-container" class="team-planning" style="position: relative; width: max-content; margin-top: 10px;">
+                    <div id="btn-open-tasks" style="background: rgba(255, 255, 255, 0.95); border: 2px solid #f39c12; border-radius: 12px; padding: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
+                        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ddd; padding-bottom: 5px; margin-bottom: 5px; gap: 15px;">
+                            <span style="color: #2c3e50; font-weight: bold;">📋 Tableau Taches des assistantes</span>
+                        </div>
+                        <div id="tasks-preview-content" style="font-size: 0.85em; color: #34495e; line-height: 1.4;">
+                            <!-- Généré par JS -->
+                        </div>
+                        <div style="text-align: center; margin-top: 5px; font-size: 0.75em; color: #7f8c8d; font-style: italic;">
+                            Cliquez pour modifier ✏️
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            // Réinitialisation UNIQUE des positions après un changement de structure de l'interface.
+            // Le garde-fou de version est indispensable : sans lui, ce bloc effaçait la
+            // personnalisation de l'utilisateur à CHAQUE démarrage de l'application.
+            (function () {
+                const LAYOUT_VERSION = "layout-2024-11";
+                const seen = localStorage.getItem("ui-layout-version");
+                // On efface uniquement des positions enregistrées pour une ANCIENNE structure.
+                // Absence de marqueur = positions déjà compatibles : on ne touche à rien.
+                if (seen && seen !== LAYOUT_VERSION) {
+                    localStorage.removeItem("ui-positions");
+                    console.log("Positions réinitialisées suite au changement d'interface.");
+                }
+                if (seen !== LAYOUT_VERSION) {
+                    localStorage.setItem("ui-layout-version", LAYOUT_VERSION);
+                }
+            })();
+        </script>
+
+        </main>
+    </div>
+
+
+    <!-- ============ DIALOG MAINTENANCE & CABINET ============ -->
+    <div id="maintenance-cabinet-overlay" class="overlay hidden">
+        <div class="dialog dialog-maintenance-cabinet" style="width: 95vw; height: 95vh; max-width: none;">
+            <div class="dialog-titlebar">
+                Maintenance & Cabinet
+                <button class="dialog-close" data-close="maintenance-cabinet-overlay">✕</button>
+            </div>
+            <div class="dialog-body" style="background: #fbfcfd; border-radius: 8px; padding: 20px; display: flex; flex-direction: column;">
+                <!-- PLAN DU CABINET -->
+                <div id="plan-container" class="plan-wrap" style="flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; margin: 0; border: none; box-shadow: none; background: transparent;">
+                    <svg viewBox="0 0 1000 1000" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Plan du cabinet dentaire" style="max-width: 100%; max-height: 100%; width: auto; height: auto;">
+                      <!-- PIÈCES (zones interactives) -->
+                      <g id="pieces">
+                        <rect class="piece cabinet-5" data-nom="Cabinet 5" x="46" y="46" width="269" height="279"/>
+                        <rect class="piece" data-nom="Zone stérilisation (Sté)" x="329" y="46" width="247" height="304"/>
+                        <rect class="piece" data-nom="Zone panoramique (Pano)" x="590" y="46" width="110" height="304"/>
+                        <rect class="piece cabinet-1" data-nom="Cabinet 1" x="714" y="46" width="240" height="314"/>
+                        <rect class="piece" data-nom="Couloir transversal" x="46" y="339" width="269" height="61"/>
+                        <rect class="piece" data-nom="Salle d'attente" x="46" y="414" width="239" height="276"/>
+                        <rect class="piece" data-nom="Salle de repos" x="46" y="704" width="239" height="250"/>
+                        <path class="piece" data-nom="Accueil" d="M299,414 H329 V364 H700 V695 H649 V639 H374 V625 H299 Z"/>
+                        <rect class="piece" data-nom="Dégagement / entrée arrière" x="299" y="639" width="61" height="315"/>
+                        <rect class="piece" data-nom="Salle de chirurgie" x="714" y="409" width="240" height="286"/>
+                        <rect class="piece cabinet-4" data-nom="Cabinet 4" x="374" y="639" width="247" height="315"/>
+                        <rect class="piece cabinet-2" data-nom="Cabinet 2" x="649" y="709" width="305" height="245"/>
+                      </g>
+                      <!-- MURS EXTÉRIEURS -->
+                      <g class="mur">
+                        <rect x="18" y="18"  width="964" height="28"/>
+                        <rect x="18" y="954" width="964" height="28"/>
+                        <rect x="18" y="18"  width="28"  height="964"/>
+                        <rect x="954" y="18" width="28"  height="964"/>
+                      </g>
+                      <!-- MURS INTÉRIEURS -->
+                      <g class="mur">
+                        <rect x="315" y="46"  width="14"  height="293"/>
+                        <rect x="46"  y="325" width="199" height="14"/>
+                        <rect x="305" y="325" width="10"  height="14"/>
+                        <rect x="576" y="46" width="14" height="304"/>
+                        <rect x="650" y="350" width="50" height="14"/>
+                        <rect x="700" y="46"  width="14"  height="314"/>
+                        <rect x="700" y="360" width="30"  height="14"/>
+                        <rect x="790" y="360" width="164" height="14"/>
+                        <rect x="46"  y="400" width="169" height="14"/>
+                        <rect x="275" y="400" width="10"  height="14"/>
+                        <rect x="285" y="400" width="14" height="55"/>
+                        <rect x="285" y="530" width="14" height="160"/>
+                        <rect x="46" y="690" width="253" height="14"/>
+                        <rect x="285" y="690" width="14" height="130"/>
+                        <rect x="285" y="880" width="14" height="74"/>
+                        <rect x="360" y="625" width="14"  height="329"/>
+                        <rect x="374" y="625" width="10"  height="14"/>
+                        <rect x="444" y="625" width="191" height="14"/>
+                        <rect x="635" y="625" width="14"  height="329"/>
+                        <rect x="700" y="695" width="254" height="14"/>
+                        <rect x="700" y="395" width="14" height="95"/>
+                        <rect x="700" y="590" width="14" height="105"/>
+                        <rect x="700" y="395" width="254" height="14"/>
+                      </g>
+                      <!-- Vitrages intérieurs -->
+                      <g>
+                        <rect class="fenetre-fond" x="740" y="395" width="52" height="14"/>
+                        <line class="fenetre-trait" x1="740" y1="402" x2="792" y2="402"/>
+                        <rect class="fenetre-fond" x="818" y="395" width="52" height="14"/>
+                        <line class="fenetre-trait" x1="818" y1="402" x2="870" y2="402"/>
+                        <rect class="fenetre-fond" x="892" y="395" width="52" height="14"/>
+                        <line class="fenetre-trait" x1="892" y1="402" x2="944" y2="402"/>
+                      </g>
+                      <!-- FENÊTRES -->
+                      <g>
+                        <g><rect class="fenetre-fond" x="90" y="18" width="80" height="28"/><line class="fenetre-trait" x1="90" y1="32" x2="170" y2="32"/></g>
+                        <g><rect class="fenetre-fond" x="235" y="18" width="70" height="28"/><line class="fenetre-trait" x1="235" y1="32" x2="305" y2="32"/></g>
+                        <g><rect class="fenetre-fond" x="390" y="18" width="70" height="28"/><line class="fenetre-trait" x1="390" y1="32" x2="460" y2="32"/></g>
+                        <g><rect class="fenetre-fond" x="645" y="18" width="45" height="28"/><line class="fenetre-trait" x1="645" y1="32" x2="690" y2="32"/></g>
+                        <g><rect class="fenetre-fond" x="760" y="18" width="70" height="28"/><line class="fenetre-trait" x1="760" y1="32" x2="830" y2="32"/></g>
+                        <g><rect class="fenetre-fond" x="870" y="18" width="60" height="28"/><line class="fenetre-trait" x1="870" y1="32" x2="930" y2="32"/></g>
+                        <g><rect class="fenetre-fond" x="18" y="500" width="28" height="70"/><line class="fenetre-trait" x1="32" y1="500" x2="32" y2="570"/></g>
+                        <g><rect class="fenetre-fond" x="18" y="600" width="28" height="60"/><line class="fenetre-trait" x1="32" y1="600" x2="32" y2="660"/></g>
+                        <g><rect class="fenetre-fond" x="90" y="954" width="80" height="28"/><line class="fenetre-trait" x1="90" y1="968" x2="170" y2="968"/></g>
+                        <g><rect class="fenetre-fond" x="430" y="954" width="70" height="28"/><line class="fenetre-trait" x1="430" y1="968" x2="500" y2="968"/></g>
+                        <g><rect class="fenetre-fond" x="540" y="954" width="60" height="28"/><line class="fenetre-trait" x1="540" y1="968" x2="600" y2="968"/></g>
+                        <g><rect class="fenetre-fond" x="710" y="954" width="70" height="28"/><line class="fenetre-trait" x1="710" y1="968" x2="780" y2="968"/></g>
+                        <g><rect class="fenetre-fond" x="840" y="954" width="70" height="28"/><line class="fenetre-trait" x1="840" y1="968" x2="910" y2="968"/></g>
+                        <g><rect class="fenetre-fond" x="954" y="110" width="28" height="80"/><line class="fenetre-trait" x1="968" y1="110" x2="968" y2="190"/></g>
+                        <g><rect class="fenetre-fond" x="954" y="490" width="28" height="100"/><line class="fenetre-trait" x1="968" y1="490" x2="968" y2="590"/></g>
+                      </g>
+                      <!-- COMPTOIR -->
+                      <g>
+                        <rect class="comptoir" x="380" y="368" width="220" height="38" rx="3"/>
+                        <rect class="comptoir" x="400" y="434" width="165" height="32" rx="3"/>
+                      </g>
+                      <!-- PORTES -->
+                      <g>
+                        <line class="porte-battant" x1="305" y1="325" x2="305" y2="265"/>
+                        <path class="porte-arc" d="M245,325 A60,60 0 0 1 305,265"/>
+                        <line class="porte-battant" x1="275" y1="414" x2="275" y2="474"/>
+                        <path class="porte-arc" d="M215,414 A60,60 0 0 0 275,474"/>
+                        <line class="porte-battant" x1="285" y1="820" x2="225" y2="820"/>
+                        <path class="porte-arc" d="M225,820 A60,60 0 0 0 285,880"/>
+                        <line class="porte-battant" x1="300" y1="954" x2="300" y2="898"/>
+                        <path class="porte-arc" d="M356,954 A56,56 0 0 0 300,898"/>
+                        <line class="porte-battant" x1="384" y1="639" x2="384" y2="699"/>
+                        <path class="porte-arc" d="M444,639 A60,60 0 0 1 384,699"/>
+                        <line class="porte-battant" x1="700" y1="709" x2="700" y2="760"/>
+                        <path class="porte-arc" d="M649,709 A51,51 0 0 0 700,760"/>
+                        <line class="porte-battant" x1="700" y1="490" x2="650" y2="490"/>
+                        <path class="porte-arc" d="M650,490 A50,50 0 0 0 700,540"/>
+                        <line class="porte-battant" x1="700" y1="590" x2="650" y2="590"/>
+                        <path class="porte-arc" d="M700,540 A50,50 0 0 0 650,590"/>
+                        <line class="porte-battant" x1="590" y1="350" x2="590" y2="290"/>
+                        <path class="porte-arc" d="M650,350 A60,60 0 0 0 590,290"/>
+                        <line class="porte-battant" x1="730" y1="360" x2="730" y2="300"/>
+                        <path class="porte-arc" d="M790,360 A60,60 0 0 0 730,300"/>
+                      </g>
+                      <!-- ÉTIQUETTES -->
+                      <g id="etiquettes">
+                        <text class="etiquette" x="180" y="140" font-size="30">CABINET 5</text>
+                        <text class="etiquette" x="452" y="185" font-size="24">ZONE</text>
+                        <text class="etiquette" x="452" y="218" font-size="24">STÉRILISATION</text>
+                        <text class="etiquette" x="452" y="251" font-size="24">(STÉ)</text>
+                        <text class="etiquette petite" x="645" y="200" font-size="16" transform="rotate(-90 645 200)">ZONE PANORAMIQUE (PANO)</text>
+                        <text class="etiquette" x="835" y="140" font-size="30">CABINET 1</text>
+                        <text class="etiquette petite" x="180" y="378" font-size="19">COULOIR TRANSVERSAL</text>
+                        <text class="etiquette" x="165" y="490" font-size="27">SALLE</text>
+                        <text class="etiquette" x="165" y="524" font-size="27">D'ATTENTE</text>
+                        <text class="etiquette" x="500" y="565" font-size="30">ACCUEIL</text>
+                        <text class="etiquette" x="833" y="475" font-size="27">SALLE DE</text>
+                        <text class="etiquette" x="833" y="509" font-size="27">CHIRURGIE</text>
+                        <text class="etiquette" x="165" y="800" font-size="27">SALLE DE</text>
+                        <text class="etiquette" x="165" y="834" font-size="27">REPOS</text>
+                        <text class="etiquette" x="500" y="800" font-size="30">CABINET 4</text>
+                        <text class="etiquette" x="805" y="800" font-size="30">CABINET 2</text>
+                      </g>
+                    </svg>
+                </div>
+                
+                <!-- AUTOCLAVES -->
+                <div id="machines-container" class="hidden" style="display: flex; flex-direction: column; align-items: center; width: 100%; margin-top: 20px;">
+                    <div style="margin-bottom: 20px;">
+                        <button id="btn-retour-plan" style="padding: 10px 20px; border-radius: 8px; border: none; background: #5d7386; color: white; cursor: pointer; font-size: 16px; font-weight: 500; transition: background 0.2s;">← Retour au plan</button>
+                    </div>
+                    <div class="machines" style="width: 100%; justify-content: center; flex-wrap: wrap;">
+                    <!-- FAUTEUIL DENTAIRE OVIS -->
+                    <div class="autoclave machine machine-fauteuil" data-machine="Fauteuil OVIS" data-type="fauteuil">
+                        <button class="autoclave-title" title="Ouvrir le suivi de maintenance">Fauteuil OVIS 📝</button>
+                        <div class="fauteuil-machine-svg" aria-hidden="true">
+                            <svg viewBox="0 0 140 134" xmlns="http://www.w3.org/2000/svg" overflow="visible">
+                                <!-- Bras articulé (en arrière-plan) -->
+                                <path d="M70 80 L70 35 L45 25" fill="none" stroke="#aab6bd" stroke-width="4" stroke-linejoin="round" />
+                                
+                                <!-- Crachoir (arrière-plan) -->
+                                <line x1="110" y1="100" x2="110" y2="65" stroke="#aab6bd" stroke-width="4" />
+                                <ellipse cx="110" cy="65" rx="12" ry="4" fill="#eef2f4" stroke="#aab6bd" stroke-width="2" />
+                                <path d="M98 65 Q110 75 122 65" fill="none" stroke="#aab6bd" stroke-width="2" />
+                                
+                                <!-- Base massive -->
+                                <path d="M40 115 L100 115 L95 100 L45 100 Z" fill="#8b979e" />
+                                <rect x="60" y="80" width="20" height="20" fill="#e3e9ec" stroke="#aab6bd" stroke-width="3" />
+                            
+                                <!-- Tête de la lampe -->
+                                <path d="M35 25 Q45 15 55 25 Z" fill="#eef2f4" stroke="#aab6bd" stroke-width="2" />
+                                <circle class="led" cx="45" cy="27" r="3" fill="var(--eu-led, #b9c3c8)" />
+                                <!-- Rayons -->
+                                <g class="rays">
+                                    <line class="ray" x1="40" y1="31" x2="32" y2="40" stroke="#f5b942" stroke-width="2" stroke-linecap="round" opacity="0" />
+                                    <line class="ray" x1="45" y1="33" x2="45" y2="45" stroke="#f5b942" stroke-width="2" stroke-linecap="round" opacity="0" />
+                                    <line class="ray" x1="50" y1="31" x2="58" y2="40" stroke="#f5b942" stroke-width="2" stroke-linecap="round" opacity="0" />
+                                </g>
+                            
+                                <!-- Corps du fauteuil (assise + dossier) -->
+                                <path d="M25 105 L35 85 L75 85 L95 48" fill="none" stroke="#aab6bd" stroke-width="24" stroke-linecap="round" stroke-linejoin="round" />
+                                <path d="M25 105 L35 85 L75 85 L95 48" fill="none" stroke="var(--eu-glass, #ddf0ff)" stroke-width="18" stroke-linecap="round" stroke-linejoin="round" />
+                            
+                                <!-- Têtière -->
+                                <line x1="95" y1="48" x2="102" y2="35" stroke="#aab6bd" stroke-width="4" />
+                                <ellipse cx="106" cy="30" rx="9" ry="12" transform="rotate(28 106 30)" fill="var(--eu-glass, #ddf0ff)" stroke="#aab6bd" stroke-width="3" />
+                            
+                                <!-- Visage (Esprit kawaii) - Coordonnées d'origine pour compatibilité CSS -->
+                                <g class="face">
+                                    <circle class="eye" cx="80" cy="65" r="2.1" fill="#3c4a52" />
+                                    <circle class="eye" cx="90" cy="65" r="2.1" fill="#3c4a52" />
+                                    <path class="mouth" d="M80 72 q5 4 10 0" fill="none" stroke="#3c4a52" stroke-width="2.2" stroke-linecap="round" />
+                                </g>
+                            </svg>
+                        </div>
+                        <div class="autoclave-status">⚪ Prêt</div>
+                        <button class="autoclave-start">Lancer</button>
+                        <button class="btn-fauteuil-maint-icon" data-machine="Fauteuil OVIS" data-cabinet="Cabinet 5" title="Rappel Maintenance - Fauteuil OVIS" style="margin-top: 10px; cursor: pointer; background: #fdfdfd; border: 1px solid #ddd; border-radius: 8px; padding: 8px; font-size: 14px; font-weight: bold; color: #555; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: background 0.2s; width: 100%; box-sizing: border-box;">
+                            <span class="fauteuil-icon-status">🔔</span> Rappel Maintenance
+                        </button>
+                    </div>
+
+                    <!-- FAUTEUIL DENTAIRE Sinius -->
+                    <div class="autoclave machine machine-fauteuil" data-machine="Fauteuil Sinius" data-type="fauteuil">
+                        <button class="autoclave-title" title="Ouvrir le suivi de maintenance">Fauteuil Sinius 📝</button>
+                        <div class="fauteuil-machine-svg" aria-hidden="true">
+                            <svg viewBox="0 0 140 134" xmlns="http://www.w3.org/2000/svg" overflow="visible">
+                                <!-- Bras articulé (en arrière-plan) -->
+                                <path d="M70 80 L70 35 L45 25" fill="none" stroke="#aab6bd" stroke-width="4" stroke-linejoin="round" />
+                                
+                                <!-- Crachoir (arrière-plan) -->
+                                <line x1="110" y1="100" x2="110" y2="65" stroke="#aab6bd" stroke-width="4" />
+                                <ellipse cx="110" cy="65" rx="12" ry="4" fill="#eef2f4" stroke="#aab6bd" stroke-width="2" />
+                                <path d="M98 65 Q110 75 122 65" fill="none" stroke="#aab6bd" stroke-width="2" />
+                                
+                                <!-- Base massive -->
+                                <path d="M40 115 L100 115 L95 100 L45 100 Z" fill="#8b979e" />
+                                <rect x="60" y="80" width="20" height="20" fill="#e3e9ec" stroke="#aab6bd" stroke-width="3" />
+                            
+                                <!-- Tête de la lampe -->
+                                <path d="M35 25 Q45 15 55 25 Z" fill="#eef2f4" stroke="#aab6bd" stroke-width="2" />
+                                <circle class="led" cx="45" cy="27" r="3" fill="var(--eu-led, #b9c3c8)" />
+                                <!-- Rayons -->
+                                <g class="rays">
+                                    <line class="ray" x1="40" y1="31" x2="32" y2="40" stroke="#f5b942" stroke-width="2" stroke-linecap="round" opacity="0" />
+                                    <line class="ray" x1="45" y1="33" x2="45" y2="45" stroke="#f5b942" stroke-width="2" stroke-linecap="round" opacity="0" />
+                                    <line class="ray" x1="50" y1="31" x2="58" y2="40" stroke="#f5b942" stroke-width="2" stroke-linecap="round" opacity="0" />
+                                </g>
+                            
+                                <!-- Corps du fauteuil (assise + dossier) -->
+                                <path d="M25 105 L35 85 L75 85 L95 48" fill="none" stroke="#aab6bd" stroke-width="24" stroke-linecap="round" stroke-linejoin="round" />
+                                <path d="M25 105 L35 85 L75 85 L95 48" fill="none" stroke="var(--eu-glass, #ddf0ff)" stroke-width="18" stroke-linecap="round" stroke-linejoin="round" />
+                            
+                                <!-- Têtière -->
+                                <line x1="95" y1="48" x2="102" y2="35" stroke="#aab6bd" stroke-width="4" />
+                                <ellipse cx="106" cy="30" rx="9" ry="12" transform="rotate(28 106 30)" fill="var(--eu-glass, #ddf0ff)" stroke="#aab6bd" stroke-width="3" />
+                            
+                                <!-- Visage (Esprit kawaii) - Coordonnées d'origine pour compatibilité CSS -->
+                                <g class="face">
+                                    <circle class="eye" cx="80" cy="65" r="2.1" fill="#3c4a52" />
+                                    <circle class="eye" cx="90" cy="65" r="2.1" fill="#3c4a52" />
+                                    <path class="mouth" d="M80 72 q5 4 10 0" fill="none" stroke="#3c4a52" stroke-width="2.2" stroke-linecap="round" />
+                                </g>
+                            </svg>
+                        </div>
+                        <div class="autoclave-status">⚪ Prêt</div>
+                        <button class="autoclave-start">Lancer</button>
+                        <button class="btn-fauteuil-maint-icon" data-machine="Fauteuil Sinius" data-cabinet="Cabinet 1" title="Rappel Maintenance - Fauteuil Sinius" style="margin-top: 10px; cursor: pointer; background: #fdfdfd; border: 1px solid #ddd; border-radius: 8px; padding: 8px; font-size: 14px; font-weight: bold; color: #555; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: background 0.2s; width: 100%; box-sizing: border-box;">
+                            <span class="fauteuil-icon-status">🔔</span> Rappel Maintenance
+                        </button>
+                    </div>
+
+                    <!-- FAUTEUIL DENTAIRE Planmeca -->
+                    <div class="autoclave machine machine-fauteuil" data-machine="Fauteuil Planmeca" data-type="fauteuil">
+                        <button class="autoclave-title" title="Ouvrir le suivi de maintenance">Fauteuil Planmeca 📝</button>
+                        <div class="fauteuil-machine-svg" aria-hidden="true">
+                            <svg viewBox="0 0 140 134" xmlns="http://www.w3.org/2000/svg" overflow="visible">
+                                <!-- Bras articulé (en arrière-plan) -->
+                                <path d="M70 80 L70 35 L45 25" fill="none" stroke="#aab6bd" stroke-width="4" stroke-linejoin="round" />
+                                
+                                <!-- Crachoir (arrière-plan) -->
+                                <line x1="110" y1="100" x2="110" y2="65" stroke="#aab6bd" stroke-width="4" />
+                                <ellipse cx="110" cy="65" rx="12" ry="4" fill="#eef2f4" stroke="#aab6bd" stroke-width="2" />
+                                <path d="M98 65 Q110 75 122 65" fill="none" stroke="#aab6bd" stroke-width="2" />
+                                
+                                <!-- Base massive -->
+                                <path d="M40 115 L100 115 L95 100 L45 100 Z" fill="#8b979e" />
+                                <rect x="60" y="80" width="20" height="20" fill="#e3e9ec" stroke="#aab6bd" stroke-width="3" />
+                            
+                                <!-- Tête de la lampe -->
+                                <path d="M35 25 Q45 15 55 25 Z" fill="#eef2f4" stroke="#aab6bd" stroke-width="2" />
+                                <circle class="led" cx="45" cy="27" r="3" fill="var(--eu-led, #b9c3c8)" />
+                                <!-- Rayons -->
+                                <g class="rays">
+                                    <line class="ray" x1="40" y1="31" x2="32" y2="40" stroke="#f5b942" stroke-width="2" stroke-linecap="round" opacity="0" />
+                                    <line class="ray" x1="45" y1="33" x2="45" y2="45" stroke="#f5b942" stroke-width="2" stroke-linecap="round" opacity="0" />
+                                    <line class="ray" x1="50" y1="31" x2="58" y2="40" stroke="#f5b942" stroke-width="2" stroke-linecap="round" opacity="0" />
+                                </g>
+                            
+                                <!-- Corps du fauteuil (assise + dossier) -->
+                                <path d="M25 105 L35 85 L75 85 L95 48" fill="none" stroke="#aab6bd" stroke-width="24" stroke-linecap="round" stroke-linejoin="round" />
+                                <path d="M25 105 L35 85 L75 85 L95 48" fill="none" stroke="var(--eu-glass, #ddf0ff)" stroke-width="18" stroke-linecap="round" stroke-linejoin="round" />
+                            
+                                <!-- Têtière -->
+                                <line x1="95" y1="48" x2="102" y2="35" stroke="#aab6bd" stroke-width="4" />
+                                <ellipse cx="106" cy="30" rx="9" ry="12" transform="rotate(28 106 30)" fill="var(--eu-glass, #ddf0ff)" stroke="#aab6bd" stroke-width="3" />
+                            
+                                <!-- Visage (Esprit kawaii) - Coordonnées d'origine pour compatibilité CSS -->
+                                <g class="face">
+                                    <circle class="eye" cx="80" cy="65" r="2.1" fill="#3c4a52" />
+                                    <circle class="eye" cx="90" cy="65" r="2.1" fill="#3c4a52" />
+                                    <path class="mouth" d="M80 72 q5 4 10 0" fill="none" stroke="#3c4a52" stroke-width="2.2" stroke-linecap="round" />
+                                </g>
+                            </svg>
+                        </div>
+                        <div class="autoclave-status">⚪ Prêt</div>
+                        <button class="autoclave-start">Lancer</button>
+                        <button class="btn-fauteuil-maint-icon" data-machine="Fauteuil Planmeca" data-cabinet="Salle de chirurgie" title="Rappel Maintenance - Fauteuil Planmeca" style="margin-top: 10px; cursor: pointer; background: #fdfdfd; border: 1px solid #ddd; border-radius: 8px; padding: 8px; font-size: 14px; font-weight: bold; color: #555; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: background 0.2s; width: 100%; box-sizing: border-box;">
+                            <span class="fauteuil-icon-status">🔔</span> Rappel Maintenance
+                        </button>
+                    </div>
+
+                    <!-- FAUTEUIL DENTAIRE Planmeca compact -->
+                    <div class="autoclave machine machine-fauteuil" data-machine="Fauteuil Planmeca compact" data-type="fauteuil">
+                        <button class="autoclave-title" title="Ouvrir le suivi de maintenance">Fauteuil Planmeca compact 📝</button>
+                        <div class="fauteuil-machine-svg" aria-hidden="true">
+                            <svg viewBox="0 0 140 134" xmlns="http://www.w3.org/2000/svg" overflow="visible">
+                                <!-- Bras articulé (en arrière-plan) -->
+                                <path d="M70 80 L70 35 L45 25" fill="none" stroke="#aab6bd" stroke-width="4" stroke-linejoin="round" />
+                                
+                                <!-- Crachoir (arrière-plan) -->
+                                <line x1="110" y1="100" x2="110" y2="65" stroke="#aab6bd" stroke-width="4" />
+                                <ellipse cx="110" cy="65" rx="12" ry="4" fill="#eef2f4" stroke="#aab6bd" stroke-width="2" />
+                                <path d="M98 65 Q110 75 122 65" fill="none" stroke="#aab6bd" stroke-width="2" />
+                                
+                                <!-- Base massive -->
+                                <path d="M40 115 L100 115 L95 100 L45 100 Z" fill="#8b979e" />
+                                <rect x="60" y="80" width="20" height="20" fill="#e3e9ec" stroke="#aab6bd" stroke-width="3" />
+                            
+                                <!-- Tête de la lampe -->
+                                <path d="M35 25 Q45 15 55 25 Z" fill="#eef2f4" stroke="#aab6bd" stroke-width="2" />
+                                <circle class="led" cx="45" cy="27" r="3" fill="var(--eu-led, #b9c3c8)" />
+                                <!-- Rayons -->
+                                <g class="rays">
+                                    <line class="ray" x1="40" y1="31" x2="32" y2="40" stroke="#f5b942" stroke-width="2" stroke-linecap="round" opacity="0" />
+                                    <line class="ray" x1="45" y1="33" x2="45" y2="45" stroke="#f5b942" stroke-width="2" stroke-linecap="round" opacity="0" />
+                                    <line class="ray" x1="50" y1="31" x2="58" y2="40" stroke="#f5b942" stroke-width="2" stroke-linecap="round" opacity="0" />
+                                </g>
+                            
+                                <!-- Corps du fauteuil (assise + dossier) -->
+                                <path d="M25 105 L35 85 L75 85 L95 48" fill="none" stroke="#aab6bd" stroke-width="24" stroke-linecap="round" stroke-linejoin="round" />
+                                <path d="M25 105 L35 85 L75 85 L95 48" fill="none" stroke="var(--eu-glass, #ddf0ff)" stroke-width="18" stroke-linecap="round" stroke-linejoin="round" />
+                            
+                                <!-- Têtière -->
+                                <line x1="95" y1="48" x2="102" y2="35" stroke="#aab6bd" stroke-width="4" />
+                                <ellipse cx="106" cy="30" rx="9" ry="12" transform="rotate(28 106 30)" fill="var(--eu-glass, #ddf0ff)" stroke="#aab6bd" stroke-width="3" />
+                            
+                                <!-- Visage (Esprit kawaii) - Coordonnées d'origine pour compatibilité CSS -->
+                                <g class="face">
+                                    <circle class="eye" cx="80" cy="65" r="2.1" fill="#3c4a52" />
+                                    <circle class="eye" cx="90" cy="65" r="2.1" fill="#3c4a52" />
+                                    <path class="mouth" d="M80 72 q5 4 10 0" fill="none" stroke="#3c4a52" stroke-width="2.2" stroke-linecap="round" />
+                                </g>
+                            </svg>
+                        </div>
+                        <div class="autoclave-status">⚪ Prêt</div>
+                        <button class="autoclave-start">Lancer</button>
+                        <button class="btn-fauteuil-maint-icon" data-machine="Fauteuil Planmeca compact" data-cabinet="Cabinet 2" title="Rappel Maintenance - Fauteuil Planmeca compact" style="margin-top: 10px; cursor: pointer; background: #fdfdfd; border: 1px solid #ddd; border-radius: 8px; padding: 8px; font-size: 14px; font-weight: bold; color: #555; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: background 0.2s; width: 100%; box-sizing: border-box;">
+                            <span class="fauteuil-icon-status">🔔</span> Rappel Maintenance
+                        </button>
+                    </div>
+
+                    <!-- FAUTEUIL DENTAIRE Anthos -->
+                    <div class="autoclave machine machine-fauteuil" data-machine="Fauteuil Anthos" data-type="fauteuil">
+                        <button class="autoclave-title" title="Ouvrir le suivi de maintenance">Fauteuil Anthos 📝</button>
+                        <div class="fauteuil-machine-svg" aria-hidden="true">
+                            <svg viewBox="0 0 140 134" xmlns="http://www.w3.org/2000/svg" overflow="visible">
+                                <!-- Bras articulé (en arrière-plan) -->
+                                <path d="M70 80 L70 35 L45 25" fill="none" stroke="#aab6bd" stroke-width="4" stroke-linejoin="round" />
+                                
+                                <!-- Crachoir (arrière-plan) -->
+                                <line x1="110" y1="100" x2="110" y2="65" stroke="#aab6bd" stroke-width="4" />
+                                <ellipse cx="110" cy="65" rx="12" ry="4" fill="#eef2f4" stroke="#aab6bd" stroke-width="2" />
+                                <path d="M98 65 Q110 75 122 65" fill="none" stroke="#aab6bd" stroke-width="2" />
+                                
+                                <!-- Base massive -->
+                                <path d="M40 115 L100 115 L95 100 L45 100 Z" fill="#8b979e" />
+                                <rect x="60" y="80" width="20" height="20" fill="#e3e9ec" stroke="#aab6bd" stroke-width="3" />
+                            
+                                <!-- Tête de la lampe -->
+                                <path d="M35 25 Q45 15 55 25 Z" fill="#eef2f4" stroke="#aab6bd" stroke-width="2" />
+                                <circle class="led" cx="45" cy="27" r="3" fill="var(--eu-led, #b9c3c8)" />
+                                <!-- Rayons -->
+                                <g class="rays">
+                                    <line class="ray" x1="40" y1="31" x2="32" y2="40" stroke="#f5b942" stroke-width="2" stroke-linecap="round" opacity="0" />
+                                    <line class="ray" x1="45" y1="33" x2="45" y2="45" stroke="#f5b942" stroke-width="2" stroke-linecap="round" opacity="0" />
+                                    <line class="ray" x1="50" y1="31" x2="58" y2="40" stroke="#f5b942" stroke-width="2" stroke-linecap="round" opacity="0" />
+                                </g>
+                            
+                                <!-- Corps du fauteuil (assise + dossier) -->
+                                <path d="M25 105 L35 85 L75 85 L95 48" fill="none" stroke="#aab6bd" stroke-width="24" stroke-linecap="round" stroke-linejoin="round" />
+                                <path d="M25 105 L35 85 L75 85 L95 48" fill="none" stroke="var(--eu-glass, #ddf0ff)" stroke-width="18" stroke-linecap="round" stroke-linejoin="round" />
+                            
+                                <!-- Têtière -->
+                                <line x1="95" y1="48" x2="102" y2="35" stroke="#aab6bd" stroke-width="4" />
+                                <ellipse cx="106" cy="30" rx="9" ry="12" transform="rotate(28 106 30)" fill="var(--eu-glass, #ddf0ff)" stroke="#aab6bd" stroke-width="3" />
+                            
+                                <!-- Visage (Esprit kawaii) - Coordonnées d'origine pour compatibilité CSS -->
+                                <g class="face">
+                                    <circle class="eye" cx="80" cy="65" r="2.1" fill="#3c4a52" />
+                                    <circle class="eye" cx="90" cy="65" r="2.1" fill="#3c4a52" />
+                                    <path class="mouth" d="M80 72 q5 4 10 0" fill="none" stroke="#3c4a52" stroke-width="2.2" stroke-linecap="round" />
+                                </g>
+                            </svg>
+                        </div>
+                        <div class="autoclave-status">⚪ Prêt</div>
+                        <button class="autoclave-start">Lancer</button>
+                        <button class="btn-fauteuil-maint-icon" data-machine="Fauteuil Anthos" data-cabinet="Cabinet 4" title="Rappel Maintenance - Fauteuil Anthos" style="margin-top: 10px; cursor: pointer; background: #fdfdfd; border: 1px solid #ddd; border-radius: 8px; padding: 8px; font-size: 14px; font-weight: bold; color: #555; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: background 0.2s; width: 100%; box-sizing: border-box;">
+                            <span class="fauteuil-icon-status">🔔</span> Rappel Maintenance
+                        </button>
+                    </div>
+
+                    <!-- RADIO CABINET 1 -->
+                    <div class="autoclave machine machine-radio machine-radio-intra" data-machine="Radio Cabinet 1" data-type="radio">
+                        <button class="autoclave-title" title="Ouvrir le suivi de maintenance">Radio Cabinet 1 📝</button>
+                        <div class="radio-intra-machine-svg" aria-hidden="true">
+                            <svg viewBox="0 0 140 134" xmlns="http://www.w3.org/2000/svg" overflow="visible">
+                                <!-- Support mural / fixation -->
+                                <rect x="14" y="35" width="10" height="50" rx="3" fill="#8b979e" stroke="#aab6bd" stroke-width="2" />
+                                <rect x="10" y="45" width="4" height="30" rx="2" fill="#cfd6da" />
+                                <circle cx="19" cy="42" r="2" fill="#607d8b" />
+                                <circle cx="19" cy="78" r="2" fill="#607d8b" />
+
+                                <!-- Boîtier de commande mural avec voyants -->
+                                <rect x="8" y="92" width="22" height="18" rx="3" fill="#eef2f4" stroke="#aab6bd" stroke-width="2" />
+                                <rect x="12" y="96" width="14" height="4" rx="1.5" fill="#3c4a52" />
+                                <circle cx="13" cy="104" r="1.5" fill="#2ecc71" />
+                                <circle cx="19" cy="104" r="1.5" fill="#f1c40f" />
+                                <circle cx="25" cy="104" r="1.5" fill="#e74c3c" />
+
+                                <!-- Bras articulé pantographe -->
+                                <path d="M24 48 L62 26" stroke="#aab6bd" stroke-width="5" stroke-linecap="round" />
+                                <path d="M24 54 L62 32" stroke="#cfd6da" stroke-width="3" stroke-linecap="round" />
+                                <circle cx="62" cy="29" r="6" fill="#8b979e" stroke="#aab6bd" stroke-width="2" />
+
+                                <path d="M62 29 L90 58" stroke="#aab6bd" stroke-width="5" stroke-linecap="round" />
+                                <path d="M64 33 L92 62" stroke="#cfd6da" stroke-width="3" stroke-linecap="round" />
+                                <circle cx="90" cy="58" r="5" fill="#8b979e" stroke="#aab6bd" stroke-width="2" />
+                                <path d="M90 58 L85 70" stroke="#aab6bd" stroke-width="4" stroke-linecap="round" />
+
+                                <!-- Poignée arrière -->
+                                <path d="M60 76 C52 76 52 88 60 88" fill="none" stroke="#aab6bd" stroke-width="3" stroke-linecap="round" />
+
+                                <!-- Corps du tube -->
+                                <rect x="62" y="68" width="42" height="28" rx="8" fill="var(--eu-glass, #ddf0ff)" stroke="#aab6bd" stroke-width="3" />
+                                <circle class="led" cx="70" cy="74" r="2.5" fill="var(--eu-led, #b9c3c8)" />
+
+                                <!-- Cône de collimation -->
+                                <path d="M104 74 L126 71 L126 93 L104 90 Z" fill="#eef2f4" stroke="#aab6bd" stroke-width="2.5" stroke-linejoin="round" />
+                                <ellipse cx="126" cy="82" rx="3" ry="11" fill="#cfd6da" stroke="#aab6bd" stroke-width="2" />
+
+                                <!-- Rayons pendant acquisition -->
+                                <g class="rays">
+                                    <line class="ray" x1="129" y1="76" x2="139" y2="70" stroke="#f5b942" stroke-width="2.5" stroke-linecap="round" opacity="0" />
+                                    <line class="ray" x1="131" y1="82" x2="142" y2="82" stroke="#f5b942" stroke-width="2.5" stroke-linecap="round" opacity="0" />
+                                    <line class="ray" x1="129" y1="88" x2="139" y2="94" stroke="#f5b942" stroke-width="2.5" stroke-linecap="round" opacity="0" />
+                                </g>
+
+                                <!-- Visage kawaii -->
+                                <g class="face">
+                                    <circle class="eye" cx="78" cy="80" r="2.1" fill="#3c4a52" />
+                                    <circle class="eye" cx="92" cy="80" r="2.1" fill="#3c4a52" />
+                                    <path class="mouth" d="M80 86 q5 4 10 0" fill="none" stroke="#3c4a52" stroke-width="2.2" stroke-linecap="round" />
+                                </g>
+                            </svg>
+                        </div>
+                        <div class="autoclave-status">⚪ Prêt</div>
+                        <button class="autoclave-start">Lancer</button>
+                        <button class="btn-mire-icon" data-machine="Radio Cabinet 1" data-cabinet="Cabinet 1" title="Rappel Mire - Cabinet 1" style="margin-top: 10px; cursor: pointer; background: #fdfdfd; border: 1px solid #ddd; border-radius: 8px; padding: 8px; font-size: 14px; font-weight: bold; color: #555; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: background 0.2s; width: 100%; box-sizing: border-box;">
+                            <span class="mire-icon-status">🔔</span> Alerte Mire
+                        </button>
+                    </div>
+
+                    <!-- RADIO CABINET 2 -->
+                    <div class="autoclave machine machine-radio machine-radio-intra" data-machine="Radio Cabinet 2" data-type="radio">
+                        <button class="autoclave-title" title="Ouvrir le suivi de maintenance">Radio Cabinet 2 📝</button>
+                        <div class="radio-intra-machine-svg" aria-hidden="true">
+                            <svg viewBox="0 0 140 134" xmlns="http://www.w3.org/2000/svg" overflow="visible">
+                                <!-- Support mural / fixation -->
+                                <rect x="14" y="35" width="10" height="50" rx="3" fill="#8b979e" stroke="#aab6bd" stroke-width="2" />
+                                <rect x="10" y="45" width="4" height="30" rx="2" fill="#cfd6da" />
+                                <circle cx="19" cy="42" r="2" fill="#607d8b" />
+                                <circle cx="19" cy="78" r="2" fill="#607d8b" />
+
+                                <!-- Boîtier de commande mural avec voyants -->
+                                <rect x="8" y="92" width="22" height="18" rx="3" fill="#eef2f4" stroke="#aab6bd" stroke-width="2" />
+                                <rect x="12" y="96" width="14" height="4" rx="1.5" fill="#3c4a52" />
+                                <circle cx="13" cy="104" r="1.5" fill="#2ecc71" />
+                                <circle cx="19" cy="104" r="1.5" fill="#f1c40f" />
+                                <circle cx="25" cy="104" r="1.5" fill="#e74c3c" />
+
+                                <!-- Bras articulé pantographe -->
+                                <path d="M24 48 L62 26" stroke="#aab6bd" stroke-width="5" stroke-linecap="round" />
+                                <path d="M24 54 L62 32" stroke="#cfd6da" stroke-width="3" stroke-linecap="round" />
+                                <circle cx="62" cy="29" r="6" fill="#8b979e" stroke="#aab6bd" stroke-width="2" />
+
+                                <path d="M62 29 L90 58" stroke="#aab6bd" stroke-width="5" stroke-linecap="round" />
+                                <path d="M64 33 L92 62" stroke="#cfd6da" stroke-width="3" stroke-linecap="round" />
+                                <circle cx="90" cy="58" r="5" fill="#8b979e" stroke="#aab6bd" stroke-width="2" />
+                                <path d="M90 58 L85 70" stroke="#aab6bd" stroke-width="4" stroke-linecap="round" />
+
+                                <!-- Poignée arrière -->
+                                <path d="M60 76 C52 76 52 88 60 88" fill="none" stroke="#aab6bd" stroke-width="3" stroke-linecap="round" />
+
+                                <!-- Corps du tube -->
+                                <rect x="62" y="68" width="42" height="28" rx="8" fill="var(--eu-glass, #ddf0ff)" stroke="#aab6bd" stroke-width="3" />
+                                <circle class="led" cx="70" cy="74" r="2.5" fill="var(--eu-led, #b9c3c8)" />
+
+                                <!-- Cône de collimation -->
+                                <path d="M104 74 L126 71 L126 93 L104 90 Z" fill="#eef2f4" stroke="#aab6bd" stroke-width="2.5" stroke-linejoin="round" />
+                                <ellipse cx="126" cy="82" rx="3" ry="11" fill="#cfd6da" stroke="#aab6bd" stroke-width="2" />
+
+                                <!-- Rayons pendant acquisition -->
+                                <g class="rays">
+                                    <line class="ray" x1="129" y1="76" x2="139" y2="70" stroke="#f5b942" stroke-width="2.5" stroke-linecap="round" opacity="0" />
+                                    <line class="ray" x1="131" y1="82" x2="142" y2="82" stroke="#f5b942" stroke-width="2.5" stroke-linecap="round" opacity="0" />
+                                    <line class="ray" x1="129" y1="88" x2="139" y2="94" stroke="#f5b942" stroke-width="2.5" stroke-linecap="round" opacity="0" />
+                                </g>
+
+                                <!-- Visage kawaii -->
+                                <g class="face">
+                                    <circle class="eye" cx="78" cy="80" r="2.1" fill="#3c4a52" />
+                                    <circle class="eye" cx="92" cy="80" r="2.1" fill="#3c4a52" />
+                                    <path class="mouth" d="M80 86 q5 4 10 0" fill="none" stroke="#3c4a52" stroke-width="2.2" stroke-linecap="round" />
+                                </g>
+                            </svg>
+                        </div>
+                        <div class="autoclave-status">⚪ Prêt</div>
+                        <button class="autoclave-start">Lancer</button>
+                        <button class="btn-mire-icon" data-machine="Radio Cabinet 2" data-cabinet="Cabinet 2" title="Rappel Mire - Cabinet 2" style="margin-top: 10px; cursor: pointer; background: #fdfdfd; border: 1px solid #ddd; border-radius: 8px; padding: 8px; font-size: 14px; font-weight: bold; color: #555; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: background 0.2s; width: 100%; box-sizing: border-box;">
+                            <span class="mire-icon-status">🔔</span> Alerte Mire
+                        </button>
+                    </div>
+
+                    <!-- RADIO CABINET 4 -->
+                    <div class="autoclave machine machine-radio machine-radio-intra" data-machine="Radio Cabinet 4" data-type="radio">
+                        <button class="autoclave-title" title="Ouvrir le suivi de maintenance">Radio Cabinet 4 📝</button>
+                        <div class="radio-intra-machine-svg" aria-hidden="true">
+                            <svg viewBox="0 0 140 134" xmlns="http://www.w3.org/2000/svg" overflow="visible">
+                                <!-- Support mural / fixation -->
+                                <rect x="14" y="35" width="10" height="50" rx="3" fill="#8b979e" stroke="#aab6bd" stroke-width="2" />
+                                <rect x="10" y="45" width="4" height="30" rx="2" fill="#cfd6da" />
+                                <circle cx="19" cy="42" r="2" fill="#607d8b" />
+                                <circle cx="19" cy="78" r="2" fill="#607d8b" />
+
+                                <!-- Boîtier de commande mural avec voyants -->
+                                <rect x="8" y="92" width="22" height="18" rx="3" fill="#eef2f4" stroke="#aab6bd" stroke-width="2" />
+                                <rect x="12" y="96" width="14" height="4" rx="1.5" fill="#3c4a52" />
+                                <circle cx="13" cy="104" r="1.5" fill="#2ecc71" />
+                                <circle cx="19" cy="104" r="1.5" fill="#f1c40f" />
+                                <circle cx="25" cy="104" r="1.5" fill="#e74c3c" />
+
+                                <!-- Bras articulé pantographe -->
+                                <path d="M24 48 L62 26" stroke="#aab6bd" stroke-width="5" stroke-linecap="round" />
+                                <path d="M24 54 L62 32" stroke="#cfd6da" stroke-width="3" stroke-linecap="round" />
+                                <circle cx="62" cy="29" r="6" fill="#8b979e" stroke="#aab6bd" stroke-width="2" />
+
+                                <path d="M62 29 L90 58" stroke="#aab6bd" stroke-width="5" stroke-linecap="round" />
+                                <path d="M64 33 L92 62" stroke="#cfd6da" stroke-width="3" stroke-linecap="round" />
+                                <circle cx="90" cy="58" r="5" fill="#8b979e" stroke="#aab6bd" stroke-width="2" />
+                                <path d="M90 58 L85 70" stroke="#aab6bd" stroke-width="4" stroke-linecap="round" />
+
+                                <!-- Poignée arrière -->
+                                <path d="M60 76 C52 76 52 88 60 88" fill="none" stroke="#aab6bd" stroke-width="3" stroke-linecap="round" />
+
+                                <!-- Corps du tube -->
+                                <rect x="62" y="68" width="42" height="28" rx="8" fill="var(--eu-glass, #ddf0ff)" stroke="#aab6bd" stroke-width="3" />
+                                <circle class="led" cx="70" cy="74" r="2.5" fill="var(--eu-led, #b9c3c8)" />
+
+                                <!-- Cône de collimation -->
+                                <path d="M104 74 L126 71 L126 93 L104 90 Z" fill="#eef2f4" stroke="#aab6bd" stroke-width="2.5" stroke-linejoin="round" />
+                                <ellipse cx="126" cy="82" rx="3" ry="11" fill="#cfd6da" stroke="#aab6bd" stroke-width="2" />
+
+                                <!-- Rayons pendant acquisition -->
+                                <g class="rays">
+                                    <line class="ray" x1="129" y1="76" x2="139" y2="70" stroke="#f5b942" stroke-width="2.5" stroke-linecap="round" opacity="0" />
+                                    <line class="ray" x1="131" y1="82" x2="142" y2="82" stroke="#f5b942" stroke-width="2.5" stroke-linecap="round" opacity="0" />
+                                    <line class="ray" x1="129" y1="88" x2="139" y2="94" stroke="#f5b942" stroke-width="2.5" stroke-linecap="round" opacity="0" />
+                                </g>
+
+                                <!-- Visage kawaii -->
+                                <g class="face">
+                                    <circle class="eye" cx="78" cy="80" r="2.1" fill="#3c4a52" />
+                                    <circle class="eye" cx="92" cy="80" r="2.1" fill="#3c4a52" />
+                                    <path class="mouth" d="M80 86 q5 4 10 0" fill="none" stroke="#3c4a52" stroke-width="2.2" stroke-linecap="round" />
+                                </g>
+                            </svg>
+                        </div>
+                        <div class="autoclave-status">⚪ Prêt</div>
+                        <button class="autoclave-start">Lancer</button>
+                        <button class="btn-mire-icon" data-machine="Radio Cabinet 4" data-cabinet="Cabinet 4" title="Rappel Mire - Cabinet 4" style="margin-top: 10px; cursor: pointer; background: #fdfdfd; border: 1px solid #ddd; border-radius: 8px; padding: 8px; font-size: 14px; font-weight: bold; color: #555; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: background 0.2s; width: 100%; box-sizing: border-box;">
+                            <span class="mire-icon-status">🔔</span> Alerte Mire
+                        </button>
+                    </div>
+
+                    <!-- RADIO CABINET 5 -->
+                    <div class="autoclave machine machine-radio machine-radio-intra" data-machine="Radio Cabinet 5" data-type="radio">
+                        <button class="autoclave-title" title="Ouvrir le suivi de maintenance">Radio Cabinet 5 📝</button>
+                        <div class="radio-intra-machine-svg" aria-hidden="true">
+                            <svg viewBox="0 0 140 134" xmlns="http://www.w3.org/2000/svg" overflow="visible">
+                                <!-- Support mural / fixation -->
+                                <rect x="14" y="35" width="10" height="50" rx="3" fill="#8b979e" stroke="#aab6bd" stroke-width="2" />
+                                <rect x="10" y="45" width="4" height="30" rx="2" fill="#cfd6da" />
+                                <circle cx="19" cy="42" r="2" fill="#607d8b" />
+                                <circle cx="19" cy="78" r="2" fill="#607d8b" />
+
+                                <!-- Boîtier de commande mural avec voyants -->
+                                <rect x="8" y="92" width="22" height="18" rx="3" fill="#eef2f4" stroke="#aab6bd" stroke-width="2" />
+                                <rect x="12" y="96" width="14" height="4" rx="1.5" fill="#3c4a52" />
+                                <circle cx="13" cy="104" r="1.5" fill="#2ecc71" />
+                                <circle cx="19" cy="104" r="1.5" fill="#f1c40f" />
+                                <circle cx="25" cy="104" r="1.5" fill="#e74c3c" />
+
+                                <!-- Bras articulé pantographe -->
+                                <path d="M24 48 L62 26" stroke="#aab6bd" stroke-width="5" stroke-linecap="round" />
+                                <path d="M24 54 L62 32" stroke="#cfd6da" stroke-width="3" stroke-linecap="round" />
+                                <circle cx="62" cy="29" r="6" fill="#8b979e" stroke="#aab6bd" stroke-width="2" />
+
+                                <path d="M62 29 L90 58" stroke="#aab6bd" stroke-width="5" stroke-linecap="round" />
+                                <path d="M64 33 L92 62" stroke="#cfd6da" stroke-width="3" stroke-linecap="round" />
+                                <circle cx="90" cy="58" r="5" fill="#8b979e" stroke="#aab6bd" stroke-width="2" />
+                                <path d="M90 58 L85 70" stroke="#aab6bd" stroke-width="4" stroke-linecap="round" />
+
+                                <!-- Poignée arrière -->
+                                <path d="M60 76 C52 76 52 88 60 88" fill="none" stroke="#aab6bd" stroke-width="3" stroke-linecap="round" />
+
+                                <!-- Corps du tube -->
+                                <rect x="62" y="68" width="42" height="28" rx="8" fill="var(--eu-glass, #ddf0ff)" stroke="#aab6bd" stroke-width="3" />
+                                <circle class="led" cx="70" cy="74" r="2.5" fill="var(--eu-led, #b9c3c8)" />
+
+                                <!-- Cône de collimation -->
+                                <path d="M104 74 L126 71 L126 93 L104 90 Z" fill="#eef2f4" stroke="#aab6bd" stroke-width="2.5" stroke-linejoin="round" />
+                                <ellipse cx="126" cy="82" rx="3" ry="11" fill="#cfd6da" stroke="#aab6bd" stroke-width="2" />
+
+                                <!-- Rayons pendant acquisition -->
+                                <g class="rays">
+                                    <line class="ray" x1="129" y1="76" x2="139" y2="70" stroke="#f5b942" stroke-width="2.5" stroke-linecap="round" opacity="0" />
+                                    <line class="ray" x1="131" y1="82" x2="142" y2="82" stroke="#f5b942" stroke-width="2.5" stroke-linecap="round" opacity="0" />
+                                    <line class="ray" x1="129" y1="88" x2="139" y2="94" stroke="#f5b942" stroke-width="2.5" stroke-linecap="round" opacity="0" />
+                                </g>
+
+                                <!-- Visage kawaii -->
+                                <g class="face">
+                                    <circle class="eye" cx="78" cy="80" r="2.1" fill="#3c4a52" />
+                                    <circle class="eye" cx="92" cy="80" r="2.1" fill="#3c4a52" />
+                                    <path class="mouth" d="M80 86 q5 4 10 0" fill="none" stroke="#3c4a52" stroke-width="2.2" stroke-linecap="round" />
+                                </g>
+                            </svg>
+                        </div>
+                        <div class="autoclave-status">⚪ Prêt</div>
+                        <button class="autoclave-start">Lancer</button>
+                        <button class="btn-mire-icon" data-machine="Radio Cabinet 5" data-cabinet="Cabinet 5" title="Rappel Mire - Cabinet 5" style="margin-top: 10px; cursor: pointer; background: #fdfdfd; border: 1px solid #ddd; border-radius: 8px; padding: 8px; font-size: 14px; font-weight: bold; color: #555; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: background 0.2s; width: 100%; box-sizing: border-box;">
+                            <span class="mire-icon-status">🔔</span> Alerte Mire
+                        </button>
+                    </div>
+
+                    <!-- RADIO PANORAMIQUE -->
+                    <div class="autoclave machine machine-radio" data-machine="Radio Panoramique" data-type="radio">
+                        <button class="autoclave-title" title="Ouvrir le suivi de maintenance">Radio Panoramique
+                            📝</button>
+                        <div class="euronda-machine" aria-hidden="true">
+                            <svg viewBox="0 0 140 124" xmlns="http://www.w3.org/2000/svg" overflow="visible">
+                                <!-- Bras supérieur (bandeau de marque) -->
+                                <rect x="18" y="6" width="104" height="15" rx="7.5" fill="var(--eu-accent)" />
+                                <text x="61" y="17" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif"
+                                    font-size="9.5" font-weight="bold" fill="#ffffff"
+                                    letter-spacing="1">PANORAMIQUE</text>
+
+                                <!-- Colonne -->
+                                <rect x="104" y="14" width="15" height="92" rx="6" fill="#e3e9ec" stroke="#aab6bd"
+                                    stroke-width="3" />
+                                <circle class="led" cx="111.5" cy="46" r="4" fill="var(--eu-led, #b9c3c8)" />
+                                <rect x="107" y="56" width="9" height="4" rx="2" fill="#c4ced3" />
+                                <rect x="107" y="64" width="9" height="4" rx="2" fill="#c4ced3" />
+
+                                <!-- Bras rotatif en U -->
+                                <g class="xarm">
+                                    <rect x="56" y="19" width="8" height="10" fill="#b7c2c8" />
+                                    <rect x="28" y="27" width="64" height="9" rx="4.5" fill="#cfd6da" stroke="#aab6bd"
+                                        stroke-width="2" />
+                                    <!-- Tube (avec petit visage) -->
+                                    <rect x="24" y="34" width="20" height="32" rx="9" fill="var(--eu-glass, #eef6fb)"
+                                        stroke="#aab6bd" stroke-width="3" />
+                                    <g class="face">
+                                        <circle class="eye" cx="30.5" cy="46" r="2.1" fill="#3c4a52" />
+                                        <circle class="eye" cx="37.5" cy="46" r="2.1" fill="#3c4a52" />
+                                        <path class="mouth-r" d="M30.5 53 q3.5 3 7 0" fill="none" stroke="#3c4a52"
+                                            stroke-width="2.2" stroke-linecap="round" />
+                                    </g>
+                                    <!-- Rayons (visibles pendant l'acquisition) -->
+                                    <g class="rays">
+                                        <line class="ray" x1="47" y1="42" x2="58" y2="40" stroke="#f5b942"
+                                            stroke-width="3" stroke-linecap="round" />
+                                        <line class="ray" x1="47" y1="50" x2="59" y2="50" stroke="#f5b942"
+                                            stroke-width="3" stroke-linecap="round" />
+                                        <line class="ray" x1="47" y1="58" x2="58" y2="60" stroke="#f5b942"
+                                            stroke-width="3" stroke-linecap="round" />
+                                    </g>
+                                    <!-- Capteur -->
+                                    <rect x="76" y="34" width="11" height="34" rx="5.5" fill="#eef2f4" stroke="#aab6bd"
+                                        stroke-width="3" />
+                                </g>
+
+                                <!-- Mentonnière + poignées -->
+                                <rect x="60" y="80" width="46" height="7" rx="3.5" fill="#cfd6da" stroke="#aab6bd"
+                                    stroke-width="2" />
+                                <ellipse cx="63" cy="78" rx="8" ry="4.5" fill="#e3e9ec" stroke="#9fabb2"
+                                    stroke-width="2.5" />
+                                <circle cx="72" cy="92" r="3.5" fill="#8b979e" />
+                                <circle cx="94" cy="92" r="3.5" fill="#8b979e" />
+
+                                <!-- Pied -->
+                                <rect x="90" y="106" width="44" height="9" rx="4.5" fill="#8b979e" />
+                            </svg>
+                        </div>
+                        <div class="autoclave-status">⚪ Prêt</div>
+                        <button class="autoclave-start">Lancer</button>
+                        <button class="btn-mire-icon" data-machine="Radio Panoramique" data-cabinet="Zone panoramique (Pano)" title="Rappel Mire - Radio Panoramique" style="margin-top: 10px; cursor: pointer; background: #fdfdfd; border: 1px solid #ddd; border-radius: 8px; padding: 8px; font-size: 14px; font-weight: bold; color: #555; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: background 0.2s; width: 100%; box-sizing: border-box;">
+                            <span class="mire-icon-status">🔔</span> Alerte Mire
+                        </button>
+                        <button class="btn-dosi-icon" title="Rappel Dosimètres" style="margin-top: 10px; cursor: pointer; background: #fdfdfd; border: 1px solid #ddd; border-radius: 8px; padding: 8px; font-size: 14px; font-weight: bold; color: #555; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: background 0.2s; width: 100%; box-sizing: border-box;">
+                            <span class="dosi-icon-status">🔔</span> Alerte Dosimètres
+                        </button>
+                    </div>
+                    <div class="autoclave machine machine-euronda" data-machine="Euronda">
+                        <button class="autoclave-title" title="Ouvrir le suivi de maintenance">Euronda 📝</button>
+                        <div class="euronda-machine" aria-hidden="true">
+                            <svg viewBox="0 -16 140 134" xmlns="http://www.w3.org/2000/svg" overflow="visible">
+                                <g class="steam">
+                                    <path class="puff p1" d="M46 20 q-5 -7 0 -13 q5 -6 0 -12" fill="none"
+                                        stroke="#c9d6dd" stroke-width="4" stroke-linecap="round" />
+                                    <path class="puff p2" d="M70 18 q-5 -7 0 -13 q5 -6 0 -12" fill="none"
+                                        stroke="#c9d6dd" stroke-width="4" stroke-linecap="round" />
+                                    <path class="puff p3" d="M94 20 q-5 -7 0 -13 q5 -6 0 -12" fill="none"
+                                        stroke="#c9d6dd" stroke-width="4" stroke-linecap="round" />
+                                </g>
+                                <rect x="14" y="24" width="112" height="80" rx="18" fill="#fbfcfd" stroke="#aab6bd"
+                                    stroke-width="3" />
+                                <path d="M14 42 v-4 a18 18 0 0 1 18 -18 h76 a18 18 0 0 1 18 18 v4 z"
+                                    fill="var(--eu-accent)" />
+                                <circle cx="58" cy="72" r="25" fill="#e3e9ec" stroke="#9fabb2" stroke-width="3" />
+                                <circle class="glass" cx="58" cy="72" r="18" fill="var(--eu-glass, #ddf0ff)"
+                                    stroke="#ffffff" stroke-width="2" />
+                                <g class="face">
+                                    <circle class="eye" cx="51" cy="69" r="2.6" fill="#3c4a52" />
+                                    <circle class="eye" cx="65" cy="69" r="2.6" fill="#3c4a52" />
+                                    <path class="mouth" d="M51 78 q7 5 14 0" fill="none" stroke="#3c4a52"
+                                        stroke-width="2.4" stroke-linecap="round" />
+                                </g>
+                                <path d="M46 62 a16 16 0 0 1 10 -6" fill="none" stroke="#ffffff" stroke-width="3"
+                                    stroke-linecap="round" opacity="0.9" />
+                                <rect x="93" y="54" width="24" height="36" rx="6" fill="#eef2f4" stroke="#b7c2c8"
+                                    stroke-width="2" />
+                                <circle class="led" cx="105" cy="63" r="4" fill="var(--eu-led, #b9c3c8)" />
+                                <rect x="99" y="72" width="12" height="4" rx="2" fill="#c4ced3" />
+                                <rect x="99" y="80" width="12" height="4" rx="2" fill="#c4ced3" />
+                                <text x="70" y="37" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif"
+                                    font-size="12" font-weight="bold" fill="#ffffff" letter-spacing="1">EURONDA</text>
+                                <rect x="28" y="104" width="16" height="8" rx="4" fill="#8b979e" />
+                                <rect x="96" y="104" width="16" height="8" rx="4" fill="#8b979e" />
+                            </svg>
+                        </div>
+                        <div class="autoclave-status">⚪ Prêt</div>
+                        <button class="autoclave-start">Lancer</button>
+                    </div>
+                    <div class="autoclave machine machine-melag" data-machine="Melag">
+                        <button class="autoclave-title" title="Ouvrir le suivi de maintenance">Melag 📝</button>
+                        <div class="euronda-machine" aria-hidden="true">
+                            <svg viewBox="0 -16 140 134" xmlns="http://www.w3.org/2000/svg" overflow="visible">
+                                <g class="steam">
+                                    <path class="puff p1" d="M46 20 q-5 -7 0 -13 q5 -6 0 -12" fill="none"
+                                        stroke="#c9d6dd" stroke-width="4" stroke-linecap="round" />
+                                    <path class="puff p2" d="M70 18 q-5 -7 0 -13 q5 -6 0 -12" fill="none"
+                                        stroke="#c9d6dd" stroke-width="4" stroke-linecap="round" />
+                                    <path class="puff p3" d="M94 20 q-5 -7 0 -13 q5 -6 0 -12" fill="none"
+                                        stroke="#c9d6dd" stroke-width="4" stroke-linecap="round" />
+                                </g>
+                                <rect x="14" y="24" width="112" height="80" rx="18" fill="#fbfcfd" stroke="#aab6bd"
+                                    stroke-width="3" />
+                                <path d="M14 42 v-4 a18 18 0 0 1 18 -18 h76 a18 18 0 0 1 18 18 v4 z"
+                                    fill="var(--eu-accent)" />
+                                <circle cx="58" cy="72" r="25" fill="#e3e9ec" stroke="#9fabb2" stroke-width="3" />
+                                <circle class="glass" cx="58" cy="72" r="18" fill="var(--eu-glass, #ddf0ff)"
+                                    stroke="#ffffff" stroke-width="2" />
+                                <g class="face">
+                                    <circle class="eye" cx="51" cy="69" r="2.6" fill="#3c4a52" />
+                                    <circle class="eye" cx="65" cy="69" r="2.6" fill="#3c4a52" />
+                                    <path class="mouth" d="M51 78 q7 5 14 0" fill="none" stroke="#3c4a52"
+                                        stroke-width="2.4" stroke-linecap="round" />
+                                </g>
+                                <path d="M46 62 a16 16 0 0 1 10 -6" fill="none" stroke="#ffffff" stroke-width="3"
+                                    stroke-linecap="round" opacity="0.9" />
+                                <rect x="93" y="54" width="24" height="36" rx="6" fill="#eef2f4" stroke="#b7c2c8"
+                                    stroke-width="2" />
+                                <circle class="led" cx="105" cy="63" r="4" fill="var(--eu-led, #b9c3c8)" />
+                                <rect x="99" y="72" width="12" height="4" rx="2" fill="#c4ced3" />
+                                <rect x="99" y="80" width="12" height="4" rx="2" fill="#c4ced3" />
+                                <text x="70" y="37" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif"
+                                    font-size="12" font-weight="bold" fill="#ffffff" letter-spacing="1">MELAG</text>
+                                <rect x="28" y="104" width="16" height="8" rx="4" fill="#8b979e" />
+                                <rect x="96" y="104" width="16" height="8" rx="4" fill="#8b979e" />
+                            </svg>
+                        </div>
+                        <div class="autoclave-status">⚪ Prêt</div>
+                        <button class="autoclave-start">Lancer</button>
+                    </div>
+                    <div class="autoclave machine machine-getinge" data-machine="Getinge">
+                        <button class="autoclave-title" title="Ouvrir le suivi de maintenance">Getinge 📝</button>
+                        <div class="euronda-machine" aria-hidden="true">
+                            <svg viewBox="0 -16 140 134" xmlns="http://www.w3.org/2000/svg" overflow="visible">
+                                <g class="steam">
+                                    <path class="puff p1" d="M46 20 q-5 -7 0 -13 q5 -6 0 -12" fill="none"
+                                        stroke="#c9d6dd" stroke-width="4" stroke-linecap="round" />
+                                    <path class="puff p2" d="M70 18 q-5 -7 0 -13 q5 -6 0 -12" fill="none"
+                                        stroke="#c9d6dd" stroke-width="4" stroke-linecap="round" />
+                                    <path class="puff p3" d="M94 20 q-5 -7 0 -13 q5 -6 0 -12" fill="none"
+                                        stroke="#c9d6dd" stroke-width="4" stroke-linecap="round" />
+                                </g>
+                                <rect x="14" y="24" width="112" height="80" rx="18" fill="#fbfcfd" stroke="#aab6bd"
+                                    stroke-width="3" />
+                                <path d="M14 42 v-4 a18 18 0 0 1 18 -18 h76 a18 18 0 0 1 18 18 v4 z"
+                                    fill="var(--eu-accent)" />
+                                <circle cx="58" cy="72" r="25" fill="#e3e9ec" stroke="#9fabb2" stroke-width="3" />
+                                <circle class="glass" cx="58" cy="72" r="18" fill="var(--eu-glass, #ddf0ff)"
+                                    stroke="#ffffff" stroke-width="2" />
+                                <g class="face">
+                                    <circle class="eye" cx="51" cy="69" r="2.6" fill="#3c4a52" />
+                                    <circle class="eye" cx="65" cy="69" r="2.6" fill="#3c4a52" />
+                                    <path class="mouth" d="M51 78 q7 5 14 0" fill="none" stroke="#3c4a52"
+                                        stroke-width="2.4" stroke-linecap="round" />
+                                </g>
+                                <path d="M46 62 a16 16 0 0 1 10 -6" fill="none" stroke="#ffffff" stroke-width="3"
+                                    stroke-linecap="round" opacity="0.9" />
+                                <rect x="93" y="54" width="24" height="36" rx="6" fill="#eef2f4" stroke="#b7c2c8"
+                                    stroke-width="2" />
+                                <circle class="led" cx="105" cy="63" r="4" fill="var(--eu-led, #b9c3c8)" />
+                                <rect x="99" y="72" width="12" height="4" rx="2" fill="#c4ced3" />
+                                <rect x="99" y="80" width="12" height="4" rx="2" fill="#c4ced3" />
+                                <text x="70" y="37" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif"
+                                    font-size="12" font-weight="bold" fill="#ffffff" letter-spacing="1">GETINGE</text>
+                                <rect x="28" y="104" width="16" height="8" rx="4" fill="#8b979e" />
+                                <rect x="96" y="104" width="16" height="8" rx="4" fill="#8b979e" />
+                            </svg>
+                        </div>
+                        <div class="autoclave-status">⚪ Prêt</div>
+                        <button class="autoclave-start">Lancer</button>
+                    </div>
+                    <div class="autoclave machine machine-dac" data-machine="DAC" data-type="dac">
+                        <button class="autoclave-title" title="Ouvrir le suivi de maintenance">DAC 📝</button>
+                        <div class="dac-machine-svg" aria-hidden="true">
+                            <svg viewBox="0 0 140 134" xmlns="http://www.w3.org/2000/svg" overflow="visible">
+                                <g class="steam">
+                                    <circle class="bubble b1" cx="55" cy="40" r="4" fill="#aab6bd" opacity="0" />
+                                    <circle class="bubble b2" cx="70" cy="35" r="5" fill="#aab6bd" opacity="0" />
+                                    <circle class="bubble b3" cx="85" cy="42" r="3" fill="#aab6bd" opacity="0" />
+                                </g>
+                                
+                                <g class="dac-lid">
+                                    <path d="M42 58 Q70 38 98 58 L98 62 L42 62 Z" fill="var(--eu-accent)" />
+                                    <rect x="65" y="38" width="10" height="10" rx="2" fill="#8b979e" />
+                                </g>
+
+                                <rect x="42" y="64" width="56" height="50" rx="6" fill="#fbfcfd" stroke="#aab6bd" stroke-width="3" />
+                                <rect x="35" y="114" width="70" height="8" rx="4" fill="#8b979e" />
+
+                                <g class="face">
+                                    <circle class="eye" cx="60" cy="80" r="2.6" fill="#3c4a52" />
+                                    <circle class="eye" cx="80" cy="80" r="2.6" fill="#3c4a52" />
+                                    <path class="mouth" d="M64 88 q6 5 12 0" fill="none" stroke="#3c4a52" stroke-width="2.4" stroke-linecap="round" />
+                                </g>
+
+                                <circle class="led" cx="70" cy="102" r="4" fill="var(--eu-led, #b9c3c8)" />
+                            </svg>
+                        </div>
+                        <div class="autoclave-status">⚪ Prêt</div>
+                        <button class="autoclave-start">Lancer</button>
+                    </div>
+                    <div class="autoclave machine machine-thermolaveur" data-machine="Thermolaveur" data-type="thermo">
+                        <button class="autoclave-title" title="Ouvrir le suivi de maintenance">Thermolaveur 📝</button>
+                        <div class="thermo-machine-svg" aria-hidden="true">
+                            <svg viewBox="0 0 140 134" xmlns="http://www.w3.org/2000/svg" overflow="visible">
+                                <g class="water">
+                                    <path class="wave w1" d="M 45 75 Q 55 65 65 75 T 85 75 T 95 75" fill="none" stroke="#3399ff" stroke-width="3" stroke-linecap="round" opacity="0" />
+                                    <path class="wave w2" d="M 45 82 Q 55 72 65 82 T 85 82 T 95 82" fill="none" stroke="#3399ff" stroke-width="3" stroke-linecap="round" opacity="0" />
+                                </g>
+                                
+                                <rect x="30" y="24" width="80" height="90" rx="6" fill="#fbfcfd" stroke="#aab6bd" stroke-width="3" />
+                                <rect x="30" y="24" width="80" height="18" fill="var(--eu-accent)" rx="6" />
+                                <circle class="led" cx="95" cy="33" r="3" fill="var(--eu-led, #b9c3c8)" />
+                                
+                                <circle cx="70" cy="70" r="26" fill="#e3e9ec" stroke="#9fabb2" stroke-width="3" />
+                                <circle class="glass" cx="70" cy="70" r="20" fill="var(--eu-glass, #ddf0ff)" stroke="#ffffff" stroke-width="2" />
+                                
+                                <g class="face">
+                                    <circle class="eye" cx="63" cy="67" r="2.6" fill="#3c4a52" />
+                                    <circle class="eye" cx="77" cy="67" r="2.6" fill="#3c4a52" />
+                                    <path class="mouth" d="M63 75 q7 5 14 0" fill="none" stroke="#3c4a52" stroke-width="2.4" stroke-linecap="round" />
+                                </g>
+
+                                <rect x="38" y="114" width="12" height="6" rx="3" fill="#8b979e" />
+                                <rect x="90" y="114" width="12" height="6" rx="3" fill="#8b979e" />
+                            </svg>
+                        </div>
+                        <div class="autoclave-status">⚪ Prêt</div>
+                        <button class="autoclave-start">Lancer</button>
+                    </div>
+                    
+                    <!-- Caméra 3shapes -->
+                    <div class="autoclave machine machine-camera" data-machine="Caméra 3shapes" data-type="camera">
+                        <button class="autoclave-title" title="Ouvrir le suivi de maintenance">Caméra 3shapes 📝</button>
+                        <div class="camera-machine-svg" aria-hidden="true">
+                            <svg viewBox="0 0 140 134" xmlns="http://www.w3.org/2000/svg" overflow="visible">
+                                <!-- Chariot / Base -->
+                                <rect x="40" y="100" width="60" height="20" rx="4" fill="#8b979e" />
+                                <circle cx="50" cy="120" r="5" fill="#3c4a52" />
+                                <circle cx="90" cy="120" r="5" fill="#3c4a52" />
+                                <!-- Colonne -->
+                                <rect x="60" y="50" width="20" height="50" fill="#cfd6da" />
+                                <!-- Écran -->
+                                <rect x="35" y="15" width="70" height="45" rx="5" fill="#e3e9ec" stroke="#aab6bd" stroke-width="3" />
+                                <rect x="40" y="20" width="60" height="35" fill="var(--eu-glass, #ddf0ff)" />
+                                <path class="calc-wave" d="M40 37 Q55 20 70 37 T100 37" fill="none" stroke="var(--eu-accent, #3498db)" stroke-width="2" opacity="0" />
+                                <!-- Bras de scan et sonde -->
+                                <path d="M105 37 L120 45 L125 70" fill="none" stroke="#aab6bd" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+                                <rect class="sonde" x="120" y="70" width="10" height="25" rx="3" fill="#eef2f4" stroke="#aab6bd" stroke-width="2" />
+                                <circle class="led" cx="125" cy="90" r="2" fill="var(--eu-led, #b9c3c8)" />
+                                <polygon class="scan-beam" points="125,92 110,115 140,115" fill="#f5b942" opacity="0" />
+                            </svg>
+                        </div>
+                        <div class="autoclave-status">⚪ Prêt</div>
+                        <button class="autoclave-start">Lancer</button>
+                    </div>
+                    
+                    <!-- MACHINE A CAFE -->
+                    <div class="autoclave machine machine-cafe" data-machine="Machine à café" data-type="cafe">
+                        <button class="autoclave-title" title="Ouvrir le suivi de maintenance">Machine à café 📝</button>
+                        <div class="cafe-machine-svg" aria-hidden="true" style="width: 140px; height: 134px;">
+                            <svg viewBox="0 0 140 134" xmlns="http://www.w3.org/2000/svg" overflow="visible">
+                                <g class="steam">
+                                    <path class="puff p1" d="M55 40 q-3 -5 0 -9 q3 -4 0 -8" fill="none" stroke="#c9d6dd" stroke-width="3" stroke-linecap="round" />
+                                    <path class="puff p2" d="M65 38 q-3 -5 0 -9 q3 -4 0 -8" fill="none" stroke="#c9d6dd" stroke-width="3" stroke-linecap="round" />
+                                    <path class="puff p3" d="M75 40 q-3 -5 0 -9 q3 -4 0 -8" fill="none" stroke="#c9d6dd" stroke-width="3" stroke-linecap="round" />
+                                </g>
+                                
+                                <!-- Corps de la machine à café -->
+                                <rect x="30" y="24" width="80" height="90" rx="6" fill="#fbfcfd" stroke="#aab6bd" stroke-width="3" />
+                                <rect x="30" y="24" width="80" height="18" fill="var(--eu-accent)" rx="6" />
+                                <!-- Écran -->
+                                <rect x="55" y="28" width="30" height="10" fill="#3c4a52" rx="2" />
+                                <circle class="led" cx="95" cy="33" r="3" fill="var(--eu-led, #b9c3c8)" />
+                                
+                                <!-- Zone de distribution -->
+                                <rect x="45" y="48" width="50" height="50" rx="4" fill="#eef2f4" stroke="#aab6bd" stroke-width="2" />
+                                
+                                <!-- Bec verseur -->
+                                <rect x="60" y="48" width="20" height="15" fill="#aab6bd" />
+                                <path d="M 65 63 L 65 68 M 75 63 L 75 68" stroke="#3c4a52" stroke-width="2" />
+                                
+                                <!-- Gouttes de café (animation) -->
+                                <g class="coffee-drip">
+                                    <circle cx="65" cy="73" r="1.5" fill="#4a2e15" opacity="0">
+                                        <animate attributeName="opacity" values="0;1;0" dur="1s" repeatCount="indefinite" />
+                                        <animate attributeName="cy" values="68;88" dur="1s" repeatCount="indefinite" />
+                                    </circle>
+                                    <circle cx="75" cy="73" r="1.5" fill="#4a2e15" opacity="0">
+                                        <animate attributeName="opacity" values="0;1;0" dur="1s" repeatCount="indefinite" begin="0.5s" />
+                                        <animate attributeName="cy" values="68;88" dur="1s" repeatCount="indefinite" begin="0.5s" />
+                                    </circle>
+                                </g>
+                                
+                                <!-- Tasse à café -->
+                                <path d="M 55 95 L 55 75 Q 55 70 60 70 L 80 70 Q 85 70 85 75 L 85 95 Z" fill="#ffffff" stroke="#aab6bd" stroke-width="2" />
+                                <!-- Anse de la tasse -->
+                                <path d="M 85 75 Q 92 75 92 82 Q 92 89 85 89" fill="none" stroke="#aab6bd" stroke-width="2" />
+                                
+                                <!-- Visage sur la tasse -->
+                                <g class="face">
+                                    <circle class="eye" cx="63" cy="80" r="1.5" fill="#3c4a52" />
+                                    <circle class="eye" cx="77" cy="80" r="1.5" fill="#3c4a52" />
+                                    <path class="mouth" d="M66 84 q4 3 8 0" fill="none" stroke="#3c4a52" stroke-width="1.5" stroke-linecap="round" />
+                                </g>
+                                
+                                <!-- Base -->
+                                <rect x="38" y="114" width="64" height="6" rx="3" fill="#8b979e" />
+                                
+                            </svg>
+                        </div>
+                        <div class="autoclave-status">⚪ Prêt</div>
+                        <button class="autoclave-start">Lancer</button>
+                    </div>
+
+                    <!-- TROUSSE DE SECOURS -->
+                    <div class="autoclave machine machine-trousse" data-machine="Trousse de secours" data-type="trousse">
+                        <button class="autoclave-title" title="Ouvrir la trousse de secours" style="background-color:#e74c3c; color:white;">Trousse de secours 🧰</button>
+                        <div class="trousse-machine-svg" aria-hidden="true" style="width: 140px; height: 134px;">
+                            <svg viewBox="0 0 140 134" xmlns="http://www.w3.org/2000/svg" overflow="visible">
+                                <rect x="30" y="40" width="80" height="60" rx="10" fill="#e74c3c" stroke="#c0392b" stroke-width="3" />
+                                <rect x="50" y="30" width="40" height="10" rx="4" fill="none" stroke="#c0392b" stroke-width="4" />
+                                <rect x="55" y="55" width="30" height="30" rx="15" fill="#fff" />
+                                <path d="M65 70 h10 v-10 h-10 z M60 65 v10 h-10 v-10 z" fill="#e74c3c" stroke="none" />
+                            </svg>
+                        </div>
+                    </div>
+
+                    <!-- MEOPA -->
+                    <div class="autoclave machine machine-meopa" data-machine="MEOPA" data-type="meopa">
+                        <button class="autoclave-title" title="Ouvrir le MEOPA" style="background-color:#3498db; color:white;">MEOPA 💨</button>
+                        <div class="meopa-machine-svg" aria-hidden="true" style="width: 140px; height: 134px;">
+                            <svg viewBox="0 0 140 134" xmlns="http://www.w3.org/2000/svg" overflow="visible">
+                                <rect x="50" y="40" width="40" height="80" rx="10" fill="#ecf0f1" stroke="#bdc3c7" stroke-width="3" />
+                                <rect x="60" y="25" width="20" height="15" fill="#ecf0f1" stroke="#bdc3c7" stroke-width="3" />
+                                <rect x="55" y="15" width="30" height="10" rx="2" fill="#7f8c8d" />
+                                <path d="M 50 60 L 90 60 L 90 80 L 50 80 Z" fill="#3498db" />
+                                <text x="70" y="74" text-anchor="middle" font-family="Arial" font-size="12" font-weight="bold" fill="white">MEOPA</text>
+                            </svg>
+                        </div>
+                    </div>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============ DIALOG SELECTION D'ESPACE ============ -->
+    <div id="user-overlay" class="overlay hidden">
+        <div class="dialog dialog-user">
+            <div class="dialog-titlebar">
+                Sélectionner un espace
+                <button class="dialog-close" data-close="user-overlay">✕</button>
+            </div>
+            <div class="dialog-body">
+                <p class="user-question">Quel stock souhaitez-vous ouvrir ?</p>
+                <div id="user-grid" class="user-grid"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============ DIALOG PLACARD ============ -->
+    <div id="placard-overlay" class="overlay hidden">
+        <div class="dialog dialog-placard">
+            <div class="dialog-titlebar">
+                <span id="placard-title-bar"></span>
+                <button class="dialog-close" data-close="placard-overlay">✕</button>
+            </div>
+            <div class="dialog-body">
+                <div class="placard-header">
+                    <h2 id="placard-title" class="placard-content-title"></h2>
+                    <div style="display: flex; gap: 10px;">
+                        <button id="btn-transfer-space" class="btn btn-blue">🔄 Transfert espace</button>
+                        <button id="btn-add-product" class="btn btn-green">➕ Ajouter un produit</button>
+                    </div>
+                </div>
+                <div class="filter-row">
+                    <input type="text" id="filter-fichier" class="filter-input" placeholder="Filtrer Fournisseur...">
+                    <input type="text" id="filter-ref" class="filter-input" placeholder="Filtrer Référence...">
+                    <input type="text" id="filter-scannette" class="filter-input" placeholder="Filtrer Réf. Scan...">
+                    <input type="text" id="filter-nom" class="filter-input" placeholder="Filtrer Nom...">
+                    <input type="text" id="filter-groupe" class="filter-input" placeholder="Filtrer Groupe...">
+                    <input type="text" id="filter-qte" class="filter-input" placeholder="Filtrer Quantité...">
+                </div>
+                <div class="table-scroll table-scroll-tall">
+                    <table class="table" id="placard-table">
+                        <thead>
+                            <tr>
+                                <th class="rownum"></th>
+                                <th class="sortable" data-col="0">Fournisseur</th>
+                                <th class="sortable" data-col="1">Référence</th>
+                                <th class="sortable" data-col="2">Réf. Scan</th>
+                                <th class="sortable" data-col="3">Nom</th>
+                                <th class="sortable" data-col="4">Groupe</th>
+                                <th class="sortable" data-col="5">Quantité</th>
+                                <th class="sortable" data-col="6">Lot</th>
+                                <th class="sortable" data-col="7">Péremption</th>
+                                <th class="sortable" data-col="8">Date Import</th>
+                                <th class="sortable col-user hidden" data-col="9">Espace</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="placard-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============ DIALOG TRANSFERT ESPACE ============ -->
+    <div id="transfer-overlay" class="overlay hidden">
+        <div class="dialog dialog-transfer">
+            <div class="dialog-titlebar">
+                <span>Transfert Espace</span>
+                <button class="dialog-close" data-close="transfer-overlay">✕</button>
+            </div>
+            <div class="dialog-body form-body">
+                <label>Référence :</label>
+                <input type="text" id="transfer-ref" class="input" placeholder="Référence du produit">
+                <label>Espace d'origine :</label>
+                <select id="transfer-source" class="input"></select>
+                <label>Espace de destination :</label>
+                <select id="transfer-dest" class="input"></select>
+                <label>Quantité à transférer :</label>
+                <input type="number" id="transfer-qte" class="input" min="1" value="1">
+                <div class="dialog-buttons">
+                    <button id="transfer-save" class="btn btn-blue">Transférer</button>
+                    <button class="btn" data-close="transfer-overlay">Annuler</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============ DIALOG PRODUIT (AJOUT / MODIF) ============ -->
+    <div id="edit-overlay" class="overlay hidden">
+        <div class="dialog dialog-edit">
+            <div class="dialog-titlebar">
+                <span id="edit-title">Modifier le produit</span>
+                <button class="dialog-close" data-close="edit-overlay">✕</button>
+            </div>
+            <div class="dialog-body form-body">
+                <div class="edit-grid">
+
+                    <!-- ---- Colonne 1 : Identification ---- -->
+                    <section class="edit-card">
+                        <h3 class="edit-card-title">🏷️ Identification</h3>
+                        <label>Référence :</label>
+                        <input type="text" id="edit-ref" class="input">
+                        <label>Nom :</label>
+                        <input type="text" id="edit-nom" class="input">
+                        <label>Groupe :</label>
+                        <input type="text" id="edit-groupe" class="input" list="groups-list">
+                        <datalist id="groups-list"></datalist>
+                        <label>Utilisateur (Cabinet) :</label>
+                        <select id="edit-user" class="input"></select>
+                        <label>Réf. Scannette (codes-barres) :</label>
+                        <div id="edit-scannette-container" class="edit-rows"></div>
+                        <button type="button" id="btn-add-scannette" class="btn edit-add-btn">+ Ajouter un code-barres</button>
+                        <input type="hidden" id="edit-scannette">
+                    </section>
+
+                    <!-- ---- Colonne 2 : Conditionnement & stock ---- -->
+                    <section class="edit-card">
+                        <h3 class="edit-card-title">📦 Conditionnement &amp; stock</h3>
+                        <label>Type de conditionnement :</label>
+                        <select id="edit-type-stockage" class="input" onchange="toggleCondFields()">
+                            <option value="unite">À l'unité</option>
+                            <option value="carton">En cartons</option>
+                            <option value="boite">En boîtes</option>
+                        </select>
+                        <div id="cond-fields" class="hidden edit-subfields">
+                            <label id="lbl-qte-par-contenant">Quantité par carton :</label>
+                            <input type="number" id="edit-qte-par-contenant" class="input" min="1" value="1">
+                            <label id="lbl-nb-contenants">Nombre de cartons (entiers) :</label>
+                            <input type="number" id="edit-nb-contenants" class="input" min="0" value="0">
+                        </div>
+                        <label id="lbl-edit-qte">Quantité (Stock Absolu) :</label>
+                        <input type="number" id="edit-qte" class="input" min="0" max="99999" value="0">
+                        <label>Stock Minimum :</label>
+                        <input type="number" id="edit-min" class="input" min="0" max="99999" value="0">
+                        <label class="check-label"><input type="checkbox" id="edit-alerte"> Activer l'alerte de stock
+                            bas</label>
+                    </section>
+
+                    <!-- ---- Colonne 3 : Lots & péremption ---- -->
+                    <section class="edit-card">
+                        <h3 class="edit-card-title">📅 Lots &amp; péremption</h3>
+                        <label>Lots, dates de péremption et quantités :</label>
+                        <div id="edit-lots-container" class="edit-rows"></div>
+                        <button type="button" id="btn-add-lot" class="btn edit-add-btn">+ Ajouter un lot</button>
+                        <p id="edit-lots-total" class="edit-lots-total"></p>
+                        <label>Délai alerte péremption (jours avant) :</label>
+                        <input type="number" id="edit-delai-peremption" class="input" min="0" max="999" value="30">
+                        <label class="check-label"><input type="checkbox" id="edit-alerte-peremption"> Activer l'alerte
+                            de péremption</label>
+                    </section>
+
+                    <!-- ---- Bandeau bas : Prix & commande ---- -->
+                    <section class="edit-card edit-card-wide">
+                        <h3 class="edit-card-title">💶 Prix &amp; commande</h3>
+                        <div class="edit-inline">
+                            <div class="edit-field">
+                                <label>Prix unitaire HT :</label>
+                                <input type="number" id="edit-prix-ht" class="input" step="0.0001" min="0">
+                            </div>
+                            <div class="edit-field">
+                                <label>Prix unitaire TTC :</label>
+                                <input type="number" id="edit-prix-ttc" class="input" step="0.0001" min="0">
+                            </div>
+                            <div class="edit-field">
+                                <label>Fournisseur :</label>
+                                <input type="text" id="edit-fournisseur" class="input">
+                            </div>
+                            <div class="edit-field">
+                                <label>Date de commande (JJ/MM/AAAA) :</label>
+                                <input type="text" id="edit-date-commande" class="input" placeholder="ex: 13/07/2026">
+                            </div>
+                            <div class="edit-field edit-field-check">
+                                <label class="check-label"><input type="checkbox" id="edit-en-commande"> Produit en
+                                    commande</label>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+
+                <div class="dialog-buttons">
+                    <button id="edit-save" class="btn btn-green">Enregistrer</button>
+                    <button class="btn" data-close="edit-overlay">Annuler</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============ DIALOG MIRE ============ -->
+    <div id="mire-overlay" class="overlay hidden" style="z-index: 10000;">
+        <div class="dialog" style="max-width: 480px; width: 92%;">
+            <div class="dialog-titlebar">
+                <span id="mire-dialog-title">Alerte Mire - Contrôle Radio</span>
+                <button class="dialog-close" data-close="mire-overlay">❌</button>
+            </div>
+            <div class="dialog-body" style="padding: 16px 20px;">
+                <div style="text-align: center; margin-bottom: 12px;">
+                    <p class="bold-label" id="mire-dialog-headline" style="color: #c0392b; font-size: 1.15rem; margin-bottom: 4px;">
+                        ⚠️ RAPPEL CONTRÔLE MIRE
+                    </p>
+                    <div id="mire-dialog-cabinet-badge" style="font-size: 1rem; font-weight: bold; color: #2c3e50;">
+                        Cabinet : <span id="mire-cabinet-display" style="color: #c0392b;">Cabinet 1</span>
+                    </div>
+                </div>
+
+                <!-- Sélecteur de Cabinet -->
+                <div style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px;">
+                    <label style="font-size: 0.85em; font-weight: bold; color: #475569;">Changer de cabinet / équipement :</label>
+                    <select id="mire-cabinet-select" class="combo" style="width: 100%; padding: 6px 10px; font-weight: 500;">
+                        <option value="Radio Cabinet 1">Cabinet 1 (Radio Cabinet 1)</option>
+                        <option value="Radio Cabinet 2">Cabinet 2 (Radio Cabinet 2)</option>
+                        <option value="Radio Cabinet 4">Cabinet 4 (Radio Cabinet 4)</option>
+                        <option value="Radio Cabinet 5">Cabinet 5 (Radio Cabinet 5)</option>
+                        <option value="Radio Panoramique">Radio Panoramique (Pano)</option>
+                    </select>
+                </div>
+
+                <!-- Carte état du cabinet sélectionné -->
+                <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; font-size: 0.9em; display: flex; flex-direction: column; gap: 6px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="color: #64748b;">Statut actuel :</span>
+                        <span id="mire-dialog-status-badge" style="font-weight: bold; color: #c0392b; font-size: 0.95em;">⚠️ À faire</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="color: #64748b;">Date de l'alerte (Échéance) :</span>
+                        <strong id="mire-dialog-alert-date" style="color: #1e293b;">05/09/2026</strong>
+                    </div>
+                </div>
+
+                <!-- Choix du délai de rappel -->
+                <div style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px;">
+                    <label style="font-size: 0.85em; font-weight: bold; color: #475569;">Prochain rappel dans :</label>
+                    <select id="mire-rappel-select" class="combo" style="width: 100%; padding: 6px 10px;">
+                        <option value="1">1 jour</option>
+                        <option value="7">1 semaine</option>
+                        <option value="30" selected>1 mois</option>
+                        <option value="90">3 mois</option>
+                        <option value="180">6 mois</option>
+                        <option value="365">1 an</option>
+                    </select>
+                </div>
+
+                <!-- Ou date personnalisée -->
+                <div style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 14px;">
+                    <label style="font-size: 0.85em; font-weight: bold; color: #475569;">Ou choisir une date précise :</label>
+                    <input type="date" id="mire-custom-date" class="input" style="width: 100%; padding: 6px 10px;">
+                </div>
+
+                <div class="dialog-buttons centered" style="margin-top: 10px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;">
+                    <button id="mire-validate-btn" class="btn btn-green" style="font-size: 0.9em; padding: 8px 14px;">✅ Valider & Reporter</button>
+                    <button id="mire-validate-all-btn" class="btn btn-blue" style="font-size: 0.9em; padding: 8px 14px;" title="Valider tous les cabinets en alerte avec ce délai">Tout valider</button>
+                    <button id="mire-goto-cabinet-btn" class="btn" style="font-size: 0.9em; padding: 8px 14px; background: #64748b; color: white;" title="Ouvrir le cabinet dans la maintenance">🏢 Ouvrir Cabinet</button>
+                    <button class="btn" data-close="mire-overlay" style="font-size: 0.9em; padding: 8px 14px;">Ignorer pour l'instant</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============ DIALOG MAINTENANCE FAUTEUILS ============ -->
+    <div id="fauteuil-overlay" class="overlay hidden" style="z-index: 10000;">
+        <div class="dialog" style="max-width: 490px; width: 92%;">
+            <div class="dialog-titlebar">
+                <span id="fauteuil-dialog-title">🛠️ Rappel Maintenance Fauteuils</span>
+                <button class="dialog-close" data-close="fauteuil-overlay">❌</button>
+            </div>
+            <div class="dialog-body" style="padding: 16px 20px;">
+                <div style="text-align: center; margin-bottom: 12px;">
+                    <p class="bold-label" id="fauteuil-dialog-headline" style="color: #c0392b; font-size: 1.15rem; margin-bottom: 4px;">
+                        ⚠️ RAPPEL MAINTENANCE FAUTEUIL
+                    </p>
+                    <div id="fauteuil-dialog-cabinet-badge" style="font-size: 1rem; font-weight: bold; color: #2c3e50;">
+                        Cabinet : <span id="fauteuil-cabinet-display" style="color: #c0392b;">Cabinet 1 (Sinius)</span>
+                    </div>
+                </div>
+
+                <!-- Sélecteur de Fauteuil / Cabinet -->
+                <div style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px;">
+                    <label style="font-size: 0.85em; font-weight: bold; color: #475569;">Changer de fauteuil / cabinet :</label>
+                    <select id="fauteuil-cabinet-select" class="combo" style="width: 100%; padding: 6px 10px; font-weight: 500;">
+                        <option value="Fauteuil Sinius">Cabinet 1 (Fauteuil Sinius)</option>
+                        <option value="Fauteuil Planmeca compact">Cabinet 2 (Fauteuil Planmeca compact)</option>
+                        <option value="Fauteuil Anthos">Cabinet 4 (Fauteuil Anthos)</option>
+                        <option value="Fauteuil OVIS">Cabinet 5 (Fauteuil OVIS)</option>
+                        <option value="Fauteuil Planmeca">Salle de chirurgie (Fauteuil Planmeca)</option>
+                    </select>
+                </div>
+
+                <!-- Carte état du fauteuil sélectionné -->
+                <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; font-size: 0.9em; display: flex; flex-direction: column; gap: 6px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="color: #64748b;">Statut actuel :</span>
+                        <span id="fauteuil-dialog-status-badge" style="font-weight: bold; color: #c0392b; font-size: 0.95em;">⚠️ À faire</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="color: #64748b;">Date de l'alerte (Échéance) :</span>
+                        <strong id="fauteuil-dialog-alert-date" style="color: #1e293b;">Non définie</strong>
+                    </div>
+                </div>
+
+                <!-- Choix libre de la date (Calendrier) -->
+                <div style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px;">
+                    <label style="font-size: 0.85em; font-weight: bold; color: #1e293b;">📅 Choisir la date du prochain rappel (échéance) :</label>
+                    <input type="date" id="fauteuil-custom-date" class="input" style="width: 100%; padding: 7px 10px; font-size: 1em; font-weight: 600; border: 2px solid #3498db; border-radius: 6px;">
+                </div>
+
+                <!-- Raccourcis / Délais rapides -->
+                <div style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px;">
+                    <label style="font-size: 0.85em; font-weight: bold; color: #475569;">Ou choisir un délai rapide :</label>
+                    <select id="fauteuil-rappel-select" class="combo" style="width: 100%; padding: 6px 10px;">
+                        <option value="30">Dans 1 mois</option>
+                        <option value="90">Dans 3 mois</option>
+                        <option value="180" selected>Dans 6 mois</option>
+                        <option value="365">Dans 1 an</option>
+                        <option value="730">Dans 2 ans</option>
+                    </select>
+                </div>
+
+                <!-- Note / Commentaire optionnel -->
+                <div style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 14px;">
+                    <label style="font-size: 0.85em; font-weight: bold; color: #475569;">Note / intervention prévue (optionnel) :</label>
+                    <input type="text" id="fauteuil-maint-note" class="input" placeholder="Ex: Révision annuelle technicien, filtres..." style="width: 100%; padding: 6px 10px;">
+                </div>
+
+                <div class="dialog-buttons centered" style="margin-top: 10px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;">
+                    <button id="fauteuil-validate-btn" class="btn btn-green" style="font-size: 0.9em; padding: 8px 14px;">✅ Valider & Enregistrer</button>
+                    <button id="fauteuil-validate-all-btn" class="btn btn-blue" style="font-size: 0.9em; padding: 8px 14px;" title="Appliquer cette même date/délai à tous les fauteuils">🔄 Tout appliquer</button>
+                    <button id="fauteuil-goto-cabinet-btn" class="btn" style="font-size: 0.9em; padding: 8px 14px; background: #64748b; color: white;" title="Ouvrir le cabinet dans la vue Maintenance">🏢 Ouvrir Cabinet</button>
+                    <button class="btn" data-close="fauteuil-overlay" style="font-size: 0.9em; padding: 8px 14px;">Ignorer pour l'instant</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============ DIALOG GESTION DOSIMÈTRES ============ -->
+    <div id="dosimetres-overlay" class="overlay hidden" style="z-index: 9999;">
+        <div class="dialog dialog-dosimetres" style="background: #ffffff; border-radius: 12px; box-shadow: 0 10px 35px rgba(0,0,0,0.3); display: flex; flex-direction: column; overflow: hidden;">
+            <div class="dialog-titlebar" style="background: #2c3e50; color: white; display: flex; justify-content: space-between; align-items: center; padding: 12px 20px;">
+                <div style="display: flex; align-items: center; gap: 10px; font-weight: bold; font-size: 1.15em;">
+                    <span style="font-size: 1.3em;">☢️</span> Gestion des Dosimètres
+                </div>
+                <button class="dialog-close" data-close="dosimetres-overlay" style="background: none; border: none; color: white; font-size: 1.3em; cursor: pointer;">✕</button>
+            </div>
+            <div class="dialog-body" style="padding: 20px; overflow-y: auto; background: #f8fafc; display: flex; flex-direction: column; gap: 16px;">
+                <!-- Informations Générales & Responsable -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; background: white; padding: 16px; border-radius: 8px; border: 1px solid #e2e8f0; box-shadow: 0 2px 5px rgba(0,0,0,0.03);">
+                    <div>
+                        <label style="font-weight: bold; color: #1e293b; display: block; margin-bottom: 6px; font-size: 0.9em;">
+                            👤 Personne qui s'en occupe (Responsable) :
+                        </label>
+                        <input type="text" id="dosi-manager-input" class="input" placeholder="Ex: Prénom de la personne responsable" style="width: 100%; border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px; font-size: 0.95em;">
+                    </div>
+                    <div>
+                        <label style="font-weight: bold; color: #1e293b; display: block; margin-bottom: 6px; font-size: 0.9em;">
+                            🔔 Alerte & Rappel de renouvellement :
+                        </label>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <span id="dosi-next-alert-badge" style="padding: 7px 12px; border-radius: 6px; font-size: 0.85em; font-weight: bold; background: #dcfce7; color: #15803d;">Statut OK</span>
+                            <button id="dosi-config-alert-btn" class="btn btn-blue" style="padding: 7px 12px; font-size: 0.85em;">📅 Configurer le rappel</button>
+                        </div>
+                    </div>
+                    <div style="grid-column: span 2;">
+                        <label style="font-weight: bold; color: #1e293b; display: block; margin-bottom: 6px; font-size: 0.9em;">
+                            📝 Note générale / Consignes de renvoi :
+                        </label>
+                        <textarea id="dosi-general-note" class="input" rows="2" placeholder="Consignes de renvoi, informations organisme (Landauer, IRSN), délais d'échange..." style="width: 100%; border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px; font-size: 0.95em; resize: vertical;"></textarea>
+                    </div>
+                </div>
+
+                <!-- Formulaire d'Ajout / Modification d'un Dosimètre -->
+                <div style="background: white; padding: 16px; border-radius: 8px; border: 1px solid #e2e8f0; box-shadow: 0 2px 5px rgba(0,0,0,0.03);">
+                    <div style="font-weight: bold; color: #1e293b; margin-bottom: 12px; font-size: 1em; display: flex; justify-content: space-between; align-items: center;">
+                        <span id="dosi-form-title">➕ Ajouter un dosimètre</span>
+                        <span id="dosi-total-count-badge" class="badge" style="background: #3b82f6; color: white; padding: 4px 10px; border-radius: 12px; font-size: 0.8em; font-weight: 600;">0 dosimètre(s)</span>
+                    </div>
+                    <input type="hidden" id="dosi-edit-id" value="">
+                    <div style="display: grid; grid-template-columns: 1.2fr 1.5fr 2fr auto; gap: 10px; align-items: flex-end;">
+                        <div>
+                            <label style="font-size: 0.82em; font-weight: bold; color: #64748b; display: block; margin-bottom: 4px;">N° / Réf dosimètre *</label>
+                            <input type="text" id="dosi-number-input" class="input" placeholder="Ex: Dosi #1 ou 101" style="width: 100%; border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px; font-size: 0.9em;">
+                        </div>
+                        <div>
+                            <label style="font-size: 0.82em; font-weight: bold; color: #64748b; display: block; margin-bottom: 4px;">Utilisateur / Porteur *</label>
+                            <input type="text" id="dosi-user-input" class="input" list="dosi-users-datalist" placeholder="Ex: Dr X, prénom..." style="width: 100%; border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px; font-size: 0.9em;">
+                            <datalist id="dosi-users-datalist"></datalist>
+                        </div>
+                        <div>
+                            <label style="font-size: 0.82em; font-weight: bold; color: #64748b; display: block; margin-bottom: 4px;">Note / Emplacement</label>
+                            <input type="text" id="dosi-note-input" class="input" placeholder="Ex: Poitrine, Bague, Cabinet 1..." style="width: 100%; border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px; font-size: 0.9em;">
+                        </div>
+                        <div style="display: flex; gap: 6px;">
+                            <button id="dosi-submit-btn" class="btn btn-green" style="white-space: nowrap; padding: 8px 16px; font-size: 0.9em;">➕ Ajouter</button>
+                            <button id="dosi-cancel-edit-btn" class="btn hidden" style="white-space: nowrap; padding: 8px 12px; font-size: 0.9em; background: #94a3b8; color: white;">Annuler</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tableau des Dosimètres -->
+                <div style="background: white; padding: 16px; border-radius: 8px; border: 1px solid #e2e8f0; box-shadow: 0 2px 5px rgba(0,0,0,0.03); display: flex; flex-direction: column; gap: 10px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;">
+                        <div style="font-weight: bold; color: #1e293b; font-size: 1em;">
+                            📋 Liste des dosimètres attribués
+                        </div>
+                        <input type="text" id="dosi-table-search" class="input" placeholder="🔍 Filtrer par n°, utilisateur..." style="width: 250px; padding: 6px 12px; border-radius: 6px; font-size: 0.88em; border: 1px solid #cbd5e1;">
+                    </div>
+                    <div style="overflow-x: auto; max-height: 280px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 6px;">
+                        <table class="table" style="width: 100%; border-collapse: collapse; text-align: left;">
+                            <thead style="position: sticky; top: 0; background: #f1f5f9; z-index: 1;">
+                                <tr>
+                                    <th style="padding: 10px 12px; border-bottom: 2px solid #cbd5e1; font-weight: bold; color: #334155;">N° Dosimètre</th>
+                                    <th style="padding: 10px 12px; border-bottom: 2px solid #cbd5e1; font-weight: bold; color: #334155;">Utilisateur (Porteur)</th>
+                                    <th style="padding: 10px 12px; border-bottom: 2px solid #cbd5e1; font-weight: bold; color: #334155;">Note / Emplacement</th>
+                                    <th style="padding: 10px 12px; border-bottom: 2px solid #cbd5e1; text-align: center; width: 120px; font-weight: bold; color: #334155;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="dosi-table-body">
+                                <!-- Rempli dynamiquement par JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="dialog-buttons" style="background: #f1f5f9; padding: 12px 20px; border-top: 1px solid #e2e8f0; display: flex; justify-content: flex-end; gap: 10px;">
+                <button id="dosi-save-global-btn" class="btn btn-green" style="padding: 8px 22px; font-size: 0.95em;">💾 Enregistrer tout</button>
+                <button class="btn" data-close="dosimetres-overlay" style="padding: 8px 16px; font-size: 0.95em;">Fermer</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============ DIALOG DOSI ============ -->
+    <div id="dosi-overlay" class="overlay hidden" style="z-index: 10000;">
+        <div class="dialog">
+            <div class="dialog-titlebar">
+                Alerte Dosimètres
+                <button class="dialog-close" data-close="dosi-overlay">❌</button>
+            </div>
+            <div class="dialog-body">
+                <p class="bold-label" style="color: #c0392b; font-size: 1.2rem; text-align: center; margin-bottom: 20px;">
+                    ⚠️ RAPPEL ATTENTION DOSIMETRES
+                </p>
+                <div style="display: flex; flex-direction: column; gap: 10px; align-items: center;">
+                    <label>Rappeler dans :</label>
+                    <select id="dosi-rappel-select" class="combo">
+                        <option value="1">1 jour</option>
+                        <option value="7">1 semaine</option>
+                        <option value="30">1 mois</option>
+                        <option value="90">3 mois</option>
+                        <option value="180">6 mois</option>
+                        <option value="365">1 an</option>
+                    </select>
+                </div>
+                <div class="dialog-buttons centered" style="margin-top: 20px;">
+                    <button id="dosi-validate-btn" class="btn btn-green">Valider & Reporter</button>
+                    <button class="btn" data-close="dosi-overlay">Ignorer pour l'instant</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============ DIALOG ALERTES ============ -->
+    <div id="alerts-overlay" class="overlay hidden">
+        <div class="dialog dialog-alerts">
+            <div class="dialog-titlebar">
+                <span id="alerts-title"></span>
+                <button class="dialog-close" data-close="alerts-overlay">✕</button>
+            </div>
+            <div class="dialog-body">
+                <div class="table-scroll">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th class="rownum"></th>
+                                <th>Utilisateur</th>
+                                <th>Référence</th>
+                                <th>Nom</th>
+                                <th>Motif</th>
+                                <th>Quantité</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="alerts-tbody"></tbody>
+                    </table>
+                </div>
+                <div class="dialog-buttons centered">
+                    <button class="btn" data-close="alerts-overlay">Fermer</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============ DIALOG MAINTENANCE AUTOCLAVE ============ -->
+    <div id="maintenance-overlay" class="overlay hidden">
+        <div class="dialog dialog-maintenance">
+            <div class="dialog-titlebar">
+                Suivi de Maintenance - Autoclaves
+                <button class="dialog-close" data-close="maintenance-overlay">✕</button>
+            </div>
+            <div class="dialog-body">
+                <p class="bold-label">Historique de Maintenance</p>
+                <div class="table-scroll">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th class="rownum"></th>
+                                <th>Date</th>
+                                <th>Machine</th>
+                                <th>Utilisateur</th>
+                                <th>Commentaire</th>
+                            </tr>
+                        </thead>
+                        <tbody id="maintenance-tbody"></tbody>
+                    </table>
+                </div>
+                <div class="maintenance-form">
+                    <label>Machine :</label>
+                    <select id="maint-machine" class="combo">
+                        <option>Fauteuil OVIS</option>
+                        <option>Fauteuil Sinius</option>
+                        <option>Fauteuil Planmeca</option>
+                        <option>Fauteuil Planmeca compact</option>
+                        <option>Fauteuil Anthos</option>
+                        <option>Radio Cabinet 1</option>
+                        <option>Radio Cabinet 2</option>
+                        <option>Radio Cabinet 4</option>
+                        <option>Radio Cabinet 5</option>
+                        <option>Euronda</option>
+                        <option>Melag</option>
+                        <option>Getinge</option>
+                        <option>DAC</option>
+                        <option>Thermolaveur</option>
+                        <option>Radio Panoramique</option>
+                        <option>Caméra 3shapes</option>
+                    </select>
+                    <label>Date :</label>
+                    <input type="date" id="maint-date" class="input">
+                    <label>Utilisateur :</label>
+                    <input type="text" id="maint-user" class="input" placeholder="Nom de la personne...">
+                    <label>Commentaire :</label>
+                    <input type="text" id="maint-comment" class="input"
+                        placeholder="Description de la maintenance, numéro de cycle, etc...">
+                    <button id="maint-add" class="btn btn-green btn-wide">Ajouter l'entrée</button>
+                </div>
+                <div class="dialog-buttons centered">
+                    <button class="btn" data-close="maintenance-overlay">Fermer</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============ DIALOG IMPORT FACTURE ============ -->
+    <div id="import-overlay" class="overlay hidden">
+        <div class="dialog dialog-import">
+            <div class="dialog-titlebar">
+                Importer une Facture
+                <button class="dialog-close" data-close="import-overlay">✕</button>
+            </div>
+            <div class="dialog-body">
+                <p class="bold-label">Contenu de la facture :</p>
+                <div class="table-scroll table-scroll-tall">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th class="rownum"></th>
+                                <th>Fournisseur</th>
+                                <th>Référence</th>
+                                <th>Réf. Scan</th>
+                                <th>Nom</th>
+                                <th>Type Cond.</th>
+                                <th>Qté/Cond.</th>
+                                <th>Quantité</th>
+                                <th>Utilisateur Dest.</th>
+                                <th>Groupe</th>
+                                <th>Stock Min</th>
+                                <th>Alerte</th>
+                                <th>Lots et Péremptions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="import-tbody"></tbody>
+                    </table>
+                </div>
+                <button id="import-validate" class="btn btn-blue btn-wide">Valider l'importation</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============ DIALOG PREVIEW EXPORT ============ -->
+    <div id="export-preview-overlay" class="overlay hidden">
+        <div class="dialog" style="width: 90vw; max-width: 1200px; height: 80vh; display: flex; flex-direction: column;">
+            <div class="dialog-titlebar">
+                Prévisualisation de l'export
+                <button class="dialog-close" data-close="export-preview-overlay">✕</button>
+            </div>
+            <div class="dialog-body" style="flex: 1; display: flex; flex-direction: column; overflow: hidden; background: #fff; padding: 20px;">
+                <p style="margin-bottom: 15px; font-weight: bold; color: #333;" id="export-preview-description">Voici un aperçu des données qui seront exportées :</p>
+                <div class="table-scroll table-scroll-tall" style="flex: 1; overflow: auto;">
+                    <table class="table" style="width: 100%;">
+                        <thead id="export-preview-thead">
+                        </thead>
+                        <tbody id="export-preview-tbody">
+                        </tbody>
+                        <tfoot id="export-preview-tfoot" style="font-weight: bold; background: #eee;">
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+            <div class="dialog-buttons centered" style="padding: 15px; background: #f9f9f9; border-top: 1px solid #ddd;">
+                <button id="btn-confirm-export" class="btn btn-green" style="font-size: 1.1em; padding: 10px 20px;">Exporter vers Excel / CSV</button>
+                <button class="btn" data-close="export-preview-overlay" style="font-size: 1.1em; padding: 10px 20px;">Annuler</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============ DIALOG REGLAGES ============ -->
+    <div id="settings-overlay" class="overlay hidden">
+        <div class="dialog dialog-settings" style="max-width: 600px;">
+            <div class="dialog-titlebar">
+                Réglages
+                <button class="dialog-close" data-close="settings-overlay">✕</button>
+            </div>
+            <div class="dialog-body">
+                <p class="bold-label">Accès depuis les autres postes du cabinet :</p>
+                <div id="settings-adresses" style="margin-bottom: 20px; font-family: monospace; font-size: 1.05em;">Chargement...</div>
+
+                <p class="bold-label">Fichier de Base de Données (SQLite) :</p>
+                <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 6px;">
+                    <input type="text" id="settings-db-path" class="input" style="flex: 1;" placeholder="Chargement du chemin...">
+                    <button id="settings-btn-select-db" class="btn btn-blue">Utiliser cette base</button>
+                </div>
+                <p id="settings-db-info" style="margin: 0 0 20px; font-size: 0.85em; color: #666;">Saisir le chemin complet d'un fichier .db existant.</p>
+
+                <p class="bold-label">Interface :</p>
+                <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 20px;">
+                    <button id="settings-btn-customization" class="btn btn-orange">🛠 Personnaliser l'interface</button>
+                </div>
+                
+                <p class="bold-label">Liste de courses :</p>
+                <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 20px;">
+                    <button id="settings-btn-generate-order-list" class="btn btn-blue">Générer la liste de courses/commandes</button>
+                </div>
+
+                <p class="bold-label">Extraction Chirurgie (Salle de chir) :</p>
+                <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 20px;">
+                    <label>Du :</label>
+                    <input type="date" id="settings-chir-debut" class="input">
+                    <label>Au :</label>
+                    <input type="date" id="settings-chir-fin" class="input">
+                    <button id="settings-btn-extract-chir" class="btn btn-blue">Extraire (Excel)</button>
+                </div>
+
+                <p id="settings-version" style="font-size: 0.8em; color: #999; text-align: right; margin: 0 0 8px;"></p>
+                <div class="dialog-buttons centered">
+                    <button class="btn" data-close="settings-overlay">Fermer</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============ ANNUAIRE ============ -->
+    <div id="annuaire-overlay" class="overlay hidden">
+        <div class="dialog" style="width: 95vw; height: 95vh; max-width: 1000px; display: flex; flex-direction: column;">
+            <div class="dialog-titlebar">
+                Carnets d'Adresses
+                <button class="dialog-close" onclick="document.getElementById('annuaire-overlay').classList.add('hidden')">✕</button>
+            </div>
+            <div class="dialog-body" style="flex: 1; padding: 0; overflow: hidden; background: #e0e5ec;">
+                <iframe src="html/annuaire.html" style="width: 100%; height: 100%; border: none;"></iframe>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============ DIALOG ENTREE / SORTIE PAR LOT ============ -->
+    <div id="lot-move-overlay" class="overlay hidden">
+        <div class="dialog dialog-lot-move">
+            <div class="dialog-titlebar">
+                <span id="lot-move-title">Sortie de stock par lot</span>
+                <button class="dialog-close" id="lot-move-close">✕</button>
+            </div>
+            <div class="dialog-body form-body">
+                <p id="lot-move-info" class="lot-move-info"></p>
+                <div class="table-scroll lot-move-scroll">
+                    <table class="table lot-move-table">
+                        <thead>
+                            <tr>
+                                <th>N° de lot</th>
+                                <th>Péremption</th>
+                                <th class="center">En stock</th>
+                                <th class="center" id="lot-move-th-qte">Qté à sortir</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="lot-move-tbody"></tbody>
+                    </table>
+                </div>
+                <button type="button" id="lot-move-add" class="btn edit-add-btn hidden">+ Nouveau lot</button>
+                <p id="lot-move-total" class="lot-move-total"></p>
+                <div class="dialog-buttons">
+                    <button id="lot-move-save" class="btn btn-blue">Sortir</button>
+                    <button id="lot-move-cancel" class="btn">Annuler</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============ BOITE DE MESSAGE ============ -->
+    <div id="msg-overlay" class="overlay hidden">
+        <div class="dialog dialog-msg">
+            <div class="dialog-titlebar" id="msg-title"></div>
+            <div class="dialog-body">
+                <p id="msg-text" class="msg-text"></p>
+                <div class="dialog-buttons">
+                    <button id="msg-ok" class="btn btn-blue">OK</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============ EASTER EGG ============ -->
+    <div id="easter-egg-modal" class="overlay hidden">
+        <div class="dialog">
+            <div class="easter-egg-header">
+                <h2>🦷 Dino Run: Sauve ta dent !</h2>
+                <button class="btn btn-red" onclick="hideEasterEgg()">Fermer</button>
+            </div>
+            <canvas id="easter-egg-canvas" width="600" height="200"></canvas>
+            <div class="easter-egg-instructions">Appuie sur <b>Espace</b> ou <b>Clique</b> sur le cadre pour sauter.
+                Évite le sucre !</div>
+        </div>
+    </div>
+
+    <!-- ============ DIALOG CALENDRIER BINOMES ============ -->
+    <div id="calendar-overlay" class="overlay hidden">
+        <div class="dialog dialog-calendar" style="max-width: 95vw; width: 1400px; max-height: 95vh; overflow: hidden; display: flex; flex-direction: column;">
+            <div class="dialog-titlebar">
+                Planning des Binômes
+                <button class="dialog-close" data-close="calendar-overlay">✕</button>
+            </div>
+            <div class="dialog-body" style="overflow-y: auto; padding: 20px; background: #fdfdfd; display: flex; flex-direction: column; gap: 30px;">
+                <div style="display: flex; justify-content: center; gap: 20px;">
+                    <button id="btn-tab-even" class="btn btn-blue" style="font-size: 1.1em; padding: 10px 30px;">SEMAINE PAIRE</button>
+                    <button id="btn-tab-odd" class="btn" style="background: #bdc3c7; color: white; font-size: 1.1em; padding: 10px 30px;">SEMAINE IMPAIRE</button>
+                    <button id="btn-tab-couleurs" class="btn" style="background: #bdc3c7; color: white; font-size: 1.1em; padding: 10px 30px;">🎨 COULEURS</button>
+                </div>
+                
+                <div id="calendar-legende" style="display: flex; justify-content: center; flex-wrap: wrap; gap: 20px; font-size: 0.9em; color: #333;"></div>
+
+                <div id="calendar-container-even" class="calendar-wrapper active"></div>
+                <div id="calendar-container-odd" class="calendar-wrapper hidden"></div>
+                <div id="calendar-container-couleurs" class="calendar-wrapper hidden"></div>
+                
+                <div class="dialog-buttons centered" style="margin-top: 20px;">
+                    <button id="btn-save-calendar" class="btn btn-green" style="font-size: 1.1em; padding: 10px 30px;">💾 Sauvegarder le planning</button>
+                    <button class="btn" data-close="calendar-overlay">Fermer</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============ DIALOG TACHES ASSISTANTES ============ -->
+    <div id="tasks-overlay" class="overlay hidden">
+        <div class="dialog dialog-tasks" style="max-width: 95vw; width: 1200px; max-height: 95vh; overflow: hidden; display: flex; flex-direction: column;">
+            <div class="dialog-titlebar">
+                Tableau Taches des assistantes
+                <button class="dialog-close" data-close="tasks-overlay">✕</button>
+            </div>
+            <div class="dialog-body" style="overflow-y: auto; padding: 20px; background: #fdfdfd; display: flex; flex-direction: column; gap: 20px;">
+                <div id="tasks-container" class="calendar-wrapper active"></div>
+                <textarea id="tasks-note" class="input" rows="2" placeholder="Consigne générale (affichée sous le tableau)..." style="margin-top: 10px; font-style: italic; color: #333; width: 100%; box-sizing: border-box; resize: vertical; font-family: inherit;"></textarea>
+                <div class="dialog-buttons centered" style="margin-top: 20px;">
+                    <button id="btn-save-tasks" class="btn btn-green" style="font-size: 1.1em; padding: 10px 30px;">💾 Sauvegarder les tâches</button>
+                    <button class="btn" data-close="tasks-overlay">Fermer</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <input type="file" id="pdf-file" accept="application/pdf,.pdf" class="hidden" multiple>
+
+    <!-- Petit bouton caché pour le mini-jeu -->
+    <div id="easter-egg-trigger"
+        style="position: fixed; bottom: 10px; right: 10px; cursor: pointer; opacity: 0.15; font-size: 20px; z-index: 9999; user-select: none; transition: opacity 0.2s;"
+        title="Un petit secret..." onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.15">🦷</div>
+
+    <!-- ============ ECRAN DE VEILLE (SCREENSAVER) ============ -->
+    <div id="screensaver-overlay" class="hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.95); z-index: 10000; display: flex; justify-content: center; align-items: center; opacity: 0; transition: opacity 1s ease;">
+        <iframe class="cabinet-animation" src="html/cabinet-dentaire.html" style="width: 100%; height: 100%; border: none; pointer-events: none;" scrolling="no" title="Animation Cabinet Dentaire"></iframe>
+    </div>
+
+    <script type="module" src="js/main-init.js"></script>
+    <script src="animation.js"></script>
+    <script src="settings.js"></script>
+</body>
+
+</html>

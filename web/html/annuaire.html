@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' app:; script-src 'self' 'unsafe-inline' app:; style-src 'self' 'unsafe-inline' app:; img-src 'self' data: app:; font-src 'self' data: app:;">
+    <title>Carnets d'Adresses Animé</title>
+    <style>
+        :root {
+            --paper-color: #fdfbf7;
+            --line-color: #dcdcdc;
+            --margin-color: #ff9999;
+            --cover-color: #2c3e50;
+            --text-color: #333;
+            --primary-color: #3498db;
+            --danger-color: #e74c3c;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background-color: transparent;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .notebook-container {
+            perspective: 1500px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+            height: 100%;
+        }
+
+        .notebook {
+            width: 95%;
+            max-width: 900px;
+            height: 90%;
+            max-height: 600px;
+            display: flex;
+            background: var(--paper-color);
+            border-radius: 5px 15px 15px 5px;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.05),
+                        10px 10px 30px rgba(0,0,0,0.2);
+            position: relative;
+            transform-style: preserve-3d;
+        }
+
+        .binding {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 50%;
+            width: 40px;
+            margin-left: -20px;
+            background: linear-gradient(to right, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0) 50%, rgba(0,0,0,0.1) 100%);
+            z-index: 10;
+        }
+        
+        .binding::after {
+            content: '';
+            position: absolute;
+            top: 20px;
+            bottom: 20px;
+            left: 50%;
+            width: 20px;
+            margin-left: -10px;
+            background-image: radial-gradient(circle, #555 4px, transparent 5px);
+            background-size: 100% 30px;
+        }
+
+        .page {
+            flex: 1;
+            height: 100%;
+            padding: 40px 40px 40px 60px;
+            position: relative;
+            background-image: 
+                linear-gradient(transparent 95%, var(--line-color) 100%);
+            background-size: 100% 30px;
+            line-height: 30px;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        .page::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 40px;
+            width: 2px;
+            background-color: var(--margin-color);
+        }
+
+        .page.left {
+            border-radius: 5px 0 0 5px;
+            padding: 40px 60px 40px 40px;
+        }
+        
+        .page.left::before {
+            left: auto;
+            right: 40px;
+        }
+
+        .page.right {
+            border-radius: 0 15px 15px 0;
+        }
+
+        .page-flip {
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 50%;
+            height: 100%;
+            background: var(--paper-color);
+            border-radius: 0 15px 15px 0;
+            transform-origin: left center;
+            transition: transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+            transform-style: preserve-3d;
+            z-index: 20;
+            box-shadow: -5px 0 15px rgba(0,0,0,0.1);
+            background-image: linear-gradient(transparent 95%, var(--line-color) 100%);
+            background-size: 100% 30px;
+        }
+
+        .page-flip.flipped {
+            transform: rotateY(-180deg);
+        }
+
+        h1, h2 {
+            font-family: 'Georgia', serif;
+            color: var(--text-color);
+            margin-bottom: 20px;
+            font-style: italic;
+            border-bottom: 2px solid var(--text-color);
+            display: inline-block;
+            line-height: normal;
+        }
+
+        .contact-list {
+            list-style: none;
+            margin-top: 10px;
+        }
+
+        .contact-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            padding: 0 10px;
+            margin-bottom: 0;
+            transition: all 0.3s;
+            border-radius: 4px;
+        }
+
+        .contact-item:hover {
+            background-color: rgba(52, 152, 219, 0.1);
+            transform: translateX(5px);
+        }
+
+        .contact-item span {
+            font-weight: 600;
+        }
+
+        .btn-add {
+            display: block;
+            margin: 20px auto 0;
+            padding: 8px 20px;
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 14px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: transform 0.2s, background-color 0.2s;
+            line-height: normal;
+        }
+
+        .btn-add:hover {
+            background-color: #2980b9;
+            transform: translateY(-2px);
+        }
+
+        .form-group {
+            margin-bottom: 12px;
+            line-height: normal;
+        }
+
+        .form-row {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 12px;
+        }
+        
+        .form-row .form-group {
+            flex: 1;
+            margin-bottom: 0;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 2px;
+        }
+
+        .form-group input, .form-group textarea {
+            width: 100%;
+            padding: 5px 0;
+            border: none;
+            border-bottom: 1px dashed #999;
+            background: transparent;
+            font-size: 14px;
+            outline: none;
+            color: var(--text-color);
+            font-family: inherit;
+            resize: none;
+        }
+        
+        .form-group input:focus, .form-group textarea:focus {
+            border-bottom: 1px solid var(--primary-color);
+        }
+
+        .form-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+            line-height: normal;
+        }
+
+        .btn {
+            padding: 8px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: 0.2s;
+        }
+
+        .btn-save { background-color: #2ecc71; color: white; }
+        .btn-save:hover { background-color: #27ae60; }
+        
+        .btn-delete { background-color: var(--danger-color); color: white; }
+        .btn-delete:hover { background-color: #c0392b; }
+        
+        .btn-cancel { background-color: #95a5a6; color: white; }
+        .btn-cancel:hover { background-color: #7f8c8d; }
+
+        .fade-content {
+            animation: fadeIn 0.4s ease-in-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .empty-state {
+            color: #999;
+            font-style: italic;
+            text-align: center;
+            margin-top: 50px;
+            line-height: normal;
+        }
+
+        .page.right {
+            font-size: 14px;
+        }
+        .page.right h2 {
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="notebook-container">
+        <div class="notebook">
+            <div class="binding"></div>
+            
+            <div class="page left">
+                <h1>Carnets d'Adresses</h1>
+                <div class="search-container" style="margin-bottom: 15px;">
+                    <input type="text" id="search-input" placeholder="Rechercher un contact..." onkeyup="filterContacts()" style="width: 100%; padding: 8px; border: none; border-bottom: 1px dashed #999; background: transparent; font-size: 14px; outline: none; color: var(--text-color); font-family: inherit;">
+                </div>
+                <ul class="contact-list" id="contact-list"></ul>
+                <button class="btn-add" onclick="showAddForm()">+ Nouveau Contact</button>
+            </div>
+
+            <div class="page right" id="right-page-content">
+                <div class="empty-state fade-content">
+                    Sélectionnez un contact ou ajoutez-en un nouveau.
+                </div>
+            </div>
+            
+            <div class="page-flip" id="page-flip" style="display: none;"></div>
+        </div>
+    </div>
+
+    <template id="form-template">
+        <div class="fade-content">
+            <h2 id="form-title">Nouveau Contact</h2>
+            <input type="hidden" id="contact-id">
+            
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Prénom</label>
+                    <input type="text" id="contact-prenom" placeholder="Ex: Jean">
+                </div>
+                <div class="form-group">
+                    <label>Nom</label>
+                    <input type="text" id="contact-nom" placeholder="Ex: Dupont">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Entreprise / Rôle</label>
+                    <input type="text" id="contact-entreprise" placeholder="Ex: Labo Prothèse">
+                </div>
+                <div class="form-group">
+                    <label>Adresse Mail</label>
+                    <input type="email" id="contact-email" placeholder="jean@exemple.com">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Téléphone Fixe</label>
+                    <input type="tel" id="contact-tel-fixe" placeholder="Ex: 01 23 45 67 89">
+                </div>
+                <div class="form-group">
+                    <label>Téléphone Portable</label>
+                    <input type="tel" id="contact-tel-portable" placeholder="Ex: 06 12 34 56 78">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Adresse (N° et Voie)</label>
+                <input type="text" id="contact-adresse" placeholder="Ex: 15 rue des Molières">
+            </div>
+            <div class="form-row">
+                <div class="form-group" style="flex: 0.35;">
+                    <label>Code Postal</label>
+                    <input type="text" id="contact-cp" placeholder="Ex: 75001">
+                </div>
+                <div class="form-group" style="flex: 0.65;">
+                    <label>Ville</label>
+                    <input type="text" id="contact-ville" placeholder="Ex: Paris">
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label>Note additionnelle</label>
+                <textarea id="contact-note" rows="1" placeholder="Informations utiles..."></textarea>
+            </div>
+            
+            <div class="form-actions">
+                <button class="btn btn-save" onclick="saveContact()">Enregistrer</button>
+                <button class="btn btn-delete" id="btn-delete" style="display:none;" onclick="deleteContact()">Supprimer</button>
+                <button class="btn btn-cancel" onclick="resetRightPage()">Annuler</button>
+            </div>
+        </div>
+    </template>
+
+    <script>
+        /* Carnet d'adresses : les contacts sont en base, lus et écrits par
+           l'API du serveur (/api/contacts). Aucun contact dans le code. */
+        let contacts = [];
+
+        async function appelApi(methode, route, corps) {
+            const options = { method: methode, headers: {} };
+            if (corps !== undefined) {
+                options.headers['Content-Type'] = 'application/json';
+                options.body = JSON.stringify(corps);
+            }
+            let reponse;
+            try {
+                reponse = await fetch(route, options);
+            } catch (e) {
+                throw new Error("Serveur injoignable.");
+            }
+            const data = await reponse.json().catch(() => ({}));
+            if (!reponse.ok || data.status === 'error') {
+                throw new Error(data.message || ('Erreur ' + reponse.status));
+            }
+            return data;
+        }
+
+        async function rechargerContacts() {
+            try {
+                const data = await appelApi('GET', '/api/contacts');
+                contacts = data.contacts || [];
+                renderList();
+            } catch (e) {
+                const listEl = document.getElementById('contact-list');
+                if (listEl) listEl.innerHTML = '<li class="contact-item">' + e.message + '</li>';
+            }
+        }
+        window.rechargerContacts = rechargerContacts;
+
+        function filterContacts() {
+            renderList();
+        }
+
+        function renderList() {
+            const listEl = document.getElementById('contact-list');
+            listEl.innerHTML = '';
+            
+            const searchInput = document.getElementById('search-input');
+            const searchTerm = searchInput ? searchInput.value.toLowerCase() : '';
+            
+            contacts.filter(contact => {
+                if (!searchTerm) return true;
+                const searchString = `${contact.nom || ''} ${contact.prenom || ''} ${contact.entreprise || ''} ${contact.ville || ''} ${contact.email || ''} ${contact.tel_fixe || ''} ${contact.tel_portable || ''}`.toLowerCase();
+                return searchString.includes(searchTerm);
+            }).sort((a, b) => {
+                let nameA = (a.nom || a.entreprise || '').trim();
+                let nameB = (b.nom || b.entreprise || '').trim();
+                return nameA.localeCompare(nameB);
+            }).forEach(contact => {
+                const li = document.createElement('li');
+                li.className = 'contact-item fade-content';
+                let displayName = (contact.nom || contact.prenom) ? `${contact.nom || ''} ${contact.prenom || ''}`.trim() : (contact.entreprise || 'Contact sans nom');
+                const span = document.createElement('span');
+                span.textContent = displayName;
+                li.appendChild(span);
+                li.appendChild(document.createTextNode(' \u270D'));
+                li.onclick = () => showEditForm(contact.id);
+                listEl.appendChild(li);
+            });
+        }
+
+        function triggerPageFlip(callback) {
+            const flipEl = document.getElementById('page-flip');
+            flipEl.style.display = 'block';
+            
+            void flipEl.offsetWidth; 
+            flipEl.classList.add('flipped');
+            
+            setTimeout(() => {
+                callback(); 
+                flipEl.style.display = 'none';
+                flipEl.classList.remove('flipped');
+            }, 250); 
+        }
+
+        function showAddForm() {
+            triggerPageFlip(() => {
+                const rightPage = document.getElementById('right-page-content');
+                const template = document.getElementById('form-template');
+                rightPage.innerHTML = template.innerHTML;
+                
+                document.getElementById('form-title').innerText = "Nouveau Contact";
+                document.getElementById('contact-id').value = '';
+                document.getElementById('btn-delete').style.display = 'none';
+            });
+        }
+
+        function showEditForm(id) {
+            const contact = contacts.find(c => c.id === id);
+            if (!contact) return;
+
+            triggerPageFlip(() => {
+                const rightPage = document.getElementById('right-page-content');
+                const template = document.getElementById('form-template');
+                rightPage.innerHTML = template.innerHTML;
+                
+                document.getElementById('form-title').innerText = "Modifier Contact";
+                document.getElementById('contact-id').value = contact.id;
+                document.getElementById('contact-prenom').value = contact.prenom || '';
+                document.getElementById('contact-nom').value = contact.nom || '';
+                document.getElementById('contact-entreprise').value = contact.entreprise || '';
+                document.getElementById('contact-email').value = contact.email || '';
+                document.getElementById('contact-tel-fixe').value = contact.tel_fixe || '';
+                document.getElementById('contact-tel-portable').value = contact.tel_portable || '';
+                document.getElementById('contact-adresse').value = contact.adresse || '';
+                document.getElementById('contact-cp').value = contact.code_postal || '';
+                document.getElementById('contact-ville').value = contact.ville || '';
+                document.getElementById('contact-note').value = contact.note || '';
+                
+                document.getElementById('btn-delete').style.display = 'block';
+            });
+        }
+
+        async function saveContact() {
+            const id = document.getElementById('contact-id').value;
+            const newContact = {
+                id: id ? parseInt(id, 10) : null,
+                prenom: document.getElementById('contact-prenom').value.trim(),
+                nom: document.getElementById('contact-nom').value.trim(),
+                entreprise: document.getElementById('contact-entreprise').value.trim(),
+                email: document.getElementById('contact-email').value.trim(),
+                tel_fixe: document.getElementById('contact-tel-fixe').value.trim(),
+                tel_portable: document.getElementById('contact-tel-portable').value.trim(),
+                adresse: document.getElementById('contact-adresse').value.trim(),
+                code_postal: document.getElementById('contact-cp').value.trim(),
+                ville: document.getElementById('contact-ville').value.trim(),
+                note: document.getElementById('contact-note').value.trim()
+            };
+
+            if (!newContact.nom && !newContact.prenom && !newContact.entreprise) {
+                alert("Veuillez renseigner au moins un nom, prénom ou une entreprise.");
+                return;
+            }
+
+            try {
+                const data = await appelApi('POST', '/api/contacts', newContact);
+                const enregistre = data.contact;
+                const index = contacts.findIndex(c => c.id === enregistre.id);
+                if (index !== -1) contacts[index] = enregistre;
+                else contacts.push(enregistre);
+            } catch (e) {
+                alert("Enregistrement impossible : " + e.message);
+                return;
+            }
+
+            renderList();
+            resetRightPage();
+        }
+
+        async function deleteContact() {
+            if(confirm("Voulez-vous vraiment supprimer ce contact ?")) {
+                const id = parseInt(document.getElementById('contact-id').value, 10);
+                try {
+                    await appelApi('DELETE', '/api/contacts?id=' + encodeURIComponent(id));
+                } catch (e) {
+                    alert("Suppression impossible : " + e.message);
+                    return;
+                }
+                contacts = contacts.filter(c => c.id !== id);
+                renderList();
+                resetRightPage();
+            }
+        }
+
+        function resetRightPage() {
+            triggerPageFlip(() => {
+                const rightPage = document.getElementById('right-page-content');
+                rightPage.innerHTML = `
+                    <div class="empty-state fade-content">
+                        Sélectionnez un contact ou ajoutez-en un nouveau.
+                    </div>
+                `;
+            });
+        }
+
+        rechargerContacts();
+    </script>
+</body>
+</html>

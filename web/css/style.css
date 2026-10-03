@@ -1,0 +1,2740 @@
+/* ============================================================
+   Style calqué sur l'application PyQt6 d'origine (main.py)
+   rendue sous Windows 11 avec une mise à l'échelle de 150 %.
+   ============================================================ */
+
+/* ==== Base ==== */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html,
+body {
+    min-height: 100vh;
+    height: auto;
+    font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 16px;
+    background-color: #E8E8E8;
+    color: #1a1a1a;
+}
+
+.hidden {
+    display: none !important;
+}
+
+#app {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Barres de défilement fines façon Windows 11 */
+::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #c8c8c8;
+    border-radius: 6px;
+    border: 3px solid transparent;
+    background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+    background-clip: content-box;
+    border: 3px solid transparent;
+}
+
+/* ==== Layout principal (la "cuisine") ==== */
+.main-layout {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 40px 60px;
+    position: relative;
+}
+
+/* ==== Crédence ==== */
+.backsplash {
+    position: relative;
+    flex: 1.2;
+    min-height: 240px;
+    display: flex;
+    align-items: stretch;
+    flex-wrap: wrap;
+    padding: 20px 40px;
+    background: linear-gradient(to bottom, #B89B7A 0%, #E2CDA7 5%, #D2B48C 95%, #A88661 100%);
+    border-top: 5px solid rgba(0, 0, 0, 0.15);
+    border-bottom: 4px solid rgba(0, 0, 0, 0.2);
+}
+
+.spacer {
+    flex: 1;
+}
+
+.datetime-container {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    align-self: flex-start;
+    gap: 8px;
+}
+
+.date-display {
+    font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 18px;
+    font-weight: bold;
+    color: #333;
+    background-color: rgba(255, 255, 255, 0.7);
+    padding: 6px 12px;
+    border-radius: 6px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    text-align: right;
+}
+
+.clock {
+    font-family: "Courier New", monospace;
+    font-size: 50px;
+    font-weight: bold;
+    letter-spacing: 2px;
+    background-color: #111111;
+    color: #00FFCC;
+    border: 4px solid #333333;
+    border-radius: 8px;
+    padding: 5px 22px;
+}
+
+
+/* Visages selon l'état des machines */
+
+/* Autoclave - Chauffe (Chaud / Essoufflé avec joues rouges) */
+.autoclave-heat .mouth {
+    d: path("M56 77 a3 4 0 1 0 0.1 0");
+    fill: #3c4a52;
+}
+
+.autoclave-heat .glass {
+    fill: #ffeae0 !important;
+}
+
+/* Autoclave - Stérilisation (Concentré / Ligne droite) */
+.autoclave-steril-a .mouth,
+.autoclave-steril-b .mouth {
+    d: path("M51 78 q7 0 14 0");
+}
+
+/* Autoclave - Séchage (Soulagé) */
+.autoclave-dry .mouth {
+    d: path("M51 78 q7 -3 14 0");
+}
+
+.autoclave-dry .glass {
+    fill: #ebf6ff !important;
+}
+
+/* Radio - Positionnement (Concentré) */
+.radio-pos .mouth-r {
+    d: path("M30.5 53 q3.5 0 7 0");
+}
+
+/* Radio - Acquisition (Surpris) */
+.radio-scan .mouth-r {
+    d: path("M33 52 a2 2 0 1 0 0.1 0");
+    fill: #3c4a52;
+}
+
+/* Radio - Traitement (Soulagé) */
+.radio-proc .mouth-r {
+    d: path("M30.5 53 q3.5 -2 7 0");
+}
+
+.action-area {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
+    width: max-content;
+    flex-shrink: 0;
+}
+
+.action-area .btn {
+    text-align: center;
+}
+
+.plan-label {
+    font-size: 27px;
+    font-weight: bold;
+    color: #444;
+    text-align: center;
+    margin-bottom: 2px;
+}
+
+/* ==== Autoclaves (Euronda / Melag / Getinge) ==== */
+.machines {
+    display: flex;
+    gap: 14px;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.autoclave {
+    width: 200px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    padding: 12px 12px 14px;
+    border: 3px solid;
+    border-radius: 18px;
+    transition: background-color 0.3s, border-color 0.3s;
+
+    /* Variables pilotées par les phases du cycle */
+    --eu-glass: #ddf0ff;
+    /* hublot au repos */
+    --eu-led: #b9c3c8;
+    /* LED éteinte */
+}
+
+/* Couleurs de marque */
+.machine-euronda {
+    --eu-accent: #16a05d;
+    border-color: #bcd4c6;
+    background: linear-gradient(to bottom, #f7fbf9, #eaf3ee);
+}
+
+.machine-melag {
+    --eu-accent: #d6222f;
+    border-color: #e0bfc2;
+    background: linear-gradient(to bottom, #fdf8f8, #f6ecec);
+}
+
+.machine-getinge {
+    --eu-accent: #1565b0;
+    border-color: #b9cfe3;
+    background: linear-gradient(to bottom, #f6fafd, #eaf2f9);
+}
+
+.machine-dac {
+    --eu-accent: #8e44ad;
+    border-color: #d7bde2;
+    background: linear-gradient(to bottom, #fcf3ff, #f4e8f9);
+}
+
+.euronda-machine {
+    width: 136px;
+    margin: 0 auto;
+    transition: transform 0.2s ease;
+}
+
+.euronda-machine svg {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+
+.autoclave:hover .euronda-machine {
+    transform: translateY(-2px);
+}
+
+/* Vapeur : cachée au repos */
+.steam .puff {
+    opacity: 0;
+}
+
+/* --- Phases (classes posées par app.js) --- */
+.autoclave-heat {
+    border-color: #ffb199 !important;
+    background: linear-gradient(to bottom, #fff6f2, #ffe9e0) !important;
+    --eu-glass: #ffd9c2;
+    --eu-led: #ff6b3d;
+}
+
+.autoclave-steril-a {
+    border-color: #ff8f8f !important;
+    background: linear-gradient(to bottom, #fff1f1, #ffe3e3) !important;
+    --eu-glass: #ffc2c2;
+    --eu-led: #e60000;
+}
+
+.autoclave-steril-b {
+    border-color: #ffa6a6 !important;
+    background: linear-gradient(to bottom, #fff4f4, #ffe8e8) !important;
+    --eu-glass: #ffd0d0;
+    --eu-led: #ff4d4d;
+}
+
+.autoclave-dry {
+    border-color: #8fc6ff !important;
+    background: linear-gradient(to bottom, #f2f8ff, #e3f0ff) !important;
+    --eu-glass: #cfe9ff;
+    --eu-led: #3399ff;
+}
+
+.autoclave-done {
+    border-color: #7fd98f !important;
+    background: linear-gradient(to bottom, #f2fff4, #e0f9e4) !important;
+    --eu-glass: #d4f7d4;
+    --eu-led: #2ecc40;
+}
+
+.glass,
+.led {
+    transition: fill 0.4s ease;
+}
+
+/* Vapeur et petite vibration pendant chauffe / stérilisation */
+.autoclave-heat .steam .puff,
+.autoclave-steril-a .steam .puff,
+.autoclave-steril-b .steam .puff {
+    animation: eu-steam 1.6s ease-in-out infinite;
+}
+
+.steam .p2 {
+    animation-delay: 0.4s !important;
+}
+
+.steam .p3 {
+    animation-delay: 0.8s !important;
+}
+
+.autoclave-steril-a .euronda-machine,
+.autoclave-steril-b .euronda-machine {
+    animation: eu-wobble 0.45s ease-in-out infinite;
+}
+
+/* La machine "sourit" plus fort quand c'est terminé */
+.autoclave-done .mouth {
+    d: path("M50 77 q8 7 16 0");
+}
+
+@keyframes eu-steam {
+    0% {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+
+    35% {
+        opacity: 0.85;
+    }
+
+    100% {
+        opacity: 0;
+        transform: translateY(-8px);
+    }
+}
+
+@keyframes eu-wobble {
+
+    0%,
+    100% {
+        transform: translateX(0);
+    }
+
+    25% {
+        transform: translateX(-1.5px) rotate(-0.4deg);
+    }
+
+    75% {
+        transform: translateX(1.5px) rotate(0.4deg);
+    }
+}
+
+/* ==== DAC Machine Animations ==== */
+.dac-machine-svg {
+    width: 136px;
+    margin: 0 auto;
+    transition: transform 0.2s ease;
+}
+
+.dac-machine-svg svg {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+
+.autoclave:hover .dac-machine-svg {
+    transform: translateY(-2px);
+}
+
+.dac-clean {
+    border-color: #8fcdff !important;
+    background: linear-gradient(to bottom, #f2f8ff, #e3f0ff) !important;
+    --eu-led: #3399ff;
+}
+
+.dac-lube-a, .dac-lube-b {
+    border-color: #ffda75 !important;
+    background: linear-gradient(to bottom, #fffdf2, #fff6d9) !important;
+    --eu-led: #ffb400;
+}
+
+.dac-steril {
+    border-color: #ff8f8f !important;
+    background: linear-gradient(to bottom, #fff1f1, #ffe3e3) !important;
+    --eu-led: #e60000;
+}
+
+.dac-machine-svg .dac-lid {
+    transition: transform 0.5s ease;
+}
+.dac-clean .dac-lid, .dac-steril .dac-lid {
+    transform: translateY(-4px);
+}
+.dac-lube-a .dac-lid, .dac-lube-b .dac-lid {
+    transform: translateY(-8px);
+}
+
+.dac-clean .mouth {
+    d: path("M64 88 q6 0 12 0");
+}
+.dac-lube-a .mouth, .dac-lube-b .mouth {
+    d: path("M64 88 q6 -4 12 0");
+}
+.dac-steril .mouth {
+    d: path("M66 87 a3 4 0 1 0 0.1 0");
+    fill: #3c4a52;
+}
+
+.dac-clean .bubble, .dac-lube-a .bubble, .dac-lube-b .bubble, .dac-steril .bubble {
+    animation: dac-bubble 1.2s infinite;
+}
+.steam .b2 { animation-delay: 0.4s !important; }
+.steam .b3 { animation-delay: 0.8s !important; }
+
+@keyframes dac-bubble {
+    0% { opacity: 0; transform: translateY(10px) scale(0.5); }
+    50% { opacity: 0.8; }
+    100% { opacity: 0; transform: translateY(-15px) scale(1.2); }
+}
+
+.dac-steril .dac-machine-svg, .dac-lube-a .dac-machine-svg, .dac-lube-b .dac-machine-svg {
+    animation: eu-wobble 0.35s ease-in-out infinite;
+}
+
+.autoclave-done[data-type="dac"] .mouth {
+    d: path("M62 88 q8 8 16 0");
+}
+
+/* ==== Thermo Machine Animations ==== */
+.machine-thermolaveur {
+    --eu-accent: #e67e22;
+    border-color: #f5cba7;
+    background: linear-gradient(to bottom, #fdf6f2, #fae5d3);
+}
+
+.thermo-machine-svg {
+    width: 136px;
+    margin: 0 auto;
+    transition: transform 0.2s ease;
+}
+
+.thermo-machine-svg svg {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+
+.autoclave:hover .thermo-machine-svg {
+    transform: translateY(-2px);
+}
+
+.thermo-prewash {
+    border-color: #8fcdff !important;
+    background: linear-gradient(to bottom, #f2f8ff, #e3f0ff) !important;
+    --eu-glass: #cfe9ff;
+    --eu-led: #3399ff;
+}
+
+.thermo-wash-a, .thermo-wash-b {
+    border-color: #ffda75 !important;
+    background: linear-gradient(to bottom, #fffdf2, #fff6d9) !important;
+    --eu-glass: #ffe9a6;
+    --eu-led: #ffb400;
+}
+
+.thermo-rinse {
+    border-color: #ff8f8f !important;
+    background: linear-gradient(to bottom, #fff1f1, #ffe3e3) !important;
+    --eu-glass: #ffc2c2;
+    --eu-led: #e60000;
+}
+
+.thermo-dry {
+    border-color: #a3e4d7 !important;
+    background: linear-gradient(to bottom, #e8f8f5, #d1f2eb) !important;
+    --eu-glass: #a3e4d7;
+    --eu-led: #1abc9c;
+}
+
+.thermo-prewash .mouth {
+    d: path("M63 75 q7 0 14 0");
+}
+.thermo-wash-a .mouth, .thermo-wash-b .mouth {
+    d: path("M63 75 q7 -4 14 0");
+}
+.thermo-rinse .mouth {
+    d: path("M65 74 a3 4 0 1 0 0.1 0");
+    fill: #3c4a52;
+}
+.autoclave-done[data-type="thermo"] .mouth {
+    d: path("M58 74 q12 8 24 0");
+}
+
+.thermo-prewash .wave, .thermo-wash-a .wave, .thermo-wash-b .wave, .thermo-rinse .wave {
+    animation: thermo-wave 1.5s infinite linear;
+    opacity: 0.7;
+}
+.water .w2 {
+    animation-direction: reverse;
+    animation-delay: 0.75s;
+}
+
+@keyframes thermo-wave {
+    0% { transform: translateX(-4px); }
+    50% { transform: translateX(4px); }
+    100% { transform: translateX(-4px); }
+}
+
+.thermo-wash-a .thermo-machine-svg, .thermo-wash-b .thermo-machine-svg, .thermo-rinse .thermo-machine-svg {
+    animation: eu-wobble 0.35s ease-in-out infinite;
+}
+
+/* ==== Fauteuil Machine Animations Override ==== */
+.autoclave-done[data-type="fauteuil"] .mouth {
+    d: path("M78 72 q7 8 14 0");
+}
+.autoclave-heat[data-type="fauteuil"] .mouth {
+    d: path("M84 72 a2 2 0 1 0 0.1 0");
+    fill: #3c4a52;
+}
+.autoclave-steril-a[data-type="fauteuil"] .mouth,
+.autoclave-steril-b[data-type="fauteuil"] .mouth {
+    d: path("M80 72 q5 0 10 0");
+}
+.autoclave-dry[data-type="fauteuil"] .mouth {
+    d: path("M80 72 q5 -3 10 0");
+}
+
+/* ==== Camera 3shapes Animations ==== */
+.machine-camera {
+    --eu-accent: #34495e;
+    border-color: #95a5a6;
+    background: linear-gradient(to bottom, #ecf0f1, #bdc3c7);
+}
+
+.camera-machine-svg {
+    width: 136px;
+    margin: 0 auto;
+    transition: transform 0.2s ease;
+}
+
+.camera-machine-svg svg {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+
+.autoclave:hover .camera-machine-svg {
+    transform: translateY(-2px);
+}
+
+.camera-init {
+    border-color: #f1c40f !important;
+    background: linear-gradient(to bottom, #fcf3cf, #f9e79f) !important;
+    --eu-glass: #f7dc6f;
+    --eu-led: #f39c12;
+}
+
+.camera-scan {
+    border-color: #3498db !important;
+    background: linear-gradient(to bottom, #ebf5fb, #d6eaf8) !important;
+    --eu-glass: #aed6f1;
+    --eu-led: #2980b9;
+}
+
+.camera-calc {
+    border-color: #9b59b6 !important;
+    background: linear-gradient(to bottom, #f4ecf7, #e8daef) !important;
+    --eu-glass: #d2b4de;
+    --eu-led: #8e44ad;
+}
+
+.camera-scan .scan-beam {
+    animation: scan-pulse 1s infinite alternate;
+}
+
+@keyframes scan-pulse {
+    0% { opacity: 0; }
+    100% { opacity: 0.8; }
+}
+
+.camera-calc .calc-wave {
+    animation: calc-wave-anim 1.5s infinite linear;
+    opacity: 1;
+}
+
+@keyframes calc-wave-anim {
+    0% { transform: translateX(-5px); }
+    50% { transform: translateX(5px); }
+    100% { transform: translateX(-5px); }
+}
+
+.camera-calc .camera-machine-svg {
+    animation: eu-wobble 0.45s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+    .euronda-machine,
+    .steam .puff {
+        animation: none !important;
+    }
+}
+
+.autoclave-title {
+    cursor: pointer;
+    border: none;
+    background: transparent;
+    color: var(--eu-accent, #16a05d);
+    text-decoration: underline;
+    font-size: 18px;
+    font-weight: bold;
+    font-family: inherit;
+    text-align: center;
+}
+
+.autoclave-title:hover {
+    filter: brightness(0.75);
+}
+
+.autoclave-status {
+    font-size: 18px;
+    font-weight: bold;
+    color: #555;
+    text-align: center;
+}
+
+.autoclave-start {
+    cursor: pointer;
+    font-family: inherit;
+    background-color: #4CAF50;
+    color: white;
+    border-radius: 8px;
+    padding: 11px;
+    font-size: 17px;
+    font-weight: bold;
+    border: none;
+}
+
+.autoclave-start:hover:not(:disabled) {
+    background-color: #45a049;
+}
+
+.autoclave-start:disabled {
+    background-color: #aaaaaa;
+    color: #eeeeee;
+    cursor: default;
+}
+
+/* ==== Placard (bouton 3D) ==== */
+.placard {
+    flex: 3;
+    min-height: 240px;
+    cursor: pointer;
+    border-radius: 10px;
+    color: #555555;
+    font-family: inherit;
+    width: 350px;
+    margin: 0 auto;
+    background: #e6e6e6;
+    border-top: 3px solid #FFFFFF;
+    border-left: 3px solid #FFFFFF;
+    border-right: 5px solid #CCCCCC;
+    border-bottom: 20px solid #777777;
+    /* Plinthe métallique 3D */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 10px;
+    position: relative;
+    box-sizing: border-box;
+}
+
+.placard:hover {
+    border-bottom-color: #4CAF50;
+    background: #f0f0f0;
+}
+
+.placard:active {
+    border-top: 10px solid #CCCCCC;
+    border-bottom: 13px solid #777777;
+}
+
+/* Visuel du placard (portes) */
+.placard-visual {
+    position: relative;
+    width: 160px;
+    height: 130px;
+    background: #a9a297; /* Intérieur sombre */
+    border: 5px solid #d4cfc7;
+    border-radius: 4px;
+    margin-bottom: 12px;
+    display: flex;
+    box-shadow: inset 0 5px 15px rgba(0,0,0,0.1), 0 3px 6px rgba(0,0,0,0.1);
+}
+
+/* Etagères à l'intérieur */
+.placard-visual::before {
+    content: '';
+    position: absolute;
+    top: 33%;
+    left: 0;
+    width: 100%;
+    height: 5px;
+    background: #8b8377; 
+}
+
+.placard-visual::after {
+    content: '';
+    position: absolute;
+    top: 66%;
+    left: 0;
+    width: 100%;
+    height: 5px;
+    background: #8b8377; 
+}
+
+.placard-door {
+    width: 50%;
+    height: 100%;
+    background: linear-gradient(to right, #ffffff, #f0f0f0);
+    border: 1px solid #d4cfc7;
+    position: relative;
+    transition: transform 0.4s ease;
+    z-index: 2;
+    transform-origin: left;
+}
+
+.placard-door.right {
+    transform-origin: right;
+    background: linear-gradient(to left, #ffffff, #f0f0f0);
+}
+
+/* Animation d'ouverture des portes au survol */
+.placard:hover .placard-door.left {
+    transform: perspective(400px) rotateY(-35deg);
+}
+
+.placard:hover .placard-door.right {
+    transform: perspective(400px) rotateY(35deg);
+}
+
+.placard-handle {
+    width: 6px;
+    height: 35px;
+    background: #999;
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    border-radius: 3px;
+    box-shadow: 1px 1px 3px rgba(0,0,0,0.3);
+}
+
+.placard-door.left .placard-handle {
+    right: 8px;
+}
+
+.placard-door.right .placard-handle {
+    left: 8px;
+}
+
+.placard-text {
+    font-size: 22px;
+    font-weight: bold;
+    line-height: 1.2;
+    color: #444;
+    text-align: center;
+}
+
+.placard-text small {
+    font-size: 15px;
+    font-weight: normal;
+    color: #666;
+}
+
+/* ==== Boutons génériques (style Windows 11) ==== */
+.btn {
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 16px;
+    padding: 8px 18px;
+    border: 1px solid #d5d5d5;
+    border-bottom-color: #c5c5c5;
+    border-radius: 6px;
+    background-color: #fdfdfd;
+    color: #1a1a1a;
+}
+
+.btn:hover {
+    background-color: #f0f0f0;
+}
+
+.btn:active {
+    background-color: #e5e5e5;
+}
+
+.btn-blue {
+    background-color: #2b78e4;
+    color: white;
+    font-weight: bold;
+    font-size: 20px;
+    padding: 15px 24px;
+    border: none;
+    border-radius: 6px;
+}
+
+.btn-blue:hover {
+    background-color: #1a5cbb;
+}
+
+.btn-green {
+    background-color: #4CAF50;
+    color: white;
+    font-weight: bold;
+    border: none;
+    border-radius: 6px;
+}
+
+.btn-green:hover {
+    background-color: #45a049;
+}
+
+.btn-red {
+    background-color: #f44336;
+    color: white;
+    font-weight: bold;
+    font-size: 19px;
+    padding: 13px 20px;
+    border: none;
+    border-radius: 6px;
+}
+
+.btn-red:hover {
+    background-color: #d32f2f;
+}
+
+.btn-orange {
+    background-color: #ff9800;
+    color: white;
+    font-weight: bold;
+    font-size: 19px;
+    padding: 13px 20px;
+    border: none;
+    border-radius: 6px;
+}
+
+.btn-orange:hover {
+    background-color: #e68a00;
+}
+
+.btn-wide {
+    width: 100%;
+    padding: 13px;
+    font-size: 19px;
+    margin-top: 14px;
+}
+
+.btn-small {
+    font-size: 16px;
+    padding: 5px 12px;
+}
+
+/* ==== Overlays / Dialogs (fenêtres Windows 11) ==== */
+.overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+}
+
+.dialog {
+    background: #F0F0F0;
+    border: 1px solid #b5b5b5;
+    border-radius: 8px;
+    box-shadow: 0 12px 45px rgba(0, 0, 0, 0.45);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    max-height: 92vh;
+    max-width: 96vw;
+}
+
+.dialog-titlebar {
+    background: #F0F0F0;
+    padding: 8px 6px 8px 16px;
+    font-weight: normal;
+    font-size: 15px;
+    color: #1a1a1a;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    border-bottom: 1px solid #e2e2e2;
+}
+
+.dialog-close {
+    cursor: pointer;
+    border: none;
+    background: transparent;
+    font-size: 15px;
+    color: #444;
+    padding: 6px 16px;
+    border-radius: 4px;
+}
+
+.dialog-close:hover {
+    background: #c42b1c;
+    color: #ffffff;
+}
+
+.dialog-body {
+    padding: 16px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+}
+
+/* ==== Dialog sélection d'espace ==== */
+.dialog-user {
+    width: 800px;
+}
+
+.dialog-user .dialog-body {
+    padding: 24px;
+}
+
+.user-question {
+    font-size: 29px;
+    font-weight: bold;
+    text-align: center;
+    margin-bottom: 28px;
+}
+
+.user-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    justify-items: center;
+}
+
+.user-btn {
+    width: 230px;
+    height: 170px;
+    cursor: pointer;
+    font-size: 24px;
+    font-weight: bold;
+    font-family: inherit;
+    background-color: #ffffff;
+    color: #333333;
+    border: 3px solid #cccccc;
+    border-radius: 12px;
+}
+
+.user-btn:hover {
+    background-color: #f0f0f0;
+    border-color: #4CAF50;
+    color: #4CAF50;
+}
+
+.user-btn:active {
+    background-color: #e0e0e0;
+}
+
+/* ==== Dialog placard ==== */
+.dialog-placard {
+    width: 1250px;
+    height: 75vh;
+    resize: both;
+}
+
+/* ==== Dialog import (MAJ Stock) ==== */
+.dialog-import {
+    width: 1250px;
+    height: 75vh;
+    resize: both;
+}
+
+.placard-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+}
+
+.placard-content-title {
+    font-size: 29px;
+    font-weight: bold;
+    color: #111;
+}
+
+#btn-add-product {
+    font-size: 17px;
+    padding: 9px 22px;
+}
+
+.filter-row {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.filter-input {
+    width: 172px;
+    font-family: inherit;
+    font-size: 16px;
+    padding: 8px 12px;
+    background: #fdfdfd;
+    border: 1px solid #d5d5d5;
+    border-bottom-color: #9a9a9a;
+    border-radius: 7px;
+}
+
+.filter-input::placeholder {
+    color: #767676;
+}
+
+.filter-input:focus {
+    outline: none;
+    border-bottom: 2px solid #2b78e4;
+    padding-bottom: 7px;
+}
+
+.table-scroll {
+    max-height: 340px;
+    overflow-y: auto;
+    overflow-x: auto;
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.table-scroll-tall {
+    flex: 1;
+    min-height: 0;
+    max-height: none;
+}
+
+/* ==== Tables (QTableWidget Windows 11) ==== */
+.table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+    font-size: 16px;
+}
+
+.table th {
+    background: #ffffff;
+    border: 1px solid #e5e5e5;
+    border-top: none;
+    padding: 8px 10px;
+    text-align: center;
+    font-weight: normal;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    box-shadow: inset 0 -1px 0 #d8d8d8;
+}
+
+.table th.sortable {
+    cursor: pointer;
+    user-select: none;
+}
+
+.table th.sortable:hover {
+    background: #f2f2f2;
+}
+
+.table td {
+    border: 1px solid #ececec;
+    padding: 10px 12px;
+    height: 45px;
+    white-space: nowrap;
+    /* comme QTableWidget : pas de retour à la ligne */
+}
+
+.table td.center {
+    text-align: center;
+}
+
+/* Colonne des numéros de ligne (en-tête vertical Qt) */
+.table th.rownum,
+.table td.rownum {
+    width: 44px;
+    min-width: 44px;
+    text-align: center;
+    color: #333;
+    background: #ffffff;
+    padding: 6px;
+}
+
+.table td.rownum {
+    border-right: 1px solid #e0e0e0;
+}
+
+/* Nom tronqué sur une ligne, comme QTableWidget (texte complet au survol) */
+.td-nom {
+    max-width: 300px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.empty-row td {
+    text-align: center;
+    color: #888;
+    font-style: italic;
+    padding: 20px;
+}
+
+/* Couleurs de ligne (péremption / stock bas) */
+.row-red td {
+    background-color: rgb(255, 150, 150);
+}
+
+.row-orange td {
+    background-color: rgb(255, 220, 150);
+}
+
+.row-pink td {
+    background-color: rgb(255, 200, 200);
+}
+
+.row-red td.rownum {
+    background-color: rgb(255, 150, 150);
+}
+
+.row-orange td.rownum {
+    background-color: rgb(255, 220, 150);
+}
+
+.row-pink td.rownum {
+    background-color: rgb(255, 200, 200);
+}
+
+/* Cellule quantité avec - / + */
+.qte-cell {
+    white-space: nowrap;
+    text-align: center;
+    min-width: 150px;
+}
+
+.qte-btn {
+    cursor: pointer;
+    width: 32px;
+    height: 32px;
+    font-weight: bold;
+    font-size: 20px;
+    line-height: 1;
+    border: none;
+    border-radius: 6px;
+    vertical-align: middle;
+}
+
+.qte-minus {
+    background-color: #ffcccc;
+    margin-right: 12px;
+}
+
+.qte-plus {
+    background-color: #ccffcc;
+    margin-left: 12px;
+}
+
+.qte-minus:hover {
+    background-color: #ffb3b3;
+}
+
+.qte-plus:hover {
+    background-color: #b3ffb3;
+}
+
+/* ==== Champs de saisie (style Windows 11) ==== */
+.input {
+    font-family: inherit;
+    font-size: 17px;
+    padding: 10px 12px;
+    border: 1px solid #d5d5d5;
+    border-bottom-color: #9a9a9a;
+    border-radius: 7px;
+    background: #fdfdfd;
+    color: #1a1a1a;
+}
+
+.input::placeholder {
+    color: #767676;
+}
+
+.input:focus {
+    outline: none;
+    border-bottom: 2px solid #2b78e4;
+    padding-bottom: 9px;
+}
+
+.input:read-only {
+    background: #f5f5f5;
+    color: #777;
+}
+
+.combo {
+    font-family: inherit;
+    font-size: 16px;
+    padding: 8px 10px;
+    border: 1px solid #d5d5d5;
+    border-bottom-color: #9a9a9a;
+    border-radius: 7px;
+    background: #fdfdfd;
+    color: #1a1a1a;
+}
+
+input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    accent-color: #2b78e4;
+}
+
+/* ==== Dialog produit (ajout / modif) - format paysage ==== */
+.dialog-edit {
+    width: 1180px;
+}
+
+.form-body {
+    gap: 8px;
+}
+
+.form-body label {
+    font-size: 17px;
+    margin-top: 6px;
+}
+
+/* Grille paysage : 3 colonnes + un bandeau pleine largeur */
+.dialog-edit .edit-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+    align-items: stretch;
+}
+
+.dialog-edit .edit-card {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    background: #fafafa;
+    border: 1px solid #e2e2e2;
+    border-radius: 8px;
+    padding: 12px 14px 14px;
+}
+
+.dialog-edit .edit-card-wide {
+    grid-column: 1 / -1;
+}
+
+.dialog-edit .edit-card-title {
+    margin: 0 0 6px;
+    font-size: 15px;
+    font-weight: 600;
+    color: #2b78e4;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    border-bottom: 1px solid #e2e2e2;
+    padding-bottom: 6px;
+}
+
+.dialog-edit .edit-card label {
+    font-size: 14px;
+    margin-top: 8px;
+    color: #3a3a3a;
+}
+
+.dialog-edit .edit-card .check-label {
+    font-size: 14px;
+    margin-top: 12px;
+}
+
+.dialog-edit .edit-card input[type="checkbox"] {
+    width: 17px;
+    height: 17px;
+}
+
+.dialog-edit .edit-card .input {
+    font-size: 15px;
+    padding: 7px 10px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* Listes dynamiques (codes-barres, lots) */
+.dialog-edit .edit-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 4px;
+    max-height: 150px;
+    overflow-y: auto;
+}
+
+.dialog-edit .edit-rows .btn {
+    font-size: 14px;
+    padding: 6px 10px;
+}
+
+.dialog-edit .edit-add-btn {
+    margin-top: 8px;
+    font-size: 14px;
+    padding: 7px 10px;
+    align-self: flex-start;
+}
+
+.dialog-edit .edit-subfields {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+/* Bandeau prix & commande : champs côte à côte */
+.dialog-edit .edit-inline {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 10px 14px;
+    align-items: end;
+}
+
+.dialog-edit .edit-field {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.dialog-edit .edit-field-check {
+    justify-content: flex-end;
+}
+
+.dialog-edit .edit-field-check .check-label {
+    margin-top: 0;
+    padding-bottom: 6px;
+}
+
+.check-label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 17px;
+    margin-top: 10px;
+    cursor: pointer;
+}
+
+.check-label-small {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 15px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.dialog-edit .dialog-buttons {
+    margin-top: 16px;
+}
+
+.dialog-edit .dialog-buttons .btn {
+    flex: 1;
+    font-size: 18px;
+    padding: 12px;
+}
+
+/* Écrans étroits : on repasse en 2 colonnes puis 1 */
+@media (max-width: 1240px) {
+    .dialog-edit .edit-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 820px) {
+    .dialog-edit .edit-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+/* ==== Dialog alertes ==== */
+.dialog-alerts {
+    width: 1050px;
+}
+
+/* ==== Dialog maintenance ==== */
+.dialog-maintenance {
+    width: 880px;
+}
+
+.maintenance-form {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 16px;
+    padding: 14px;
+    background-color: #f5f5f5;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+}
+
+.maintenance-form label {
+    font-size: 16px;
+}
+
+.maintenance-form .btn-wide {
+    font-size: 17px;
+    margin-top: 8px;
+}
+
+/* ==== Dialog import ==== */
+.dialog-import {
+    width: 1300px;
+}
+
+.bold-label {
+    font-size: 27px;
+    font-weight: bold;
+    color: #111;
+    margin-bottom: 12px;
+}
+
+.table .input {
+    width: 100%;
+    min-width: 80px;
+    font-size: 15px;
+    padding: 8px 10px;
+}
+
+.table .combo {
+    width: 100%;
+    font-size: 15px;
+}
+
+.import-min {
+    max-width: 95px;
+}
+
+.import-date {
+    min-width: 110px;
+}
+
+.dialog-edit .edit-lots-total {
+    margin-top: 6px;
+    font-size: 14px;
+    font-weight: bold;
+    color: #0067c0;
+}
+
+/* ==== Entree / sortie par lot ==== */
+.dialog-lot-move {
+    width: 780px;
+}
+
+.lot-move-info {
+    font-size: 16px;
+    font-weight: bold;
+    color: #222;
+    margin-bottom: 10px;
+}
+
+.lot-move-scroll {
+    max-height: 320px;
+}
+
+.lot-move-table td {
+    height: 42px;
+}
+
+.lot-move-table .lot-move-qte {
+    width: 90px;
+    min-width: 90px;
+    text-align: center;
+}
+
+.lot-move-table .lot-move-lot,
+.lot-move-table .lot-move-date {
+    min-width: 120px;
+}
+
+.lot-move-badge {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 1px 7px;
+    border-radius: 9px;
+    background: #0067c0;
+    color: #fff;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.lot-move-total {
+    margin-top: 12px;
+    font-size: 17px;
+    font-weight: bold;
+    color: #111;
+}
+
+/* ==== Messages ==== */
+.dialog-msg {
+    width: 520px;
+}
+
+.msg-text {
+    font-size: 16px;
+    white-space: pre-wrap;
+    margin-bottom: 16px;
+}
+
+.dialog-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    margin-top: 10px;
+}
+
+.dialog-buttons.centered {
+    justify-content: center;
+}
+
+.dialog-buttons .btn-blue {
+    padding: 10px 26px;
+    font-size: 16px;
+}
+
+.qty-text {
+    font-size: 16px;
+    white-space: pre-wrap;
+    margin-bottom: 14px;
+}
+
+/* ==== Radio Panoramique ==== */
+.machine-radio {
+    --eu-accent: #7a4fbf;
+    border-color: #d3c5e8;
+    background: linear-gradient(to bottom, #faf8fd, #f1ecf8);
+    margin-left: 40px;
+}
+
+/* Le bras rotatif tourne autour de son axe pendant l'acquisition */
+.machine-radio .xarm {
+    transform-box: fill-box;
+    transform-origin: 50% 8%;
+}
+
+.radio-scan .xarm {
+    animation: radio-spin 2.6s linear infinite;
+}
+
+/* Rayons : cachés au repos, clignotent pendant l'acquisition */
+.rays .ray {
+    opacity: 0;
+}
+
+.radio-scan .rays .ray {
+    animation: ray-blink 0.8s ease-in-out infinite;
+}
+
+.rays .ray:nth-child(2) {
+    animation-delay: 0.15s !important;
+}
+
+.rays .ray:nth-child(3) {
+    animation-delay: 0.3s !important;
+}
+
+/* Phases du cycle radio */
+.radio-pos {
+    border-color: #e8d9a8 !important;
+    background: linear-gradient(to bottom, #fdfaf2, #f8f2e0) !important;
+    --eu-glass: #fff3cf;
+    --eu-led: #e6c229;
+}
+
+.radio-scan {
+    border-color: #f5b942 !important;
+    background: linear-gradient(to bottom, #fff8ec, #ffedcc) !important;
+    --eu-glass: #ffe2b8;
+    --eu-led: #ff9800;
+}
+
+.radio-proc {
+    border-color: #8fc6ff !important;
+    background: linear-gradient(to bottom, #f2f8ff, #e3f0ff) !important;
+    --eu-glass: #cfe9ff;
+    --eu-led: #3399ff;
+}
+
+/* Grand sourire en fin de cycle (visage de la radio et autoclaves) */
+.autoclave-done .mouth-r {
+    d: path("M29.5 52.5 q4.5 4.5 9 0");
+}
+
+.autoclave-done .mouth {
+    d: path("M50 77 q8 8 16 0");
+}
+
+@keyframes radio-spin {
+    from {
+        transform: rotateY(0deg);
+    }
+
+    to {
+        transform: rotateY(360deg);
+    }
+}
+
+@keyframes ray-blink {
+
+    0%,
+    100% {
+        opacity: 0;
+    }
+
+    50% {
+        opacity: 0.9;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+    .xarm,
+    .rays .ray {
+        animation: none !important;
+    }
+
+    .radio-scan .rays .ray {
+        opacity: 0.8;
+    }
+}
+
+/* ==== Easter Egg Modal ==== */
+#easter-egg-modal .dialog {
+    width: 640px;
+    max-width: 90%;
+}
+
+#easter-egg-canvas {
+    background: #ecf0f1;
+    border: 2px solid #bdc3c7;
+    border-radius: 8px;
+    display: block;
+    margin: 0 auto;
+    cursor: pointer;
+}
+
+.easter-egg-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.easter-egg-header h2 {
+    margin: 0;
+    color: #2c3e50;
+    font-size: 1.5rem;
+}
+
+.easter-egg-instructions {
+    text-align: center;
+    color: #7f8c8d;
+    font-size: 0.9rem;
+    margin-top: 10px;
+}
+
+/* ==== Media Queries pour les petits écrans ==== */
+@media (max-width: 1200px) {
+    .main-layout {
+        padding: 20px;
+    }
+
+    .backsplash {
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .backsplash .spacer {
+        margin-left: 0 !important;
+        padding-right: 0 !important;
+        width: 100%;
+        display: flex;
+        justify-content: center;
+    }
+
+    .clock {
+        margin-top: 15px;
+    }
+
+    .countertop {
+        justify-content: center;
+        gap: 20px;
+    }
+
+    .countertop .spacer {
+        display: none;
+    }
+
+    .action-area {
+        align-items: center;
+    }
+
+    .machines {
+        justify-content: center;
+    }
+
+    .machine-radio {
+        margin-left: 0;
+    }
+
+    .placard {
+        min-height: 160px;
+        font-size: 24px;
+        margin-top: 20px;
+    }
+}
+
+@media (max-width: 768px) {
+    .main-layout {
+        padding: 10px;
+    }
+
+    .backsplash {
+        padding: 10px;
+    }
+
+
+    .clock {
+        font-size: 32px;
+        padding: 5px 15px;
+    }
+
+    .action-area {
+        width: 100%;
+    }
+
+    .action-area input {
+        width: 100% !important;
+        max-width: 100%;
+    }
+
+    .placard {
+        min-height: 120px;
+        font-size: 20px;
+    }
+
+    .filter-row {
+        flex-wrap: wrap;
+    }
+}
+
+@media (max-width: 480px) {
+    .clock {
+        font-size: 24px;
+        padding: 5px 10px;
+    }
+
+    .btn {
+        padding: 6px 12px;
+        font-size: 14px;
+    }
+
+    .btn-blue,
+    .btn-red,
+    .btn-orange {
+        font-size: 16px;
+        padding: 10px 16px;
+    }
+
+    .user-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .user-btn {
+        width: 100%;
+        height: 100px;
+        font-size: 20px;
+    }
+
+    .dialog-titlebar {
+        font-size: 14px;
+        flex-wrap: wrap;
+        gap: 5px;
+    }
+
+    .dialog-close {
+        align-self: flex-end;
+    }
+
+    .placard-header {
+        flex-direction: column;
+        gap: 10px;
+        align-items: flex-start;
+    }
+
+    .placard-content-title {
+        font-size: 22px;
+    }
+
+    .filter-input {
+        width: 100%;
+    }
+
+    .dialog-buttons {
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    .btn-wide {
+        font-size: 16px;
+    }
+}
+
+
+/* ============ POST-IT RUPTURES ============ */
+.postit {
+    width: 260px;
+    background-color: #fcfc92;
+    padding: 15px;
+    box-shadow: 4px 4px 10px rgba(0, 0, 0, 0.2);
+    font-family: 'Comic Sans MS', 'Segoe Print', cursive, sans-serif;
+    color: #333;
+    transform: rotate(3deg);
+    position: relative;
+    will-change: transform, width, box-shadow;
+    backface-visibility: hidden;
+    transition: transform 0.25s cubic-bezier(0.25, 0.8, 0.25, 1),
+                box-shadow 0.25s cubic-bezier(0.25, 0.8, 0.25, 1),
+                width 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
+    z-index: 10;
+}
+
+/* Wrapper qui isole le post-it du flux flex parent.
+   Le padding laisse de la place a la languette (.postit::before, -10px) et a
+   la legende (.postit-legend-topright, -25px a droite) qui depassent du papier.
+   Il ne sert plus de zone de survol : c'est le papier qui pilote l'ouverture. */
+#postit-wrapper {
+    position: relative;
+    z-index: 10;
+    padding: 30px 30px 20px 20px;
+    margin: -30px -30px -20px -20px; /* ne pas decaler les widgets voisins */
+}
+
+/* Le conteneur passe au-dessus des autres widgets pendant le survol. */
+#postit-container {
+    overflow: visible !important;
+    z-index: 10;
+    position: relative;
+    display: inline-block;
+    min-height: 180px;
+    width: 260px;
+    will-change: z-index;
+}
+
+/* L'etat deploye est pilote par la classe posee en JS au survol du papier
+   lui-meme. On n'utilise plus :hover sur le wrapper : son padding tampon
+   gardait le post-it ouvert alors que la souris avait quitte le papier. */
+#postit-wrapper.postit-hover-active {
+    z-index: 999 !important;
+}
+
+#postit-wrapper.postit-hover-active .postit {
+    width: 320px;
+    transform: rotate(0deg);
+    box-shadow: 6px 6px 18px rgba(0, 0, 0, 0.3);
+}
+
+.postit.hidden {
+    display: none;
+}
+
+.postit::before {
+    content: "";
+    position: absolute;
+    top: -10px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 60px;
+    height: 25px;
+    background: rgba(255, 255, 255, 0.4);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.postit-title {
+    font-weight: bold;
+    font-size: 1.1em;
+    margin-bottom: 10px;
+    border-bottom: 1px solid #d4c060;
+    padding-bottom: 5px;
+}
+
+.postit ul {
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+}
+
+.postit li {
+    font-size: 0.9em;
+    margin-bottom: 5px;
+    border-bottom: 1px dashed #e6d37a;
+    padding-bottom: 3px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: background-color 0.2s;
+}
+
+.postit li:hover {
+    background-color: rgba(255, 255, 255, 0.3);
+}
+
+.postit li:last-child {
+    border-bottom: none;
+}
+
+.postit-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+}
+
+/* Hide items beyond the 5th normally, except the 'more' text */
+#postit-list li.postit-item:nth-child(n+6) {
+    display: none;
+}
+
+/* Show them on hover and allow text wrapping - pilote par JS via postit-hover-active */
+#postit-wrapper.postit-hover-active #postit-list li.postit-item {
+    display: flex;
+    white-space: normal;
+    word-wrap: break-word;
+}
+
+/* Avec beaucoup de ruptures, le papier agrandi devenait plus haut que la
+   fenetre : les dernieres lignes passaient sous le bord de l'ecran sans
+   qu'on puisse les atteindre (aller vers la barre de defilement fait sortir
+   du post-it, donc il se refermait). On borne la liste et on la rend
+   defilante : la molette fonctionne tant que la souris reste sur le papier.
+   La hauteur max est calculee dynamiquement en JS selon le zoom et la position. */
+#postit-wrapper.postit-hover-active #postit-list {
+    --postit-list-max-height: 60vh;
+    max-height: var(--postit-list-max-height, 60vh);
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: #d4c060 rgba(212,192,96,0.25);
+}
+
+/* Style de la barre de scroll Webkit */
+#postit-wrapper.postit-hover-active #postit-list::-webkit-scrollbar {
+    width: 8px;
+}
+#postit-wrapper.postit-hover-active #postit-list::-webkit-scrollbar-track {
+    background: rgba(255,255,255,0.3);
+    border-radius: 4px;
+}
+#postit-wrapper.postit-hover-active #postit-list::-webkit-scrollbar-thumb {
+    background: #d4c060;
+    border-radius: 4px;
+}
+#postit-wrapper.postit-hover-active #postit-list::-webkit-scrollbar-thumb:hover {
+    background: #b8a840;
+}
+
+.postit-more {
+    font-style: italic;
+    color: #888;
+    text-align: center;
+    border-bottom: none !important;
+    display: block;
+}
+
+#postit-wrapper.postit-hover-active .postit-more {
+    display: none !important;
+}
+
+.postit-legend-topright {
+    position: absolute;
+    top: -10px;
+    right: -25px;
+    font-size: 0.75em;
+    color: #444;
+    background: #fff;
+    padding: 6px 10px;
+    border-radius: 6px;
+    border: 1px solid #d4c060;
+    box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.15);
+    white-space: nowrap;
+    text-align: left;
+    transform: rotate(5deg);
+    z-index: 20;
+}
+
+.cabinet-animation {
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    transform-origin: left center;
+}
+
+.cabinet-animation:hover {
+    transform: scale(1.15);
+    box-shadow: 0 12px 30px rgba(0,0,0,0.4) !important;
+    z-index: 50;
+    position: relative;
+}
+
+/* Disable hover scale in customization mode */
+body.customization-active .cabinet-animation:hover {
+    transform: none;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+    z-index: auto;
+}
+
+/* ============================================================
+   MODE PERSONNALISATION
+   ============================================================ */
+body.customization-active::after {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+    z-index: 40;
+    background-size: 20px 20px;
+    background-image: 
+        linear-gradient(to right, rgba(0, 0, 0, 0.05) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(0, 0, 0, 0.05) 1px, transparent 1px);
+}
+
+body.customization-active .draggable-item {
+    outline: 2px dashed #f39c12 !important;
+    cursor: grab !important;
+    z-index: 50 !important;
+}
+
+body.customization-active .draggable-item:hover {
+    outline: 3px solid #e67e22 !important;
+    box-shadow: 0 0 10px rgba(243, 156, 18, 0.5) !important;
+}
+
+body.customization-active .draggable-item:active {
+    cursor: grabbing !important;
+    opacity: 0.9;
+}
+
+.resize-handle {
+    position: absolute;
+    bottom: -10px;
+    right: -10px;
+    width: 24px;
+    height: 24px;
+    background-color: #2980b9;
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    cursor: nwse-resize;
+    z-index: 1000;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+    opacity: 0.8;
+}
+
+.resize-handle:hover {
+    opacity: 1;
+    transform: scale(1.1);
+}
+
+.resizable-bg-item {
+    position: relative;
+}
+
+body.customization-active .resizable-bg-item {
+    outline: 2px dashed #27ae60 !important;
+}
+
+body.customization-active .resizable-bg-item:hover {
+    outline: 3px solid #2ecc71 !important;
+}
+
+.bg-resize-handle {
+    position: absolute;
+    bottom: -10px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 24px;
+    height: 24px;
+    background-color: #27ae60;
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    cursor: ns-resize;
+    z-index: 1000;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+    opacity: 0.8;
+}
+
+.bg-resize-handle:hover {
+    opacity: 1;
+    transform: translateX(-50%) scale(1.1);
+}
+
+/* ============ CALENDRIER BINOMES ============ */
+.calendar-wrapper {
+    overflow-x: auto;
+    width: 100%;
+}
+.calendar-table {
+    border-collapse: collapse;
+    width: max-content;
+    background: white;
+    font-size: 13px;
+    font-family: Arial, sans-serif;
+    color: black;
+    border: 2px solid black;
+}
+.calendar-table th, .calendar-table td {
+    border: 1px solid black;
+    padding: 2px 4px;
+    text-align: center;
+}
+.calendar-table .day-header {
+    background-color: #f5b041; /* Orange/Yellow from screenshot */
+    color: black;
+    font-size: 1.05em;
+    font-weight: bold;
+    text-transform: uppercase;
+    position: relative;
+    padding: 4px;
+    border-bottom: 2px solid black;
+    border-right: 2px solid black;
+}
+.calendar-table .day-header:last-child {
+    border-right: 1px solid black;
+}
+.calendar-table .btn-add-col {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    background: #27ae60;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 9px;
+    padding: 1px 4px;
+    font-weight: bold;
+}
+.calendar-table .dentist-header {
+    background-color: #fcf3cf; /* Pale yellow */
+    color: black;
+    position: relative;
+    padding: 2px;
+    font-weight: normal;
+    border-bottom: 2px solid black;
+}
+.calendar-table .dentist-input {
+    width: 100%;
+    border: 1px solid transparent;
+    background: transparent;
+    text-align: center;
+    color: black;
+    font-size: 0.95em;
+}
+.calendar-table .dentist-input:focus {
+    border: 1px solid #3498db;
+    background: white;
+}
+.calendar-table .btn-remove-col {
+    position: absolute;
+    top: 0px;
+    right: 0px;
+    background: rgba(231, 76, 60, 0.7);
+    color: white;
+    border: none;
+    border-radius: 0 0 0 4px;
+    cursor: pointer;
+    font-size: 8px;
+    width: 12px;
+    height: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.calendar-table .shift-header {
+    background-color: #f5b041;
+    color: black;
+    font-weight: bold;
+    text-align: left;
+    padding-left: 8px;
+    border-right: 2px solid black;
+    font-size: 0.9em;
+}
+.calendar-table .cell-input {
+    width: 65px;
+    border: 1px solid transparent;
+    text-align: center;
+    padding: 2px;
+    font-size: 0.9em;
+    background-color: transparent;
+    color: black;
+    transition: background-color 0.2s;
+}
+.calendar-table .cell-input:focus {
+    border: 1px solid #3498db;
+    background-color: white !important;
+}
+
+/* Case sans praticien (repos, école...). Les autres couleurs viennent des
+   règles enregistrées en base (onglet « Couleurs » du planning). */
+.cell-inactive { background-color: #555555; color: #555555; }
+
+/* Éditeur des couleurs du planning */
+.couleurs-table { border-collapse: collapse; margin: 0 auto; }
+.couleurs-table th, .couleurs-table td { padding: 4px 8px; border-bottom: 1px solid #e2e8f0; text-align: left; }
+.couleurs-table th { background: #f1f5f9; font-size: 0.9em; }
+.couleurs-table input[type="color"] { width: 48px; height: 30px; padding: 0; border: 1px solid #cbd5e1; border-radius: 4px; cursor: pointer; }
+.couleurs-table .input, .couleurs-table .combo { min-width: 140px; }
+
+/* Preview specific styles */
+.calendar-preview-table {
+    transform-origin: top left;
+    font-size: 11px;
+}
+.calendar-preview-table .cell-input {
+    width: auto;
+    min-width: 20px;
+}
+.calendar-preview-table .dentist-header {
+    padding: 2px 4px;
+}
+.calendar-preview-table th, .calendar-preview-table td {
+    padding: 1px 3px;
+}
+
+/* --- PLAN CABINET DENTAIRE CSS --- */
+.plan-wrap {
+    --mur: #5d7386;
+    --mur-fonce: #4c6072;
+    --sol: #ffffff;
+    --sol-survol: #dfeaf2;
+    --arc: #8fa5b6;
+    --encre: #2e3d49;
+    --fond: #eef2f5;
+    --vitre: #cfe0ec;
+    background: var(--sol);
+    border: 1px solid #d5dee5;
+    border-radius: 10px;
+    box-shadow: 0 12px 30px rgba(46,61,73,.10);
+    width: 100%;
+    padding: clamp(8px, 2vw, 22px);
+    margin: 0 auto 20px auto;
+}
+.plan-wrap svg { display: block; width: 100%; height: auto; }
+.piece { fill: var(--sol); transition: fill .18s ease; cursor: pointer; }
+.piece:hover, .piece.actif { fill: var(--sol-survol); }
+.mur { fill: var(--mur); }
+.porte-battant { stroke: var(--mur-fonce); stroke-width: 5; stroke-linecap: round; }
+.porte-arc { stroke: var(--arc); stroke-width: 1.6; fill: none; stroke-dasharray: none; }
+.fenetre-fond { fill: var(--vitre); }
+.fenetre-trait { stroke: #ffffff; stroke-width: 2.4; }
+.comptoir { fill: #e7eef4; stroke: var(--mur); stroke-width: 2.5; pointer-events: none; }
+.etiquette { font-family: 'Jost', sans-serif; fill: var(--encre); letter-spacing: .18em; text-anchor: middle; font-weight: 400; pointer-events: none; }
+.etiquette.petite { letter-spacing: .14em; fill: #43535f; }
+
+/* Animations Machine à café */
+.cafe-extract .steam .puff,
+.cafe-ready .steam .puff {
+    animation: eu-steam 1.6s ease-in-out infinite;
+}
+
+.coffee-drip {
+    opacity: 0;
+}
+
+.cafe-extract .coffee-drip {
+    opacity: 1;
+}
+
+.machine-cafe .led {
+    fill: #b9c3c8;
+}
+
+.cafe-grind .led,
+.cafe-extract .led,
+.cafe-ready .led {
+    fill: #f39c12; /* orange pour l'activité */
+    animation: led-blink 1s infinite;
+}
+
+.cafe-ready .led {
+    fill: #2ecc71; /* vert quand prêt */
+    animation: none;
+}
+
+/* ==== Fauteuil Dentaire ==== */
+.machine-fauteuil {
+    --eu-accent: #00bcd4;
+    border-color: #b2ebf2;
+    background: linear-gradient(to bottom, #e0f7fa, #b2ebf2);
+}
+
+.fauteuil-machine-svg {
+    width: 140px;
+    height: 134px;
+    margin: 0 auto;
+    transition: transform 0.3s ease;
+}
+
+.machine-fauteuil:hover .fauteuil-machine-svg {
+    transform: scale(1.05);
+}
+
+/* Phases du fauteuil */
+.fauteuil-install {
+    border-color: #ffe082 !important;
+    background: linear-gradient(to bottom, #fff8e1, #ffecb3) !important;
+    --eu-glass: #fff3cf;
+    --eu-led: #ffb300;
+}
+
+.fauteuil-soin {
+    border-color: #ffab91 !important;
+    background: linear-gradient(to bottom, #fbe9e7, #ffccbc) !important;
+    --eu-glass: #ffccbc;
+    --eu-led: #ff5722;
+}
+
+.fauteuil-soin .fauteuil-machine-svg {
+    animation: fauteuil-wobble 0.4s ease-in-out infinite;
+}
+
+@keyframes fauteuil-wobble {
+    0% { transform: rotate(-1deg) translateY(0); }
+    50% { transform: rotate(1deg) translateY(-2px); }
+    100% { transform: rotate(-1deg) translateY(0); }
+}
+
+.fauteuil-soin .mouth {
+    d: path("M80 72 q5 -4 10 0") !important; /* Concentrated/open mouth */
+}
+
+.fauteuil-rincage {
+    border-color: #81d4fa !important;
+    background: linear-gradient(to bottom, #e1f5fe, #b3e5fc) !important;
+    --eu-glass: #b3e5fc;
+    --eu-led: #03a9f4;
+}
+
+.autoclave-done[data-type="fauteuil"] .mouth {
+    d: path("M79 72 q6 6 12 0") !important; /* Sourire plus grand */
+}
+
+/* ==== Radio Intra-orale de Cabinet ==== */
+.machine-radio-intra {
+    --eu-accent: #7a4fbf;
+    border-color: #d3c5e8;
+    background: linear-gradient(to bottom, #faf8fd, #f1ecf8);
+    margin-left: 0 !important;
+}
+
+.radio-intra-machine-svg {
+    width: 140px;
+    height: 134px;
+    margin: 0 auto;
+    transition: transform 0.3s ease;
+}
+
+.machine-radio-intra:hover .radio-intra-machine-svg {
+    transform: scale(1.05);
+}
+
+.radio-scan .radio-intra-machine-svg {
+    animation: fauteuil-wobble 0.5s ease-in-out infinite;
+}
+
+.radio-scan .radio-intra-machine-svg .rays .ray {
+    animation: ray-blink 0.8s ease-in-out infinite;
+    opacity: 1;
+}
+
+.autoclave-done[data-type="radio"] .radio-intra-machine-svg .mouth {
+    d: path("M79 86 q6 6 12 0") !important;
+}
+
+
+/* Added for inverted binome planning */
+.calendar-table .assistant-input {
+  background-color: transparent;
+  border: none;
+  color: #2c3e50;
+  outline: none;
+}
+.calendar-table .assistant-input:focus {
+  background-color: #fff;
+  border: 1px solid #bdc3c7;
+}
+
+/* Couleurs des cabinets pour le plan */
+.piece.cabinet-1 { fill: #ff8888; }
+.piece.cabinet-1:hover, .piece.cabinet-1.actif { fill: #ff6666; }
+
+.piece.cabinet-2 { fill: #fce4ec; }
+.piece.cabinet-2:hover, .piece.cabinet-2.actif { fill: #f8bbd0; }
+
+.piece.cabinet-4 { fill: #ffe0b2; }
+.piece.cabinet-4:hover, .piece.cabinet-4.actif { fill: #ffcc80; }
+
+.piece.cabinet-5 { fill: #bbdefb; }
+.piece.cabinet-5:hover, .piece.cabinet-5.actif { fill: #90caf9; }
+
+/* Couleurs des menus déroulants : garantit un fond blanc / texte noir lisibles
+   quel que soit le thème Windows.
+   Note : ceci ne corrige PAS le surlignage bleu qui restait collé sur les lignes
+   déjà survolées — ce bug vient de QtWebEngine et se corrige en utilisant
+   PySide6 >= 6.9.3 (voir requirements.txt). */
+select option {
+    background-color: #ffffff;
+    color: #000000;
+}
+
+
+
+/* NOTEBOOK WIDGET CSS */
+.notebook-widget {
+    position: relative;
+    width: 110px;
+    height: 140px;
+    background-color: #8e44ad;
+    border-radius: 5px 15px 15px 5px;
+    box-shadow: inset 5px 0 10px rgba(0,0,0,0.3), 3px 3px 10px rgba(0,0,0,0.3);
+    cursor: pointer;
+    perspective: 1000px;
+    transform: rotate(-3deg);
+    transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    margin: 10px 0;
+    flex: 0 0 auto;
+}
+.notebook-widget:hover {
+    transform: rotate(0deg) scale(1.05);
+}
+.notebook-cover {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background-color: #8e44ad;
+    border-radius: 5px 15px 15px 5px;
+    box-shadow: inset 2px 0 5px rgba(0,0,0,0.2), 2px 0 5px rgba(0,0,0,0.2);
+    transform-origin: left center;
+    transition: transform 0.5s ease;
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-left: 12px solid #6c3483;
+}
+.notebook-widget:hover .notebook-cover {
+    transform: rotateY(-35deg);
+}
+.notebook-label {
+    color: white;
+    font-weight: bold;
+    font-size: 0.9em;
+    font-family: 'Comic Sans MS', 'Segoe Print', cursive, sans-serif;
+    padding: 5px;
+    border: 2px dashed rgba(255,255,255,0.4);
+    border-radius: 5px;
+    text-align: center;
+    line-height: 1.2;
+    transform: rotate(-2deg);
+    user-select: none;
+}
+.notebook-pages {
+    position: absolute;
+    top: 4px;
+    left: 12px;
+    width: calc(100% - 16px);
+    height: calc(100% - 8px);
+    background-color: #fdfbf7;
+    border-radius: 0 10px 10px 0;
+    box-shadow: inset -2px 0 5px rgba(0,0,0,0.05);
+    z-index: 2;
+    border: 1px solid #ccc;
+}
+.notebook-pages::before {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: #fdfbf7;
+    border-radius: 0 10px 10px 0;
+    border: 1px solid #ccc;
+    z-index: -1;
+}
+.notebook-pages::after {
+    content: '';
+    position: absolute;
+    top: 4px;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: #fdfbf7;
+    border-radius: 0 10px 10px 0;
+    border: 1px solid #ccc;
+    z-index: -2;
+}
+.notebook-bookmark {
+    position: absolute;
+    bottom: -10px;
+    right: 25px;
+    width: 15px;
+    height: 30px;
+    background-color: #e74c3c;
+    z-index: 1;
+    box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
+}
+
+
+/* ============================================================
+   FOND ANIME (CABINET DENTAIRE)
+   L'animation qui servait uniquement d'ecran de veille sert
+   maintenant de fond general de l'appli, a la place du degrade
+   marron de la credence.
+   ============================================================ */
+html {
+    background-color: #E8E8E8;
+}
+
+body {
+    background-color: transparent;
+}
+
+#background-animation {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: -1;
+    overflow: hidden;
+    pointer-events: none;
+    background-color: #E8E8E8;
+}
+
+#background-animation iframe {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border: none;
+    pointer-events: none;
+}
+
+/* Voile clair pour garder l'interface lisible par-dessus l'animation */
+#background-animation::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.35);
+    pointer-events: none;
+}
+
+/* La credence devient transparente : on voit le fond anime a la place du marron */
+.backsplash {
+    background: transparent;
+    border-top: none;
+    border-bottom: none;
+}
+
+/* ============================================================
+   PLACARDS REMONTES DANS LA BARRE D'ACTION
+   Objectif : toute l'appli tient dans la fenetre, sans scroll.
+   ============================================================ */
+.main-layout {
+    padding: 20px 40px;
+}
+
+.bottom-zones .placard {
+    flex: 0 0 auto;
+    width: 240px;
+    min-height: 150px;
+    padding: 8px;
+    border-bottom-width: 12px;
+}
+
+.bottom-zones .placard-visual {
+    width: 104px;
+    height: 74px;
+    border-width: 4px;
+    margin-bottom: 8px;
+}
+
+.bottom-zones .placard-text {
+    font-size: 15px;
+}
+
+.bottom-zones .placard-text small {
+    font-size: 11px;
+}
+
+/* ============================================================
+   WIDGET RADIOACTIF DOSIMÈTRES
+   ============================================================ */
+.dosimetre-widget {
+    position: relative;
+    width: 115px;
+    height: 140px;
+    background: linear-gradient(145deg, #1e293b, #0f172a);
+    border: 2px solid #f39c12;
+    border-radius: 14px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25), inset 0 1px 1px rgba(255, 255, 255, 0.1);
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 10px 6px;
+    box-sizing: border-box;
+    transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), box-shadow 0.3s ease, border-color 0.3s ease;
+    user-select: none;
+    flex: 0 0 auto;
+    margin: 10px 0;
+}
+
+.dosimetre-widget:hover {
+    transform: translateY(-4px) scale(1.05);
+    box-shadow: 0 8px 22px rgba(243, 156, 18, 0.4), 0 2px 6px rgba(0, 0, 0, 0.3);
+    border-color: #f1c40f;
+}
+
+.dosimetre-widget:hover .radioactive-icon {
+    transform: rotate(120deg);
+}
+
+.dosimetre-symbol-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.radioactive-icon {
+    width: 58px;
+    height: 58px;
+    filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.35));
+    transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.dosimetre-widget-label {
+    text-align: center;
+    color: #ecf0f1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+}
+
+.dosimetre-title {
+    font-weight: bold;
+    font-size: 0.9em;
+    letter-spacing: 0.5px;
+    color: #f1c40f;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+.dosimetre-badge {
+    font-size: 0.7em;
+    background: rgba(243, 156, 18, 0.2);
+    border: 1px solid rgba(243, 156, 18, 0.5);
+    color: #f39c12;
+    padding: 2px 6px;
+    border-radius: 10px;
+    font-weight: 600;
+}
+
+/* ============================================================
+   MODALE DOSIMÈTRES
+   ============================================================ */
+.dialog-dosimetres {
+    max-width: 920px;
+    width: 92vw;
+    max-height: 92vh;
+}
+
+/* ============================================================
+   ALERTES MIRE RADIO PAR CABINET
+   ============================================================ */
+.btn-mire-main-alert {
+    animation: mirePulse 2.5s infinite;
+    cursor: pointer;
+    transition: transform 0.15s, background-color 0.2s;
+}
+
+.btn-mire-main-alert:hover {
+    transform: scale(1.03);
+}
+
+@keyframes mirePulse {
+    0% { box-shadow: 0 0 0 0 rgba(244, 67, 54, 0.5); }
+    70% { box-shadow: 0 0 0 8px rgba(244, 67, 54, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(244, 67, 54, 0); }
+}
+
+.piece.mire-alert-active,
+.piece.fauteuil-alert-active {
+    stroke: #e74c3c !important;
+    stroke-width: 3.5px !important;
+    stroke-dasharray: 8 4 !important;
+    animation: pieceAlertPulse 2s infinite ease-in-out;
+}
+
+@keyframes pieceAlertPulse {
+    0% { filter: drop-shadow(0 0 2px rgba(231, 76, 60, 0.4)); }
+    50% { filter: drop-shadow(0 0 8px rgba(231, 76, 60, 0.8)); }
+    100% { filter: drop-shadow(0 0 2px rgba(231, 76, 60, 0.4)); }
+}
+
+.btn-fauteuil-maint-icon:hover {
+    filter: brightness(0.96);
+    transform: translateY(-1px);
+}
+
+.btn-fauteuil-main-alert {
+    animation: mirePulse 2.5s infinite;
+}
+

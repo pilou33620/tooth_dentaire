@@ -1,0 +1,52 @@
+{
+  "name": "tooth_dentaire",
+  "version": "3.0.0",
+  "description": "Interface web de l'outil de gestion de stock du cabinet (servie par serveur.py)",
+  "type": "module",
+  "scripts": {
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "test:watch": "node --experimental-vm-modules node_modules/jest/bin/jest.js --watch",
+    "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage",
+    "test:verbose": "node --experimental-vm-modules node_modules/jest/bin/jest.js --verbose"
+  },
+  "jest": {
+    "testEnvironment": "jsdom",
+    "transform": {},
+    "coverageProvider": "v8",
+    "moduleNameMapper": {
+      "^@/(.*)$": "<rootDir>/js/$1"
+    },
+    "collectCoverageFrom": [
+      "js/**/*.js",
+      "!js/main-init.js",
+      "!**/node_modules/**",
+      "!**/vendor/**"
+    ],
+    "coverageThreshold": {
+      "global": {
+        "branches": 70,
+        "functions": 70,
+        "lines": 70,
+        "statements": 70
+      }
+    },
+    "setupFiles": [
+      "<rootDir>/tests/helpers/fetch-par-defaut.js"
+    ]
+  },
+  "devDependencies": {
+    "@jest/globals": "^29.7.0",
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0"
+  },
+  "keywords": [
+    "gestion",
+    "stock",
+    "medical",
+    "cabinet",
+    "dentaire"
+  ],
+  "author": "Cabinet Médical",
+  "license": "UNLICENSED",
+  "private": true
+}
