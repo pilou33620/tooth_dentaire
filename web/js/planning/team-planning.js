@@ -101,6 +101,9 @@ function updateWidgetParityButtons(activeParity, actualParity) {
 
     if (btnEven && btnOdd) {
         const isEven = (activeParity === 'even');
+        // Classe lue par le thème (css/bonjourr.css) pour marquer la semaine affichée
+        btnEven.classList.toggle("actif", isEven);
+        btnOdd.classList.toggle("actif", !isEven);
 
         if (isEven) {
             btnEven.style.background = "#2980b9";

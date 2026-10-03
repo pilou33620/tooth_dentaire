@@ -51,6 +51,18 @@ la base (`donnees/stock.db` par défaut), et le dossier `donnees/` est exclu de 
 - Seules les **positions de l'interface** (mode personnalisation) restent propres à
   chaque poste, car les écrans n'ont pas tous la même taille.
 
+## Interface
+
+L'accueil s'inspire de l'extension [Bonjourr](https://bonjourr.fr) : fond plein écran
+qui change avec l'heure (aube, jour, crépuscule, nuit), grande horloge, salutation,
+recherche et accès rapides en verre dépoli, widgets planning / tâches / ruptures,
+alertes dans le coin haut gauche et citation du jour.
+
+**Réglages ⚙️ > Apparence** (propre à chaque poste) : fond (selon l'heure, animation du
+cabinet, image personnelle ou couleur unie), flou et luminosité du fond, horloge
+numérique ou analogique, taille, secondes, salutation et nom, citation, widgets affichés.
+`Échap` ferme la fenêtre ouverte.
+
 ## Reprise de l'ancienne application (PySide6)
 
 ```bash
@@ -83,6 +95,8 @@ python/
   leveldb_lecteur.py  lecture du stockage navigateur de l'ancienne appli
 web/                  interface (HTML / CSS / JavaScript, sans framework)
   js/core/api.js      échanges avec le serveur + synchronisation entre postes
+  js/ui/bonjourr.js   accueil : horloge, salutation, citation, fond, réglages d'apparence
+  css/bonjourr.css    thème de l'interface (chargé après css/style.css)
   vendor/             PDF.js (lecture des factures, hors ligne)
 tests/                tests Python (pytest)
 web/tests/            tests JavaScript (Jest)

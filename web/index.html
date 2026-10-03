@@ -6,197 +6,198 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; frame-src 'self'; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self';">
     <link rel="icon" href="logo.ico">
-    <title>Gestion de Stock - Cabinet Médical (Général)</title>
+    <title>Cabinet — Accueil</title>
     <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/bonjourr.css">
     <!-- PDF.js embarqué (vendor/) : l'import de factures fonctionne hors ligne et
          ne dépend plus d'une URL externe. Build classique 3.11.174 : les builds 4.x
          ne sont publiées qu'en module ES, que Chromium refuse de charger en file://. -->
     <script src="vendor/pdf.min.js"></script>
 </head>
-<body>
+<body class="bj">
     <!-- BANDEAU MODE PERSONNALISATION -->
-    <div id="customization-banner" class="hidden" style="position: fixed; top: 0; left: 0; right: 0; background-color: #f39c12; color: white; text-align: center; padding: 10px; font-weight: bold; z-index: 9999; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">
-        🛠 Mode Personnalisation Actif : Déplacez les éléments où vous le souhaitez.
-        <button id="btn-exit-customization" class="btn" style="margin-left: 20px; background-color: #c0392b; border: none; color: white; padding: 5px 15px; border-radius: 4px; cursor: pointer;">Quitter le mode et sauvegarder</button>
-        <button id="btn-reset-customization" class="btn" style="margin-left: 10px; background-color: #2980b9; border: none; color: white; padding: 5px 15px; border-radius: 4px; cursor: pointer;">Réinitialiser les positions</button>
+    <div id="customization-banner" class="hidden" role="status">
+        <span>Mode personnalisation : déplacez les éléments où vous le souhaitez.</span>
+        <button id="btn-exit-customization" class="btn">Quitter et sauvegarder</button>
+        <button id="btn-reset-customization" class="btn">Réinitialiser les positions</button>
     </div>
 
-    <!-- ============ FOND ANIME (CABINET DENTAIRE) ============ -->
-    <div id="background-animation" aria-hidden="true">
-        <iframe src="html/cabinet-dentaire.html" scrolling="no" tabindex="-1" title="Animation Cabinet Dentaire"></iframe>
+    <!-- ============ FOND (dégradé selon l'heure, image, couleur ou animation) ============ -->
+    <div id="bj-fond" aria-hidden="true">
+        <div class="bj-fond-degrade">
+            <span class="bj-blob bj-blob-1"></span>
+            <span class="bj-blob bj-blob-2"></span>
+            <span class="bj-blob bj-blob-3"></span>
+        </div>
+        <div class="bj-fond-image"></div>
+        <!-- L'animation du cabinet n'est chargée que si elle est choisie comme fond (Réglages > Apparence) -->
+        <div id="background-animation">
+            <iframe data-src="html/cabinet-dentaire.html" scrolling="no" tabindex="-1" title="Animation Cabinet Dentaire"></iframe>
+        </div>
+        <div class="bj-fond-grain"></div>
+        <div class="bj-fond-voile"></div>
     </div>
 
     <!-- ============ APPLICATION PRINCIPALE ============ -->
     <div id="app">
-        <main class="main-layout">
+        <main class="main-layout bj-page">
 
-            <!-- ZONE UNIFIÉE -->
-        <div class="unified-workspace" style="position: relative; flex: 1; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-around; padding: 10px 20px; gap: 10px; background: transparent;">
-            
-            <!-- ============ CARNET D'ADRESSES ============ -->
-            <div id="btn-annuaire-container" style="position: relative; flex-shrink: 0; z-index: 10;">
-                <div id="btn-annuaire" class="notebook-widget" onclick="document.getElementById('annuaire-overlay').classList.remove('hidden'); const f = document.querySelector('#annuaire-overlay iframe'); if (f && f.contentWindow && f.contentWindow.rechargerContacts) f.contentWindow.rechargerContacts();">
-                    <div class="notebook-pages"></div>
-                    <div class="notebook-bookmark"></div>
-                    <div class="notebook-cover">
-                        <div class="notebook-label">Carnets<br>d'adresses</div>
-                    </div>
+            <!-- ============ ALERTES (coin haut gauche) ============ -->
+            <aside class="bj-alertes" aria-label="Alertes" aria-live="polite">
+                <button id="btn-alertes-stock" class="btn btn-red hidden">🔔 STOCK</button>
+                <button id="btn-alertes-peremp" class="btn btn-orange hidden">⚠️ Aucune Alerte Péremption</button>
+                <div id="mire-alerts-container" class="bj-alertes-groupe hidden">
+                    <button id="btn-alertes-mire" class="btn btn-red hidden" title="Rappel Mire">⚠️ Alerte Mire</button>
                 </div>
-            </div>
+                <div id="fauteuil-alerts-container" class="bj-alertes-groupe hidden">
+                    <button id="btn-alertes-fauteuil" class="btn btn-red hidden" title="Rappel Maintenance Fauteuils">⚠️ Maint. Fauteuils</button>
+                </div>
+                <button id="btn-alertes-dosi" class="btn btn-red hidden" title="Rappel Dosimètres">⚠️ Alerte Dosimètres</button>
+            </aside>
 
-            <!-- ============ DOSIMÈTRES (ICÔNE RADIOACTIVE) ============ -->
-            <div id="btn-dosimetre-container" style="position: relative; flex-shrink: 0; z-index: 10;">
-                <div id="btn-dosimetre" class="dosimetre-widget" title="Gestion des Dosimètres">
-                    <div class="dosimetre-symbol-wrapper">
-                        <svg class="radioactive-icon" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-                            <circle cx="50" cy="50" r="46" fill="#f1c40f" stroke="#2c3e50" stroke-width="4"/>
-                            <g fill="#2c3e50">
-                                <circle cx="50" cy="50" r="8"/>
-                                <path id="rad-blade" d="M 44 39.6 L 31 17.1 A 38 38 0 0 1 69 17.1 L 56 39.6 A 12 12 0 0 0 44 39.6 Z"/>
-                                <use href="#rad-blade" transform="rotate(120 50 50)"/>
-                                <use href="#rad-blade" transform="rotate(240 50 50)"/>
+            <!-- ============ CENTRE : HEURE, SALUTATION, RECHERCHE, LIENS ============ -->
+            <section class="bj-centre">
+                <div id="datetime-container" class="bj-heure">
+                    <!-- Mis à jour par js/planning/clock.js (sert aussi au changement de semaine du planning) -->
+                    <div id="clock" class="bj-masque">00:00:00</div>
+                    <div id="date-display" class="bj-masque"></div>
+
+                    <div class="bj-horloge">
+                        <time id="bj-heure-num" class="bj-heure-num">
+                            <span class="bj-hm">--:--</span><span class="bj-sec"></span>
+                        </time>
+                        <svg id="bj-heure-analog" class="bj-heure-analog hidden" viewBox="0 0 100 100" role="img" aria-label="Horloge">
+                            <circle class="bj-cadran" cx="50" cy="50" r="47"/>
+                            <g class="bj-graduations">
+                                <line x1="50" y1="7" x2="50" y2="13"/>
+                                <line x1="50" y1="7" x2="50" y2="13" transform="rotate(90 50 50)"/>
+                                <line x1="50" y1="7" x2="50" y2="13" transform="rotate(180 50 50)"/>
+                                <line x1="50" y1="7" x2="50" y2="13" transform="rotate(270 50 50)"/>
                             </g>
-                            <circle cx="50" cy="50" r="3" fill="#f1c40f"/>
+                            <line id="bj-aiguille-h" class="bj-aiguille bj-aiguille-h" x1="50" y1="50" x2="50" y2="27"/>
+                            <line id="bj-aiguille-m" class="bj-aiguille bj-aiguille-m" x1="50" y1="50" x2="50" y2="16"/>
+                            <line id="bj-aiguille-s" class="bj-aiguille bj-aiguille-s" x1="50" y1="56" x2="50" y2="12"/>
+                            <circle class="bj-axe" cx="50" cy="50" r="2.2"/>
                         </svg>
                     </div>
-                    <div class="dosimetre-widget-label">
-                        <div class="dosimetre-title">Dosimètres</div>
-                        <span id="dosimetre-widget-badge" class="dosimetre-badge">0 suivi(s)</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- ============ POST-IT RUPTURES ============ -->
-            <div id="postit-wrapper" style="position: relative; z-index: 10;">
-                <div id="postit-container" class="hidden">
-                    <div id="postit-rupture" class="postit">
-                        <div class="postit-legend-topright">❌ en rupture<br>⚠️ limite (HS)</div>
-                        <div class="postit-title">En rupture 📌</div>
-                        <ul id="postit-list"></ul>
-                    </div>
-                </div>
-            </div>
-
-            <!-- PLAN DE TRAVAIL (ACTION AREA) -->
-            <div class="action-area" style="display: flex; flex-direction: column; gap: 10px; align-items: center; justify-content: center; z-index: 10;">
-                <input type="text" id="main-global-search" class="input" placeholder="🔍 Rechercher..." style="width: 300px; font-size: 1.1em; border-radius: 12px;">
-                <div style="display: flex; gap: 15px; flex-wrap: wrap; justify-content: center;">
-                    <div style="display: flex; flex-direction: column; gap: 10px; align-items: center;">
-                        <button id="btn-add-product-main" class="btn btn-green"
-                            style="font-size: 0.9em; padding: 6px 12px; width: max-content; flex: 0 0 auto; white-space: nowrap;">➕ Ajouter un produit</button>
-                        <button id="btn-import" class="btn btn-blue"
-                            style="font-size: 0.9em; padding: 6px 12px; width: max-content; flex: 0 0 auto; white-space: nowrap;">📄 MAJ <span>Stock</span></button>
-                    </div>
-                    <div style="display: flex; flex-direction: column; gap: 10px; align-items: center;">
-                        <button id="btn-alertes-stock" class="btn btn-red hidden">🔔 STOCK</button>
-                        <button id="btn-alertes-peremp" class="btn btn-orange hidden">⚠️ Aucune Alerte Péremption</button>
-                        <div id="mire-alerts-container" class="hidden" style="display: flex; flex-direction: column; gap: 6px; align-items: center; width: 100%;">
-                            <button id="btn-alertes-mire" class="btn btn-red hidden" title="Rappel Mire">⚠️ Alerte Mire</button>
-                        </div>
-                        <div id="fauteuil-alerts-container" class="hidden" style="display: flex; flex-direction: column; gap: 6px; align-items: center; width: 100%;">
-                            <button id="btn-alertes-fauteuil" class="btn btn-red hidden" title="Rappel Maintenance Fauteuils">⚠️ Maint. Fauteuils</button>
-                        </div>
-                        <button id="btn-alertes-dosi" class="btn btn-red hidden" title="Rappel Dosimètres">⚠️ Alerte Dosimètres</button>
-                    </div>
-                    <div style="display: flex; flex-direction: column; gap: 10px; align-items: center;">
-                        <button id="btn-settings" class="btn"
-                            style="font-size: 0.9em; padding: 6px 12px; width: max-content; flex: 0 0 auto; white-space: nowrap; background: #95a5a6; color: white;">⚙️ Réglages</button>
-                    </div>
-                    <div style="display: flex; flex-direction: column; gap: 10px; align-items: center;">
-                        <button id="btn-export-main" class="btn btn-green"
-                            style="font-size: 0.9em; padding: 6px 12px; width: max-content; flex: 0 0 auto; white-space: nowrap;">📊 Export Stock</button>
-                        <button id="btn-stats-main" class="btn btn-blue"
-                            style="font-size: 0.9em; padding: 6px 12px; width: max-content; flex: 0 0 auto; white-space: nowrap;">📈 Stats Conso</button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- PLACARDS -->
-            <div class="bottom-zones" style="display: flex; gap: 15px; align-items: center; z-index: 10;">
-                <!-- PLACARD STOCK -->
-                <button id="btn-placard" class="placard" style="margin: 0; min-height: 160px; width: 220px;">
-                    <div class="placard-visual">
-                        <div class="placard-door left">
-                            <div class="placard-handle"></div>
-                        </div>
-                        <div class="placard-door right">
-                            <div class="placard-handle"></div>
-                        </div>
-                    </div>
-                    <div class="placard-text">OUVRIR LE PLACARD<br><small>(Stock)</small></div>
-                </button>
-
-                <!-- PLACARD MAINTENANCE -->
-                <button id="btn-maintenance-cabinet" class="placard" style="margin: 0; min-height: 160px; width: 220px;">
-                    <div class="placard-visual">
-                        <div class="placard-door left">
-                            <div class="placard-handle"></div>
-                        </div>
-                        <div class="placard-door right">
-                            <div class="placard-handle"></div>
-                        </div>
-                    </div>
-                    <div class="placard-text">OUVRIR LES PORTES<br><small>(Maintenance & Cabinet)</small></div>
-                </button>
-            </div>
-
-            <!-- HEURE ET PLANNING -->
-            <div style="display: flex; flex-direction: column; align-items: center; gap: 10px;">
-                <div id="datetime-container" class="datetime-container" style="align-items: center;">
-                    <div id="date-display" class="date-display"></div>
-                    <div id="clock" class="clock">00:00:00</div>
+                    <p id="bj-date" class="bj-date"></p>
+                    <h1 id="bj-salutation" class="bj-salutation">Bonjour</h1>
                 </div>
 
-                <!-- ============ TEAM PLANNING ============ -->
-                <div id="team-planning-container" class="team-planning" style="position: relative; width: max-content;">
-                    <div id="calendar-card" style="background: rgba(255, 255, 255, 0.95); border: 2px solid #f39c12; border-radius: 12px; padding: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: transform 0.2s;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ddd; padding-bottom: 6px; margin-bottom: 6px; gap: 12px;">
-                            <span style="color: #2c3e50; font-weight: bold; font-size: 0.95em;">📅 Planning Binômes</span>
-                            <div id="parity-switch-container" style="display: inline-flex; align-items: center; background: #eaeded; border-radius: 14px; padding: 2px; gap: 2px; font-size: 0.75em;">
-                                <button type="button" id="btn-preview-even" style="border: none; border-radius: 11px; padding: 2px 8px; cursor: pointer; font-weight: bold; font-size: 0.85em; transition: all 0.2s;">Paire</button>
-                                <button type="button" id="btn-preview-odd" style="border: none; border-radius: 11px; padding: 2px 8px; cursor: pointer; font-weight: bold; font-size: 0.85em; transition: all 0.2s;">Impaire</button>
+                <div class="action-area bj-actions">
+                    <label class="bj-recherche">
+                        <svg class="bj-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+                        <input type="text" id="main-global-search" placeholder="Rechercher un produit ou scanner un code-barres" autocomplete="off" spellcheck="false">
+                    </label>
+
+                    <nav class="bj-liens" aria-label="Accès rapides">
+                        <button id="btn-placard" class="bj-lien" type="button" title="Ouvrir le placard (stock)">
+                            <span class="bj-lien-ico"><svg class="bj-ico" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2.5"/><path d="M12 3v18M9.5 11v2.5M14.5 11v2.5"/></svg></span>
+                            <span class="bj-lien-nom">Placard</span>
+                        </button>
+                        <button id="btn-maintenance-cabinet" class="bj-lien" type="button" title="Maintenance &amp; cabinet">
+                            <span class="bj-lien-ico"><svg class="bj-ico" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2.5"/><path d="M3 11h6V3M15 21v-6h6M9 15v3M13 11h3"/></svg></span>
+                            <span class="bj-lien-nom">Cabinet</span>
+                        </button>
+                        <button id="btn-add-product-main" class="bj-lien" type="button" title="Ajouter un produit">
+                            <span class="bj-lien-ico"><svg class="bj-ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 8v8M8 12h8"/></svg></span>
+                            <span class="bj-lien-nom">Ajouter</span>
+                        </button>
+                        <button id="btn-import" class="bj-lien" type="button" title="Mettre à jour le stock depuis une facture PDF">
+                            <span class="bj-lien-ico"><svg class="bj-ico" viewBox="0 0 24 24"><path d="M14 3H7.5A2.5 2.5 0 0 0 5 5.5v13A2.5 2.5 0 0 0 7.5 21h9a2.5 2.5 0 0 0 2.5-2.5V8z"/><path d="M14 3v5h5M12 11v6M9 14l3 3 3-3"/></svg></span>
+                            <span class="bj-lien-nom">MAJ stock</span>
+                        </button>
+                        <button id="btn-export-main" class="bj-lien" type="button" title="Exporter le stock (Excel)">
+                            <span class="bj-lien-ico"><svg class="bj-ico" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M3 9.5h18M3 14.5h18M9.5 4v16"/></svg></span>
+                            <span class="bj-lien-nom">Export</span>
+                        </button>
+                        <button id="btn-stats-main" class="bj-lien" type="button" title="Statistiques de consommation">
+                            <span class="bj-lien-ico"><svg class="bj-ico" viewBox="0 0 24 24"><path d="M4 4v16h16"/><path d="M8 15l3.5-4 3 2.5L20 7"/></svg></span>
+                            <span class="bj-lien-nom">Stats</span>
+                        </button>
+                        <div id="btn-annuaire-container" class="bj-lien-cadre">
+                            <button id="btn-annuaire" class="bj-lien" type="button" title="Carnets d'adresses">
+                                <span class="bj-lien-ico"><svg class="bj-ico" viewBox="0 0 24 24"><path d="M6 3h12a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><circle cx="12" cy="10" r="2.5"/><path d="M8.5 16.5c.6-1.8 2-2.7 3.5-2.7s2.9.9 3.5 2.7"/></svg></span>
+                                <span class="bj-lien-nom">Annuaire</span>
+                            </button>
+                        </div>
+                        <div id="btn-dosimetre-container" class="bj-lien-cadre">
+                            <button id="btn-dosimetre" class="bj-lien" type="button" title="Gestion des dosimètres">
+                                <span class="bj-lien-ico">
+                                    <svg class="bj-ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><g class="bj-ico-plein"><circle cx="12" cy="12" r="1.6"/><path d="M10.6 9.6 8.4 5.8a7 7 0 0 1 7.2 0l-2.2 3.8a2.8 2.8 0 0 0-2.8 0z"/><path d="M10.6 9.6 8.4 5.8a7 7 0 0 1 7.2 0l-2.2 3.8a2.8 2.8 0 0 0-2.8 0z" transform="rotate(120 12 12)"/><path d="M10.6 9.6 8.4 5.8a7 7 0 0 1 7.2 0l-2.2 3.8a2.8 2.8 0 0 0-2.8 0z" transform="rotate(240 12 12)"/></g></svg>
+                                    <span id="dosimetre-widget-badge" class="bj-pastille">0 suivi</span>
+                                </span>
+                                <span class="bj-lien-nom">Dosimètres</span>
+                            </button>
+                        </div>
+                    </nav>
+                </div>
+            </section>
+
+            <!-- ============ WIDGETS ============ -->
+            <section class="bj-widgets">
+                <!-- Planning binômes -->
+                <div id="team-planning-container" class="bj-widget" data-widget="planning">
+                    <div id="calendar-card" class="bj-carte">
+                        <header class="bj-carte-titre">
+                            <span>Binômes</span>
+                            <div id="parity-switch-container" class="bj-segment">
+                                <button type="button" id="btn-preview-even">Paire</button>
+                                <button type="button" id="btn-preview-odd">Impaire</button>
                             </div>
-                        </div>
-                        <div id="calendar-preview-content" style="font-size: 0.85em; color: #34495e; line-height: 1.4; cursor: pointer;" title="Cliquez pour ouvrir le planning">
+                        </header>
+                        <div id="calendar-preview-content" class="bj-carte-corps" title="Cliquez pour ouvrir le planning">
                             <!-- Généré par JS -->
                         </div>
-                        <div id="btn-open-calendar" style="text-align: center; margin-top: 5px; font-size: 0.75em; color: #7f8c8d; font-style: italic; cursor: pointer;" onmouseover="this.style.color='#e67e22'" onmouseout="this.style.color='#7f8c8d'">
-                            Cliquez pour modifier ✏️
-                        </div>
+                        <button type="button" id="btn-open-calendar" class="bj-carte-lien">Modifier le planning</button>
                     </div>
                 </div>
 
-                <!-- ============ TASKS TABLE ============ -->
-                <div id="tasks-planning-container" class="team-planning" style="position: relative; width: max-content; margin-top: 10px;">
-                    <div id="btn-open-tasks" style="background: rgba(255, 255, 255, 0.95); border: 2px solid #f39c12; border-radius: 12px; padding: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
-                        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ddd; padding-bottom: 5px; margin-bottom: 5px; gap: 15px;">
-                            <span style="color: #2c3e50; font-weight: bold;">📋 Tableau Taches des assistantes</span>
-                        </div>
-                        <div id="tasks-preview-content" style="font-size: 0.85em; color: #34495e; line-height: 1.4;">
+                <!-- Tâches des assistantes -->
+                <div id="tasks-planning-container" class="bj-widget" data-widget="taches">
+                    <div id="btn-open-tasks" class="bj-carte bj-carte-cliquable" role="button" tabindex="0" title="Cliquez pour modifier les tâches">
+                        <header class="bj-carte-titre"><span>Tâches des assistantes</span></header>
+                        <div id="tasks-preview-content" class="bj-carte-corps">
                             <!-- Généré par JS -->
                         </div>
-                        <div style="text-align: center; margin-top: 5px; font-size: 0.75em; color: #7f8c8d; font-style: italic;">
-                            Cliquez pour modifier ✏️
+                        <span class="bj-carte-lien">Modifier les tâches</span>
+                    </div>
+                </div>
+
+                <!-- Ruptures / à commander (notes) -->
+                <div id="postit-wrapper" class="bj-widget" data-widget="ruptures">
+                    <div id="postit-container" class="hidden">
+                        <div id="postit-rupture" class="postit bj-carte">
+                            <div class="postit-title">En rupture 📌</div>
+                            <div class="postit-legend-topright">❌ en rupture · ⚠️ limite (HS)</div>
+                            <ul id="postit-list"></ul>
                         </div>
                     </div>
                 </div>
-            </div>
-        </div>
+            </section>
+
+            <!-- ============ CITATION ============ -->
+            <footer class="bj-pied">
+                <figure id="bj-citation" class="bj-citation" title="Cliquer pour une autre citation">
+                    <blockquote id="bj-citation-texte"></blockquote>
+                    <figcaption id="bj-citation-auteur"></figcaption>
+                </figure>
+            </footer>
+
+            <!-- ============ BOUTON REGLAGES (coin bas droit) ============ -->
+            <button id="btn-settings" class="bj-bouton-reglages" type="button" title="Réglages" aria-label="Réglages">
+                <svg class="bj-ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            </button>
 
         <script>
             // Réinitialisation UNIQUE des positions après un changement de structure de l'interface.
-            // Le garde-fou de version est indispensable : sans lui, ce bloc effaçait la
-            // personnalisation de l'utilisateur à CHAQUE démarrage de l'application.
+            // Les positions de l'ancienne interface n'ont pas de sens dans la nouvelle : on repart
+            // d'une disposition vide ("{}" et non une suppression, sinon la disposition importée
+            // de l'ancienne application serait rechargée par le mode personnalisation).
             (function () {
-                const LAYOUT_VERSION = "layout-2024-11";
-                const seen = localStorage.getItem("ui-layout-version");
-                // On efface uniquement des positions enregistrées pour une ANCIENNE structure.
-                // Absence de marqueur = positions déjà compatibles : on ne touche à rien.
-                if (seen && seen !== LAYOUT_VERSION) {
-                    localStorage.removeItem("ui-positions");
-                    console.log("Positions réinitialisées suite au changement d'interface.");
-                }
-                if (seen !== LAYOUT_VERSION) {
+                const LAYOUT_VERSION = "layout-bonjourr-2026-10";
+                if (localStorage.getItem("ui-layout-version") !== LAYOUT_VERSION) {
+                    localStorage.setItem("ui-positions", "{}");
                     localStorage.setItem("ui-layout-version", LAYOUT_VERSION);
                 }
             })();
@@ -213,7 +214,7 @@
                 Maintenance & Cabinet
                 <button class="dialog-close" data-close="maintenance-cabinet-overlay">✕</button>
             </div>
-            <div class="dialog-body" style="background: #fbfcfd; border-radius: 8px; padding: 20px; display: flex; flex-direction: column;">
+            <div class="dialog-body" style="padding: 20px; display: flex; flex-direction: column;">
                 <!-- PLAN DU CABINET -->
                 <div id="plan-container" class="plan-wrap" style="flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; margin: 0; border: none; box-shadow: none; background: transparent;">
                     <svg viewBox="0 0 1000 1000" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Plan du cabinet dentaire" style="max-width: 100%; max-height: 100%; width: auto; height: auto;">
@@ -393,7 +394,7 @@
                         </div>
                         <div class="autoclave-status">⚪ Prêt</div>
                         <button class="autoclave-start">Lancer</button>
-                        <button class="btn-fauteuil-maint-icon" data-machine="Fauteuil OVIS" data-cabinet="Cabinet 5" title="Rappel Maintenance - Fauteuil OVIS" style="margin-top: 10px; cursor: pointer; background: #fdfdfd; border: 1px solid #ddd; border-radius: 8px; padding: 8px; font-size: 14px; font-weight: bold; color: #555; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: background 0.2s; width: 100%; box-sizing: border-box;">
+                        <button class="btn-fauteuil-maint-icon" data-machine="Fauteuil OVIS" data-cabinet="Cabinet 5" title="Rappel Maintenance - Fauteuil OVIS" style="margin-top: 10px; cursor: pointer; border: 1px solid #ddd; border-radius: 8px; padding: 8px; font-size: 14px; font-weight: bold; color: #555; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: background 0.2s; width: 100%; box-sizing: border-box;">
                             <span class="fauteuil-icon-status">🔔</span> Rappel Maintenance
                         </button>
                     </div>
@@ -443,7 +444,7 @@
                         </div>
                         <div class="autoclave-status">⚪ Prêt</div>
                         <button class="autoclave-start">Lancer</button>
-                        <button class="btn-fauteuil-maint-icon" data-machine="Fauteuil Sinius" data-cabinet="Cabinet 1" title="Rappel Maintenance - Fauteuil Sinius" style="margin-top: 10px; cursor: pointer; background: #fdfdfd; border: 1px solid #ddd; border-radius: 8px; padding: 8px; font-size: 14px; font-weight: bold; color: #555; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: background 0.2s; width: 100%; box-sizing: border-box;">
+                        <button class="btn-fauteuil-maint-icon" data-machine="Fauteuil Sinius" data-cabinet="Cabinet 1" title="Rappel Maintenance - Fauteuil Sinius" style="margin-top: 10px; cursor: pointer; border: 1px solid #ddd; border-radius: 8px; padding: 8px; font-size: 14px; font-weight: bold; color: #555; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: background 0.2s; width: 100%; box-sizing: border-box;">
                             <span class="fauteuil-icon-status">🔔</span> Rappel Maintenance
                         </button>
                     </div>
@@ -493,7 +494,7 @@
                         </div>
                         <div class="autoclave-status">⚪ Prêt</div>
                         <button class="autoclave-start">Lancer</button>
-                        <button class="btn-fauteuil-maint-icon" data-machine="Fauteuil Planmeca" data-cabinet="Salle de chirurgie" title="Rappel Maintenance - Fauteuil Planmeca" style="margin-top: 10px; cursor: pointer; background: #fdfdfd; border: 1px solid #ddd; border-radius: 8px; padding: 8px; font-size: 14px; font-weight: bold; color: #555; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: background 0.2s; width: 100%; box-sizing: border-box;">
+                        <button class="btn-fauteuil-maint-icon" data-machine="Fauteuil Planmeca" data-cabinet="Salle de chirurgie" title="Rappel Maintenance - Fauteuil Planmeca" style="margin-top: 10px; cursor: pointer; border: 1px solid #ddd; border-radius: 8px; padding: 8px; font-size: 14px; font-weight: bold; color: #555; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: background 0.2s; width: 100%; box-sizing: border-box;">
                             <span class="fauteuil-icon-status">🔔</span> Rappel Maintenance
                         </button>
                     </div>
@@ -543,7 +544,7 @@
                         </div>
                         <div class="autoclave-status">⚪ Prêt</div>
                         <button class="autoclave-start">Lancer</button>
-                        <button class="btn-fauteuil-maint-icon" data-machine="Fauteuil Planmeca compact" data-cabinet="Cabinet 2" title="Rappel Maintenance - Fauteuil Planmeca compact" style="margin-top: 10px; cursor: pointer; background: #fdfdfd; border: 1px solid #ddd; border-radius: 8px; padding: 8px; font-size: 14px; font-weight: bold; color: #555; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: background 0.2s; width: 100%; box-sizing: border-box;">
+                        <button class="btn-fauteuil-maint-icon" data-machine="Fauteuil Planmeca compact" data-cabinet="Cabinet 2" title="Rappel Maintenance - Fauteuil Planmeca compact" style="margin-top: 10px; cursor: pointer; border: 1px solid #ddd; border-radius: 8px; padding: 8px; font-size: 14px; font-weight: bold; color: #555; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: background 0.2s; width: 100%; box-sizing: border-box;">
                             <span class="fauteuil-icon-status">🔔</span> Rappel Maintenance
                         </button>
                     </div>
@@ -593,7 +594,7 @@
                         </div>
                         <div class="autoclave-status">⚪ Prêt</div>
                         <button class="autoclave-start">Lancer</button>
-                        <button class="btn-fauteuil-maint-icon" data-machine="Fauteuil Anthos" data-cabinet="Cabinet 4" title="Rappel Maintenance - Fauteuil Anthos" style="margin-top: 10px; cursor: pointer; background: #fdfdfd; border: 1px solid #ddd; border-radius: 8px; padding: 8px; font-size: 14px; font-weight: bold; color: #555; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: background 0.2s; width: 100%; box-sizing: border-box;">
+                        <button class="btn-fauteuil-maint-icon" data-machine="Fauteuil Anthos" data-cabinet="Cabinet 4" title="Rappel Maintenance - Fauteuil Anthos" style="margin-top: 10px; cursor: pointer; border: 1px solid #ddd; border-radius: 8px; padding: 8px; font-size: 14px; font-weight: bold; color: #555; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: background 0.2s; width: 100%; box-sizing: border-box;">
                             <span class="fauteuil-icon-status">🔔</span> Rappel Maintenance
                         </button>
                     </div>
@@ -654,7 +655,7 @@
                         </div>
                         <div class="autoclave-status">⚪ Prêt</div>
                         <button class="autoclave-start">Lancer</button>
-                        <button class="btn-mire-icon" data-machine="Radio Cabinet 1" data-cabinet="Cabinet 1" title="Rappel Mire - Cabinet 1" style="margin-top: 10px; cursor: pointer; background: #fdfdfd; border: 1px solid #ddd; border-radius: 8px; padding: 8px; font-size: 14px; font-weight: bold; color: #555; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: background 0.2s; width: 100%; box-sizing: border-box;">
+                        <button class="btn-mire-icon" data-machine="Radio Cabinet 1" data-cabinet="Cabinet 1" title="Rappel Mire - Cabinet 1" style="margin-top: 10px; cursor: pointer; border: 1px solid #ddd; border-radius: 8px; padding: 8px; font-size: 14px; font-weight: bold; color: #555; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: background 0.2s; width: 100%; box-sizing: border-box;">
                             <span class="mire-icon-status">🔔</span> Alerte Mire
                         </button>
                     </div>
@@ -715,7 +716,7 @@
                         </div>
                         <div class="autoclave-status">⚪ Prêt</div>
                         <button class="autoclave-start">Lancer</button>
-                        <button class="btn-mire-icon" data-machine="Radio Cabinet 2" data-cabinet="Cabinet 2" title="Rappel Mire - Cabinet 2" style="margin-top: 10px; cursor: pointer; background: #fdfdfd; border: 1px solid #ddd; border-radius: 8px; padding: 8px; font-size: 14px; font-weight: bold; color: #555; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: background 0.2s; width: 100%; box-sizing: border-box;">
+                        <button class="btn-mire-icon" data-machine="Radio Cabinet 2" data-cabinet="Cabinet 2" title="Rappel Mire - Cabinet 2" style="margin-top: 10px; cursor: pointer; border: 1px solid #ddd; border-radius: 8px; padding: 8px; font-size: 14px; font-weight: bold; color: #555; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: background 0.2s; width: 100%; box-sizing: border-box;">
                             <span class="mire-icon-status">🔔</span> Alerte Mire
                         </button>
                     </div>
@@ -776,7 +777,7 @@
                         </div>
                         <div class="autoclave-status">⚪ Prêt</div>
                         <button class="autoclave-start">Lancer</button>
-                        <button class="btn-mire-icon" data-machine="Radio Cabinet 4" data-cabinet="Cabinet 4" title="Rappel Mire - Cabinet 4" style="margin-top: 10px; cursor: pointer; background: #fdfdfd; border: 1px solid #ddd; border-radius: 8px; padding: 8px; font-size: 14px; font-weight: bold; color: #555; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: background 0.2s; width: 100%; box-sizing: border-box;">
+                        <button class="btn-mire-icon" data-machine="Radio Cabinet 4" data-cabinet="Cabinet 4" title="Rappel Mire - Cabinet 4" style="margin-top: 10px; cursor: pointer; border: 1px solid #ddd; border-radius: 8px; padding: 8px; font-size: 14px; font-weight: bold; color: #555; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: background 0.2s; width: 100%; box-sizing: border-box;">
                             <span class="mire-icon-status">🔔</span> Alerte Mire
                         </button>
                     </div>
@@ -837,7 +838,7 @@
                         </div>
                         <div class="autoclave-status">⚪ Prêt</div>
                         <button class="autoclave-start">Lancer</button>
-                        <button class="btn-mire-icon" data-machine="Radio Cabinet 5" data-cabinet="Cabinet 5" title="Rappel Mire - Cabinet 5" style="margin-top: 10px; cursor: pointer; background: #fdfdfd; border: 1px solid #ddd; border-radius: 8px; padding: 8px; font-size: 14px; font-weight: bold; color: #555; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: background 0.2s; width: 100%; box-sizing: border-box;">
+                        <button class="btn-mire-icon" data-machine="Radio Cabinet 5" data-cabinet="Cabinet 5" title="Rappel Mire - Cabinet 5" style="margin-top: 10px; cursor: pointer; border: 1px solid #ddd; border-radius: 8px; padding: 8px; font-size: 14px; font-weight: bold; color: #555; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: background 0.2s; width: 100%; box-sizing: border-box;">
                             <span class="mire-icon-status">🔔</span> Alerte Mire
                         </button>
                     </div>
@@ -903,10 +904,10 @@
                         </div>
                         <div class="autoclave-status">⚪ Prêt</div>
                         <button class="autoclave-start">Lancer</button>
-                        <button class="btn-mire-icon" data-machine="Radio Panoramique" data-cabinet="Zone panoramique (Pano)" title="Rappel Mire - Radio Panoramique" style="margin-top: 10px; cursor: pointer; background: #fdfdfd; border: 1px solid #ddd; border-radius: 8px; padding: 8px; font-size: 14px; font-weight: bold; color: #555; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: background 0.2s; width: 100%; box-sizing: border-box;">
+                        <button class="btn-mire-icon" data-machine="Radio Panoramique" data-cabinet="Zone panoramique (Pano)" title="Rappel Mire - Radio Panoramique" style="margin-top: 10px; cursor: pointer; border: 1px solid #ddd; border-radius: 8px; padding: 8px; font-size: 14px; font-weight: bold; color: #555; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: background 0.2s; width: 100%; box-sizing: border-box;">
                             <span class="mire-icon-status">🔔</span> Alerte Mire
                         </button>
-                        <button class="btn-dosi-icon" title="Rappel Dosimètres" style="margin-top: 10px; cursor: pointer; background: #fdfdfd; border: 1px solid #ddd; border-radius: 8px; padding: 8px; font-size: 14px; font-weight: bold; color: #555; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: background 0.2s; width: 100%; box-sizing: border-box;">
+                        <button class="btn-dosi-icon" title="Rappel Dosimètres" style="margin-top: 10px; cursor: pointer; border: 1px solid #ddd; border-radius: 8px; padding: 8px; font-size: 14px; font-weight: bold; color: #555; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: background 0.2s; width: 100%; box-sizing: border-box;">
                             <span class="dosi-icon-status">🔔</span> Alerte Dosimètres
                         </button>
                     </div>
@@ -1819,47 +1820,110 @@
         </div>
     </div>
 
-    <!-- ============ DIALOG REGLAGES ============ -->
+    <!-- ============ DIALOG REGLAGES (panneau latéral) ============ -->
     <div id="settings-overlay" class="overlay hidden">
-        <div class="dialog dialog-settings" style="max-width: 600px;">
+        <div class="dialog dialog-settings" role="dialog" aria-labelledby="settings-titre">
             <div class="dialog-titlebar">
-                Réglages
-                <button class="dialog-close" data-close="settings-overlay">✕</button>
+                <span id="settings-titre">Réglages</span>
+                <button class="dialog-close" data-close="settings-overlay" aria-label="Fermer">✕</button>
             </div>
             <div class="dialog-body">
-                <p class="bold-label">Accès depuis les autres postes du cabinet :</p>
-                <div id="settings-adresses" style="margin-bottom: 20px; font-family: monospace; font-size: 1.05em;">Chargement...</div>
 
-                <p class="bold-label">Fichier de Base de Données (SQLite) :</p>
-                <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 6px;">
-                    <input type="text" id="settings-db-path" class="input" style="flex: 1;" placeholder="Chargement du chemin...">
-                    <button id="settings-btn-select-db" class="btn btn-blue">Utiliser cette base</button>
-                </div>
-                <p id="settings-db-info" style="margin: 0 0 20px; font-size: 0.85em; color: #666;">Saisir le chemin complet d'un fichier .db existant.</p>
+                <!-- ---------- Apparence (propre à ce poste) ---------- -->
+                <section class="bj-section" id="bj-apparence">
+                    <h3 class="bj-section-titre">Apparence <small>propre à ce poste</small></h3>
 
-                <p class="bold-label">Interface :</p>
-                <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 20px;">
-                    <button id="settings-btn-customization" class="btn btn-orange">🛠 Personnaliser l'interface</button>
-                </div>
-                
-                <p class="bold-label">Liste de courses :</p>
-                <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 20px;">
-                    <button id="settings-btn-generate-order-list" class="btn btn-blue">Générer la liste de courses/commandes</button>
-                </div>
+                    <div class="bj-champ">
+                        <label for="bj-opt-fond">Fond</label>
+                        <select id="bj-opt-fond" class="input">
+                            <option value="dynamique">Selon l'heure</option>
+                            <option value="cabinet">Animation cabinet</option>
+                            <option value="image">Image personnelle</option>
+                            <option value="uni">Couleur unie</option>
+                        </select>
+                    </div>
+                    <div class="bj-champ" data-si-fond="image">
+                        <label for="bj-opt-image">Image</label>
+                        <div class="bj-ligne">
+                            <input type="file" id="bj-opt-image" accept="image/*">
+                            <button type="button" id="bj-opt-image-retirer" class="btn btn-small">Retirer</button>
+                        </div>
+                    </div>
+                    <div class="bj-champ" data-si-fond="uni">
+                        <label for="bj-opt-couleur">Couleur</label>
+                        <input type="color" id="bj-opt-couleur" value="#24414f">
+                    </div>
+                    <div class="bj-champ">
+                        <label for="bj-opt-flou">Flou du fond</label>
+                        <input type="range" id="bj-opt-flou" min="0" max="40" step="1">
+                    </div>
+                    <div class="bj-champ">
+                        <label for="bj-opt-luminosite">Luminosité du fond</label>
+                        <input type="range" id="bj-opt-luminosite" min="30" max="100" step="1">
+                    </div>
 
-                <p class="bold-label">Extraction Chirurgie (Salle de chir) :</p>
-                <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 20px;">
-                    <label>Du :</label>
-                    <input type="date" id="settings-chir-debut" class="input">
-                    <label>Au :</label>
-                    <input type="date" id="settings-chir-fin" class="input">
+                    <div class="bj-champ">
+                        <label for="bj-opt-horloge">Horloge</label>
+                        <select id="bj-opt-horloge" class="input">
+                            <option value="numerique">Numérique</option>
+                            <option value="analogique">Analogique</option>
+                        </select>
+                    </div>
+                    <div class="bj-champ">
+                        <label for="bj-opt-taille">Taille de l'horloge</label>
+                        <input type="range" id="bj-opt-taille" min="60" max="160" step="5">
+                    </div>
+                    <label class="bj-interrupteur"><input type="checkbox" id="bj-opt-secondes"><span>Afficher les secondes</span></label>
+                    <label class="bj-interrupteur"><input type="checkbox" id="bj-opt-salutation"><span>Salutation</span></label>
+                    <div class="bj-champ">
+                        <label for="bj-opt-nom">Nom dans la salutation</label>
+                        <input type="text" id="bj-opt-nom" class="input" placeholder="ex. l'équipe" maxlength="40">
+                    </div>
+                    <label class="bj-interrupteur"><input type="checkbox" id="bj-opt-citation"><span>Citation du jour</span></label>
+
+                    <h4 class="bj-sous-titre">Widgets affichés</h4>
+                    <label class="bj-interrupteur"><input type="checkbox" data-bj-widget="planning"><span>Planning binômes</span></label>
+                    <label class="bj-interrupteur"><input type="checkbox" data-bj-widget="taches"><span>Tâches des assistantes</span></label>
+                    <label class="bj-interrupteur"><input type="checkbox" data-bj-widget="ruptures"><span>Ruptures / à commander</span></label>
+
+                    <div class="bj-ligne bj-ligne-boutons">
+                        <button id="settings-btn-customization" class="btn">Déplacer les éléments</button>
+                        <button type="button" id="bj-opt-defaut" class="btn">Apparence par défaut</button>
+                    </div>
+                </section>
+
+                <!-- ---------- Cabinet ---------- -->
+                <section class="bj-section">
+                    <h3 class="bj-section-titre">Accès depuis les autres postes</h3>
+                    <div id="settings-adresses" class="bj-mono">Chargement...</div>
+                </section>
+
+                <section class="bj-section">
+                    <h3 class="bj-section-titre">Base de données (SQLite)</h3>
+                    <div class="bj-ligne">
+                        <input type="text" id="settings-db-path" class="input" placeholder="Chargement du chemin...">
+                        <button id="settings-btn-select-db" class="btn btn-blue">Utiliser</button>
+                    </div>
+                    <p id="settings-db-info" class="bj-aide">Saisir le chemin complet d'un fichier .db existant.</p>
+                </section>
+
+                <section class="bj-section">
+                    <h3 class="bj-section-titre">Liste de courses</h3>
+                    <button id="settings-btn-generate-order-list" class="btn btn-blue">Générer la liste de courses / commandes</button>
+                </section>
+
+                <section class="bj-section">
+                    <h3 class="bj-section-titre">Extraction chirurgie</h3>
+                    <div class="bj-ligne bj-ligne-dates">
+                        <label for="settings-chir-debut">Du</label>
+                        <input type="date" id="settings-chir-debut" class="input">
+                        <label for="settings-chir-fin">au</label>
+                        <input type="date" id="settings-chir-fin" class="input">
+                    </div>
                     <button id="settings-btn-extract-chir" class="btn btn-blue">Extraire (Excel)</button>
-                </div>
+                </section>
 
-                <p id="settings-version" style="font-size: 0.8em; color: #999; text-align: right; margin: 0 0 8px;"></p>
-                <div class="dialog-buttons centered">
-                    <button class="btn" data-close="settings-overlay">Fermer</button>
-                </div>
+                <p id="settings-version" class="bj-version"></p>
             </div>
         </div>
     </div>
@@ -1871,7 +1935,7 @@
                 Carnets d'Adresses
                 <button class="dialog-close" onclick="document.getElementById('annuaire-overlay').classList.add('hidden')">✕</button>
             </div>
-            <div class="dialog-body" style="flex: 1; padding: 0; overflow: hidden; background: #e0e5ec;">
+            <div class="dialog-body" style="flex: 1; padding: 0; overflow: hidden;">
                 <iframe src="html/annuaire.html" style="width: 100%; height: 100%; border: none;"></iframe>
             </div>
         </div>
@@ -1943,7 +2007,7 @@
                 Planning des Binômes
                 <button class="dialog-close" data-close="calendar-overlay">✕</button>
             </div>
-            <div class="dialog-body" style="overflow-y: auto; padding: 20px; background: #fdfdfd; display: flex; flex-direction: column; gap: 30px;">
+            <div class="dialog-body" style="overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 30px;">
                 <div style="display: flex; justify-content: center; gap: 20px;">
                     <button id="btn-tab-even" class="btn btn-blue" style="font-size: 1.1em; padding: 10px 30px;">SEMAINE PAIRE</button>
                     <button id="btn-tab-odd" class="btn" style="background: #bdc3c7; color: white; font-size: 1.1em; padding: 10px 30px;">SEMAINE IMPAIRE</button>
@@ -1971,7 +2035,7 @@
                 Tableau Taches des assistantes
                 <button class="dialog-close" data-close="tasks-overlay">✕</button>
             </div>
-            <div class="dialog-body" style="overflow-y: auto; padding: 20px; background: #fdfdfd; display: flex; flex-direction: column; gap: 20px;">
+            <div class="dialog-body" style="overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 20px;">
                 <div id="tasks-container" class="calendar-wrapper active"></div>
                 <textarea id="tasks-note" class="input" rows="2" placeholder="Consigne générale (affichée sous le tableau)..." style="margin-top: 10px; font-style: italic; color: #333; width: 100%; box-sizing: border-box; resize: vertical; font-family: inherit;"></textarea>
                 <div class="dialog-buttons centered" style="margin-top: 20px;">
@@ -1985,9 +2049,8 @@
     <input type="file" id="pdf-file" accept="application/pdf,.pdf" class="hidden" multiple>
 
     <!-- Petit bouton caché pour le mini-jeu -->
-    <div id="easter-egg-trigger"
-        style="position: fixed; bottom: 10px; right: 10px; cursor: pointer; opacity: 0.15; font-size: 20px; z-index: 9999; user-select: none; transition: opacity 0.2s;"
-        title="Un petit secret..." onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.15">🦷</div>
+    <div id="easter-egg-trigger" class="bj-oeuf"
+        title="Un petit secret...">🦷</div>
 
     <!-- ============ ECRAN DE VEILLE (SCREENSAVER) ============ -->
     <div id="screensaver-overlay" class="hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.95); z-index: 10000; display: flex; justify-content: center; align-items: center; opacity: 0; transition: opacity 1s ease;">

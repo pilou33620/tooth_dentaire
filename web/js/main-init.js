@@ -26,6 +26,7 @@ import { refreshMaintenanceTable } from './machines/machines.js';
 import { initCustomizationMode } from './ui/customization.js';
 import { initZoomIndicator } from './ui/zoom-indicator.js';
 import { initScreensaver } from './ui/screensaver.js';
+import { initBonjourr } from './ui/bonjourr.js';
 import { initPostitHover, updatePostitListHeight } from './features/alerts.js';
 import { getStock } from './features/stock.js';
 import { showMessage } from './core/utils.js';
@@ -72,6 +73,8 @@ window.addEventListener("donnees-modifiees", rafraichirApresModificationDistante
    ============================================================ */
 
 document.addEventListener("DOMContentLoaded", async () => {
+    // Fond, horloge et salutation s'affichent même si le serveur ne répond pas
+    initBonjourr();
     initDB();
     try {
         await demarrer();

@@ -330,6 +330,13 @@ describe('parité de la semaine', () => {
         expect(document.getElementById('btn-preview-odd').innerHTML).toBe('Impaire');
     });
 
+    test('le bouton de la semaine affichée porte la classe « actif »', () => {
+        team.updateTeamPlanning(10);
+        team.setPreviewParity('odd');
+        expect(document.getElementById('btn-preview-odd').classList.contains('actif')).toBe(true);
+        expect(document.getElementById('btn-preview-even').classList.contains('actif')).toBe(false);
+    });
+
     test('un dimanche, la parité est celle du lundi suivant', () => {
         const dimanche = new Date(2026, 2, 8, 12);   // 08/03/2026 est un dimanche
         jest.useFakeTimers().setSystemTime(dimanche);
