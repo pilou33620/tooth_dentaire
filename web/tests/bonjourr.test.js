@@ -37,6 +37,7 @@ const MARKUP = `
     </select>
     <div data-si-fond="image"></div>
     <div data-si-fond="uni"></div>
+    <div data-si-fond="dynamique paysage"></div>
     <input type="checkbox" id="bj-opt-secondes">
     <input type="text" id="bj-opt-nom">
     <input type="checkbox" data-bj-widget="taches">
@@ -89,6 +90,10 @@ describe('réglages d\'apparence', () => {
         appliquerOptions(normaliserOptions({ meteoFond: false, meteoTexte: false }));
         expect(document.documentElement.dataset.bjMeteoFond).toBe('non');
         expect(document.documentElement.dataset.bjMeteoTexte).toBe('non');
+    });
+
+    test('le fond « Paysage » est un choix valide', () => {
+        expect(normaliserOptions({ fond: 'paysage' }).fond).toBe('paysage');
     });
 
     test('le nom est nettoyé et limité', () => {
@@ -306,7 +311,15 @@ describe('initialisation', () => {
         expect(document.getElementById('bj-opt-nom').value).toBe('Pilou');
         expect(document.querySelector('[data-bj-widget="taches"]').checked).toBe(false);
         expect(document.querySelector('[data-si-fond="uni"]').classList.contains('hidden')).toBe(false);
+        expect(document.querySelector('[data-si-fond="dynamique paysage"]').classList.contains('hidden')).toBe(true);
         expect(document.querySelector('[data-si-fond="image"]').classList.contains('hidden')).toBe(true);
+    });
+
+    test('une option liée à plusieurs fonds s\'affiche pour chacun d\'eux', () => {
+        localStorage.setItem(CLE_OPTIONS, JSON.stringify({ fond: 'paysage' }));
+        initBonjourr();
+        expect(document.querySelector('[data-si-fond="dynamique paysage"]').classList.contains('hidden')).toBe(false);
+        expect(document.querySelector('[data-si-fond="uni"]').classList.contains('hidden')).toBe(true);
     });
 
     test('changer un réglage l\'applique et l\'enregistre aussitôt', () => {

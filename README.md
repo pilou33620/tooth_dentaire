@@ -58,13 +58,15 @@ qui change avec l'heure (aube, jour, crépuscule, nuit), grande horloge, salutat
 recherche et accès rapides en verre dépoli, widgets planning / tâches / ruptures,
 alertes dans le coin haut gauche et citation du jour.
 
-**Réglages ⚙️ > Apparence** (propre à chaque poste) : fond (selon l'heure, animation du
-cabinet, image personnelle ou couleur unie), flou et luminosité du fond, horloge
+**Réglages ⚙️ > Apparence** (propre à chaque poste) : fond (selon l'heure, paysage,
+animation du cabinet, image personnelle ou couleur unie), flou et luminosité du fond, horloge
 numérique ou analogique, taille, secondes, salutation et nom, citation, widgets affichés.
 `Échap` ferme la fenêtre ouverte.
 
-**Météo** : avec le fond « selon l'heure », le ciel suit aussi le temps qu'il fait
-(soleil, nuages, brouillard, pluie, neige, orage, étoiles la nuit) et la température
+**Météo** : avec le fond « selon l'heure » ou « paysage », le ciel suit aussi le temps
+qu'il fait (soleil, nuages, brouillard, pluie, neige, orage, étoiles la nuit). Le paysage
+est un petit décor dessiné (collines, cabinet avec sa dent en enseigne) : fenêtres
+allumées le soir et par mauvais temps, toit enneigé, brume et la température
 s'affiche à côté de la date. La commune du cabinet se choisit dans Réglages > Apparence
 > Météo (la même pour tous les postes). C'est le **serveur** qui interroge
 [MET Norway](https://api.met.no) (gratuit, usage professionnel autorisé, sans clé),

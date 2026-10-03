@@ -29,6 +29,8 @@
             <span class="bj-blob bj-blob-2"></span>
             <span class="bj-blob bj-blob-3"></span>
         </div>
+        <!-- Fond « Paysage » : décor dessiné par js/ui/paysage.js -->
+        <div id="bj-paysage" class="bj-paysage"></div>
         <!-- Météo (fond « selon l'heure » seulement) : soleil, nuages, brume, éclairs, pluie / neige / étoiles -->
         <div class="bj-meteo-soleil"></div>
         <div class="bj-meteo-nuages"><span></span><span></span><span></span><span></span></div>
@@ -1910,12 +1912,13 @@
                         <label for="bj-opt-fond">Fond</label>
                         <select id="bj-opt-fond" class="input">
                             <option value="dynamique">Selon l'heure</option>
+                            <option value="paysage">Paysage</option>
                             <option value="cabinet">Animation cabinet</option>
                             <option value="image">Image personnelle</option>
                             <option value="uni">Couleur unie</option>
                         </select>
                     </div>
-                    <label class="bj-interrupteur" data-si-fond="dynamique"><input type="checkbox" id="bj-opt-meteo-fond"><span>Le fond suit aussi la météo</span></label>
+                    <label class="bj-interrupteur" data-si-fond="dynamique paysage"><input type="checkbox" id="bj-opt-meteo-fond"><span>Le fond suit aussi la météo</span></label>
                     <div class="bj-champ" data-si-fond="image">
                         <label for="bj-opt-image">Image</label>
                         <div class="bj-ligne">

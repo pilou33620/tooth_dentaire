@@ -115,6 +115,15 @@ describe('affichage', () => {
         expect(document.getElementById('bj-meteo').classList.contains('hidden')).toBe(true);
     });
 
+    test('fond « Paysage » : le décor est dessiné avec la météo', () => {
+        document.body.insertAdjacentHTML('beforeend', '<div id="bj-paysage"></div>');
+        document.documentElement.dataset.bjFond = 'paysage';
+        document.documentElement.dataset.bjPhase = 'jour';
+        meteo.appliquerMeteo({ categorie: 'neige', intensite: 'moyenne', nuit: false, libelle: 'Neige', temperature: -1 });
+        expect(document.querySelector('#bj-paysage svg')).not.toBeNull();
+        expect(document.querySelector('#bj-paysage .bj-p-soleil')).toBeNull();
+    });
+
     test('une catégorie inconnue est ignorée', () => {
         meteo.appliquerMeteo({ categorie: 'tempete-de-sable', temperature: 30 });
         expect(racine().bjMeteo).toBe('');

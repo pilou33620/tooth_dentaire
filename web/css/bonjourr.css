@@ -146,6 +146,7 @@ body.bj {
 
 .bj-fond-degrade,
 .bj-fond-image,
+.bj-paysage,
 #background-animation iframe {
     filter: blur(var(--bj-flou));
     transform: scale(var(--bj-echelle, 1));
@@ -247,6 +248,8 @@ body.bj {
 /* Choix du fond (Réglages > Apparence) */
 :root[data-bj-fond="image"][data-bj-image="oui"] .bj-fond-image { opacity: 1; }
 :root[data-bj-fond="image"][data-bj-image="oui"] .bj-fond-degrade { opacity: 0; }
+:root[data-bj-fond="paysage"] .bj-paysage { opacity: 1; }
+:root[data-bj-fond="paysage"] .bj-fond-degrade { opacity: 0; }
 :root[data-bj-fond="uni"] #bj-fond { background: var(--bj-couleur-unie); }
 :root[data-bj-fond="uni"] .bj-fond-degrade { opacity: 0; }
 :root[data-bj-fond="cabinet"] #background-animation { opacity: 1; }
@@ -2229,7 +2232,7 @@ body.customization-active .draggable-item {
 :root[data-bj-meteo="brouillard"][data-bj-meteo-nuit="oui"] .bj-meteo-brume { filter: brightness(0.45); }
 
 /* ---------- Pluie, neige, étoiles (canvas) ---------- */
-:root[data-bj-fond="dynamique"]:not([data-bj-meteo-fond="non"]):is([data-bj-meteo="pluie"], [data-bj-meteo="neige"], [data-bj-meteo="orage"]) .bj-meteo-canvas,
+:root:is([data-bj-fond="dynamique"], [data-bj-fond="paysage"]):not([data-bj-meteo-fond="non"]):is([data-bj-meteo="pluie"], [data-bj-meteo="neige"], [data-bj-meteo="orage"]) .bj-meteo-canvas,
 :root[data-bj-fond="dynamique"]:not([data-bj-meteo-fond="non"])[data-bj-meteo-nuit="oui"]:is([data-bj-meteo="clair"], [data-bj-meteo="voile"]) .bj-meteo-canvas {
     opacity: 1;
 }
@@ -2239,7 +2242,7 @@ body.customization-active .draggable-item {
     background: radial-gradient(ellipse at 30% 0%, rgba(235, 240, 255, 0.85), rgba(200, 210, 255, 0.25) 45%, transparent 75%);
 }
 
-:root[data-bj-fond="dynamique"]:not([data-bj-meteo-fond="non"])[data-bj-meteo="orage"] .bj-meteo-eclair {
+:root:is([data-bj-fond="dynamique"], [data-bj-fond="paysage"]):not([data-bj-meteo-fond="non"])[data-bj-meteo="orage"] .bj-meteo-eclair {
     animation: bj-eclair 11s linear infinite;
 }
 
@@ -2377,4 +2380,66 @@ body.customization-active .draggable-item {
     :root[data-bj-meteo="orage"] .bj-meteo-eclair {
         animation: none !important;
     }
+}
+
+/* ============================================================
+   FOND « PAYSAGE » (js/ui/paysage.js)
+   ============================================================ */
+.bj-paysage {
+    opacity: 0;
+    transition: opacity 0.8s ease;
+}
+
+.bj-paysage svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+/* Nuages qui traversent le ciel */
+.bj-p-derive {
+    animation: bj-p-derive linear infinite;
+}
+
+@keyframes bj-p-derive {
+    from { transform: translateX(-300px); }
+    to { transform: translateX(1500px); }
+}
+
+/* Étoiles qui scintillent */
+.bj-p-etoiles {
+    animation: bj-p-scintille 4s ease-in-out infinite alternate;
+}
+
+@keyframes bj-p-scintille {
+    from { opacity: 0.55; }
+    to { opacity: 1; }
+}
+
+/* Halo du soleil qui respire doucement */
+.bj-p-soleil {
+    animation: bj-p-halo 10s ease-in-out infinite alternate;
+}
+
+@keyframes bj-p-halo {
+    to { opacity: 0.85; }
+}
+
+/* Fenêtres du cabinet allumées le soir */
+.bj-p-fenetre-allumee {
+    filter: drop-shadow(0 0 6px rgba(255, 200, 100, 0.9));
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .bj-p-derive,
+    .bj-p-etoiles,
+    .bj-p-soleil {
+        animation: none;
+    }
+}
+
+/* Neige et brouillard donnent un fond très clair : on l'assombrit un peu de plus
+   pour que le texte blanc des widgets reste lisible */
+:root:is([data-bj-fond="dynamique"], [data-bj-fond="paysage"]):not([data-bj-meteo-fond="non"]):is([data-bj-meteo="neige"], [data-bj-meteo="brouillard"]) .bj-fond-voile {
+    opacity: calc(1.14 - var(--bj-luminosite));
 }

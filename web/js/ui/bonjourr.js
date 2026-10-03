@@ -10,12 +10,13 @@
    ============================================================ */
 
 import { getWeekNumber } from '../planning/clock.js';
+import { majPaysage } from './paysage.js';
 
 export const CLE_OPTIONS = "bj-apparence";
 export const CLE_IMAGE = "bj-fond-image";
 
 export const DEFAUTS = Object.freeze({
-    fond: "dynamique",          // dynamique | cabinet | image | uni
+    fond: "dynamique",          // dynamique | paysage | cabinet | image | uni
     couleur: "#24414f",
     flou: 0,                    // px
     luminosite: 85,             // % (100 = fond non assombri)
@@ -33,7 +34,7 @@ export const DEFAUTS = Object.freeze({
     })
 });
 
-const FONDS = ["dynamique", "cabinet", "image", "uni"];
+const FONDS = ["dynamique", "paysage", "cabinet", "image", "uni"];
 const HORLOGES = ["numerique", "analogique"];
 
 /* Proverbes et auteurs du domaine public */
@@ -180,7 +181,10 @@ export function majHorloge(date = new Date(), options = etat.options, doc = docu
     if (sal) sal.textContent = salutation(date, options.nom);
 
     const phase = phaseDuJour(date);
-    if (doc.documentElement.dataset.bjPhase !== phase) doc.documentElement.dataset.bjPhase = phase;
+    if (doc.documentElement.dataset.bjPhase !== phase) {
+        doc.documentElement.dataset.bjPhase = phase;
+        majPaysage(doc);
+    }
 }
 
 export function afficherCitation(date = new Date(), decalage = 0, doc = document) {
@@ -245,6 +249,9 @@ export function appliquerOptions(options, doc = document, stockage = globalThis.
             el.classList.toggle("bj-widget-masque", !visible);
         });
     }
+
+    // Fond « Paysage » : décor redessiné selon le moment et la météo
+    majPaysage(doc);
 }
 
 /* ------------------------------------------------------------
@@ -317,7 +324,7 @@ function remplirReglages(doc = document) {
         el.checked = o.widgets[el.dataset.bjWidget] !== false;
     });
     doc.querySelectorAll("[data-si-fond]").forEach(el => {
-        el.classList.toggle("hidden", el.dataset.siFond !== o.fond);
+        el.classList.toggle("hidden", !el.dataset.siFond.split(" ").includes(o.fond));
     });
 }
 

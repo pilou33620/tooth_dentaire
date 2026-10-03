@@ -13,6 +13,7 @@
 import { api, setDocument, getDocument } from '../core/api.js';
 import { escapeHtml } from '../core/utils.js';
 import { phaseDuJour } from './bonjourr.js';
+import { majPaysage } from './paysage.js';
 
 export const CATEGORIES = ["clair", "voile", "nuageux", "couvert", "brouillard", "pluie", "neige", "orage"];
 export const INTERVALLE = 10 * 60 * 1000;   // le serveur garde de toute façon 10 min en cache
@@ -225,9 +226,13 @@ export function appliquerMeteo(meteo, doc = document, date = new Date()) {
         zone.classList.toggle("hidden", !valide);
     }
 
-    // Particules seulement quand le fond « selon l'heure » est affiché avec la météo
-    const actif = racine.dataset.bjFond === "dynamique" && racine.dataset.bjMeteoFond !== "non";
-    const spec = valide && actif ? particulesPour(meteo.categorie, meteo.intensite, nuit) : null;
+    // Particules seulement avec les fonds « selon l'heure » ou « paysage » et la météo activée.
+    // Le paysage dessine lui-même ses étoiles : on n'y garde que la pluie et la neige.
+    const fond = racine.dataset.bjFond;
+    const actif = (fond === "dynamique" || fond === "paysage") && racine.dataset.bjMeteoFond !== "non";
+    let spec = valide && actif ? particulesPour(meteo.categorie, meteo.intensite, nuit) : null;
+    if (spec && fond === "paysage" && spec.type === "etoiles") spec = null;
+    majPaysage(doc);
     demarrerAnimation(doc.getElementById("bj-meteo-canvas"), spec);
 }
 
