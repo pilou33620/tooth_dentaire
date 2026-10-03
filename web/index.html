@@ -29,6 +29,12 @@
             <span class="bj-blob bj-blob-2"></span>
             <span class="bj-blob bj-blob-3"></span>
         </div>
+        <!-- Météo (fond « selon l'heure » seulement) : soleil, nuages, brume, éclairs, pluie / neige / étoiles -->
+        <div class="bj-meteo-soleil"></div>
+        <div class="bj-meteo-nuages"><span></span><span></span><span></span><span></span></div>
+        <div class="bj-meteo-brume"><span></span><span></span></div>
+        <canvas id="bj-meteo-canvas" class="bj-meteo-canvas"></canvas>
+        <div class="bj-meteo-eclair"></div>
         <div class="bj-fond-image"></div>
         <!-- L'animation du cabinet n'est chargée que si elle est choisie comme fond (Réglages > Apparence) -->
         <div id="background-animation">
@@ -103,7 +109,10 @@
                             <circle class="bj-axe" cx="50" cy="50" r="2.2"/>
                         </svg>
                     </div>
-                    <p id="bj-date" class="bj-date"></p>
+                    <div class="bj-date-ligne">
+                        <p id="bj-date" class="bj-date"></p>
+                        <span id="bj-meteo" class="bj-meteo hidden"></span>
+                    </div>
                     <h1 id="bj-salutation" class="bj-salutation">Bonjour</h1>
                 </div>
 
@@ -1906,6 +1915,7 @@
                             <option value="uni">Couleur unie</option>
                         </select>
                     </div>
+                    <label class="bj-interrupteur" data-si-fond="dynamique"><input type="checkbox" id="bj-opt-meteo-fond"><span>Le fond suit aussi la météo</span></label>
                     <div class="bj-champ" data-si-fond="image">
                         <label for="bj-opt-image">Image</label>
                         <div class="bj-ligne">
@@ -1944,6 +1954,19 @@
                         <input type="text" id="bj-opt-nom" class="input" placeholder="ex. l'équipe" maxlength="40">
                     </div>
                     <label class="bj-interrupteur"><input type="checkbox" id="bj-opt-citation"><span>Citation du jour</span></label>
+
+                    <h4 class="bj-sous-titre">Météo <small>même commune pour tous les postes</small></h4>
+                    <label class="bj-interrupteur"><input type="checkbox" id="bj-opt-meteo-texte"><span>Afficher la température</span></label>
+                    <div class="bj-ligne">
+                        <input type="text" id="bj-meteo-recherche" class="input" placeholder="Commune du cabinet ou « lat, lon »" autocomplete="off" aria-label="Commune du cabinet">
+                        <button type="button" id="bj-meteo-chercher" class="btn btn-small">Chercher</button>
+                    </div>
+                    <ul id="bj-meteo-resultats" class="bj-resultats"></ul>
+                    <div class="bj-ligne">
+                        <p id="bj-meteo-etat" class="bj-aide"></p>
+                        <button type="button" id="bj-meteo-retirer" class="btn btn-small hidden">Retirer</button>
+                    </div>
+                    <p class="bj-aide">Prévisions : MET Norway · communes : Base Adresse Nationale. Seule la position de la commune est envoyée.</p>
 
                     <h4 class="bj-sous-titre">Widgets affichés</h4>
                     <label class="bj-interrupteur"><input type="checkbox" data-bj-widget="planning"><span>Planning binômes</span></label>

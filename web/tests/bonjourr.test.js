@@ -83,6 +83,14 @@ describe('réglages d\'apparence', () => {
         expect(o.couleur).toBe(DEFAUTS.couleur);
     });
 
+    test('météo sur le fond et température : actives par défaut, désactivables', () => {
+        expect(normaliserOptions({})).toMatchObject({ meteoFond: true, meteoTexte: true });
+        expect(normaliserOptions({ meteoFond: false, meteoTexte: 'non' })).toMatchObject({ meteoFond: false, meteoTexte: true });
+        appliquerOptions(normaliserOptions({ meteoFond: false, meteoTexte: false }));
+        expect(document.documentElement.dataset.bjMeteoFond).toBe('non');
+        expect(document.documentElement.dataset.bjMeteoTexte).toBe('non');
+    });
+
     test('le nom est nettoyé et limité', () => {
         expect(normaliserOptions({ nom: '   l\'équipe  ' }).nom).toBe('l\'équipe');
         expect(normaliserOptions({ nom: 'x'.repeat(100) }).nom).toHaveLength(40);

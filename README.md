@@ -63,6 +63,15 @@ cabinet, image personnelle ou couleur unie), flou et luminosité du fond, horlog
 numérique ou analogique, taille, secondes, salutation et nom, citation, widgets affichés.
 `Échap` ferme la fenêtre ouverte.
 
+**Météo** : avec le fond « selon l'heure », le ciel suit aussi le temps qu'il fait
+(soleil, nuages, brouillard, pluie, neige, orage, étoiles la nuit) et la température
+s'affiche à côté de la date. La commune du cabinet se choisit dans Réglages > Apparence
+> Météo (la même pour tous les postes). C'est le **serveur** qui interroge
+[MET Norway](https://api.met.no) (gratuit, usage professionnel autorisé, sans clé),
+au plus une fois toutes les 10 minutes ; la recherche de commune utilise la
+[Base Adresse Nationale](https://adresse.data.gouv.fr). Seule la position de la
+commune quitte le réseau du cabinet. Sans internet, le fond suit simplement l'heure.
+
 Widgets partagés entre tous les postes (enregistrés en base) :
 - **Notes de l'équipe** : petits messages (`**gras**`, tirets en puces), épinglables,
   effaçables avec « Annuler » ;
@@ -100,6 +109,7 @@ serveur.py            serveur HTTP + API JSON (bibliothèque standard)
 python/
   base.py             base SQLite (schéma, lecture, écritures, documents, contacts)
   exports.py          exports Excel (openpyxl)
+  meteo.py            météo du fond (MET Norway) et recherche de commune (BAN)
   migration.py        reprise de l'ancienne application
   leveldb_lecteur.py  lecture du stockage navigateur de l'ancienne appli
 web/                  interface (HTML / CSS / JavaScript, sans framework)
@@ -127,6 +137,8 @@ donnees/              base et configuration — non versionné
 | POST | `/api/export/stock`, `liste-courses`, `consommation`, `chirurgie` | exports Excel (base64) |
 | GET / POST | `/api/base` | chemin de la base (changement : poste serveur seulement) |
 | GET | `/api/info` | version et adresse réseau |
+| GET | `/api/meteo` | météo actuelle de la commune du cabinet (cache 10 min) |
+| GET | `/api/meteo/communes?q=` | recherche de commune (ou « lat, lon ») |
 
 ## Feuille de route
 

@@ -63,6 +63,7 @@ if DOSSIER_PYTHON not in sys.path:
 
 import base                                   # noqa: E402
 import exports                                # noqa: E402
+import meteo                                  # noqa: E402
 
 # Origines acceptees pour les requetes qui modifient les donnees (CSRF) :
 # localhost et les adresses des reseaux prives (postes du cabinet).
@@ -259,7 +260,7 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
             self._json(resultat)
         except base.ErreurDonnees as exc:
             self._json({"status": "error", "message": str(exc)}, 400)
-        except exports.ExportIndisponible as exc:
+        except (exports.ExportIndisponible, meteo.MeteoIndisponible) as exc:
             self._json({"status": "error", "message": str(exc)}, 503)
         except Exception as exc:                          # noqa: BLE001
             traceback.print_exc()
@@ -286,6 +287,10 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
         if route.startswith("/api/documents/"):
             cle = route[len("/api/documents/"):]
             return self._executer(lambda: {"valeur": base.lire_document(cle)})
+        if route == "/api/meteo":
+            return self._executer(lambda: meteo.meteo_actuelle(base.lire_document("meteo_lieu")))
+        if route == "/api/meteo/communes":
+            return self._executer(lambda: {"communes": meteo.chercher_communes(q.get("q", ""))})
         if route == "/api/base":
             return self._executer(lambda: {
                 "chemin": base.CHEMIN_BASE,

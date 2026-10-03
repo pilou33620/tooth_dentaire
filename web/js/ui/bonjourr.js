@@ -25,6 +25,8 @@ export const DEFAUTS = Object.freeze({
     salutation: true,
     nom: "",
     citation: true,
+    meteoFond: true,            // le fond « selon l'heure » suit aussi la météo
+    meteoTexte: true,           // température et temps à côté de la date
     widgets: Object.freeze({
         planning: true, taches: true, ruptures: true,
         notes: true, checklist: true, minuteurs: true
@@ -75,6 +77,8 @@ export function normaliserOptions(brut) {
         salutation: typeof o.salutation === "boolean" ? o.salutation : DEFAUTS.salutation,
         nom: typeof o.nom === "string" ? o.nom.trim().slice(0, 40) : DEFAUTS.nom,
         citation: typeof o.citation === "boolean" ? o.citation : DEFAUTS.citation,
+        meteoFond: typeof o.meteoFond === "boolean" ? o.meteoFond : DEFAUTS.meteoFond,
+        meteoTexte: typeof o.meteoTexte === "boolean" ? o.meteoTexte : DEFAUTS.meteoTexte,
         widgets: Object.fromEntries(
             Object.keys(DEFAUTS.widgets).map(nom => [nom, w[nom] !== false]))
     };
@@ -191,6 +195,8 @@ export function afficherCitation(date = new Date(), decalage = 0, doc = document
 export function appliquerOptions(options, doc = document, stockage = globalThis.localStorage) {
     const racine = doc.documentElement;
     racine.dataset.bjFond = options.fond;
+    racine.dataset.bjMeteoFond = options.meteoFond ? "oui" : "non";
+    racine.dataset.bjMeteoTexte = options.meteoTexte ? "oui" : "non";
     racine.style.setProperty("--bj-flou", `${options.flou}px`);
     // Léger zoom du fond flouté pour que ses bords ne laissent pas voir de liseré
     racine.style.setProperty("--bj-echelle", String(1 + options.flou / 200));
@@ -286,6 +292,7 @@ const etat = {
 function definir(options) {
     etat.options = ecrireOptions(options);
     appliquerOptions(etat.options);
+    window.dispatchEvent(new CustomEvent("bj-apparence", { detail: etat.options }));
     majHorloge(new Date(), etat.options);
     remplirReglages();
 }
@@ -304,6 +311,8 @@ function remplirReglages(doc = document) {
     coche("bj-opt-secondes", o.secondes);
     coche("bj-opt-salutation", o.salutation);
     coche("bj-opt-citation", o.citation);
+    coche("bj-opt-meteo-fond", o.meteoFond);
+    coche("bj-opt-meteo-texte", o.meteoTexte);
     doc.querySelectorAll("[data-bj-widget]").forEach(el => {
         el.checked = o.widgets[el.dataset.bjWidget] !== false;
     });
@@ -326,6 +335,8 @@ function brancherReglages(doc = document) {
     sur("bj-opt-secondes", "change", e => maj({ secondes: e.target.checked }));
     sur("bj-opt-salutation", "change", e => maj({ salutation: e.target.checked }));
     sur("bj-opt-citation", "change", e => maj({ citation: e.target.checked }));
+    sur("bj-opt-meteo-fond", "change", e => maj({ meteoFond: e.target.checked }));
+    sur("bj-opt-meteo-texte", "change", e => maj({ meteoTexte: e.target.checked }));
     doc.querySelectorAll("[data-bj-widget]").forEach(el => {
         el.addEventListener("change", () => {
             maj({ widgets: { ...etat.options.widgets, [el.dataset.bjWidget]: el.checked } });

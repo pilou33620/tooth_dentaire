@@ -68,6 +68,8 @@ DOCUMENTS_DEFAUT = {
         "jour": "",
         "fait": {},
     },
+    # Commune du cabinet pour la météo du fond (vide : pas de météo)
+    "meteo_lieu": {"nom": "", "lat": None, "lon": None},
     "minuteurs": {
         "actifs": [],
         "preselections": [

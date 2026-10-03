@@ -2130,3 +2130,251 @@ body.customization-active .draggable-item {
 .bj select.input {
     color: var(--bj-fenetre-texte);
 }
+
+/* ============================================================
+   MÉTÉO SUR LE FOND (js/ui/meteo.js)
+   Uniquement avec le fond « selon l'heure » et l'option « le fond suit
+   aussi la météo ». Beau temps : couleurs de l'heure + soleil ou étoiles ;
+   mauvais temps : le ciel se couvre et prend le dessus sur l'heure.
+   ============================================================ */
+
+.bj-meteo-soleil,
+.bj-meteo-nuages,
+.bj-meteo-brume,
+.bj-meteo-canvas,
+.bj-meteo-eclair {
+    opacity: 0;
+    transition: opacity 1.2s ease;
+    pointer-events: none;
+}
+
+.bj-meteo-canvas {
+    width: 100%;
+    height: 100%;
+}
+
+/* Le fond météo n'est actif qu'avec le dégradé selon l'heure */
+:root[data-bj-fond="dynamique"]:not([data-bj-meteo-fond="non"]) {
+    --bj-meteo-actif: 1;
+}
+
+/* ---------- Soleil (jour, beau temps) ---------- */
+.bj-meteo-soleil {
+    background:
+        radial-gradient(circle at 82% 10%, rgba(255, 246, 214, 0.75) 0, rgba(255, 228, 160, 0.35) 9vmax, transparent 30vmax);
+    mix-blend-mode: screen;
+    animation: bj-soleil 14s ease-in-out infinite alternate;
+}
+
+@keyframes bj-soleil {
+    to { filter: brightness(1.15); transform: scale(1.04); }
+}
+
+:root[data-bj-fond="dynamique"]:not([data-bj-meteo-fond="non"])[data-bj-meteo-nuit="non"]:is([data-bj-meteo="clair"], [data-bj-meteo="voile"]) .bj-meteo-soleil {
+    opacity: 1;
+}
+
+:root[data-bj-fond="dynamique"]:not([data-bj-meteo-fond="non"])[data-bj-meteo-nuit="non"][data-bj-meteo="nuageux"] .bj-meteo-soleil {
+    opacity: 0.55;
+}
+
+/* ---------- Nuages ---------- */
+.bj-meteo-nuages span {
+    position: absolute;
+    border-radius: 50%;
+    background: radial-gradient(ellipse at center, var(--bj-nuage, rgba(255, 255, 255, 0.55)) 0%, transparent 68%);
+    filter: blur(18px);
+    will-change: transform;
+}
+
+.bj-meteo-nuages span:nth-child(1) { width: 70vw; height: 26vh; top: 4%;  left: -20%; animation: bj-nuage 140s linear infinite; }
+.bj-meteo-nuages span:nth-child(2) { width: 55vw; height: 22vh; top: 18%; left: 30%;  animation: bj-nuage 180s linear infinite -60s; }
+.bj-meteo-nuages span:nth-child(3) { width: 80vw; height: 30vh; top: 38%; left: -40%; animation: bj-nuage 220s linear infinite -120s; }
+.bj-meteo-nuages span:nth-child(4) { width: 60vw; height: 24vh; top: 62%; left: 10%;  animation: bj-nuage 200s linear infinite -30s; }
+
+@keyframes bj-nuage {
+    from { transform: translateX(-25vw); }
+    to   { transform: translateX(110vw); }
+}
+
+:root[data-bj-fond="dynamique"]:not([data-bj-meteo-fond="non"])[data-bj-meteo="voile"] .bj-meteo-nuages { opacity: 0.45; }
+:root[data-bj-fond="dynamique"]:not([data-bj-meteo-fond="non"])[data-bj-meteo="nuageux"] .bj-meteo-nuages { opacity: 0.8; }
+:root[data-bj-fond="dynamique"]:not([data-bj-meteo-fond="non"]):is([data-bj-meteo="couvert"], [data-bj-meteo="pluie"], [data-bj-meteo="neige"], [data-bj-meteo="orage"]) .bj-meteo-nuages { opacity: 1; }
+
+:root:is([data-bj-meteo="voile"], [data-bj-meteo="nuageux"]) .bj-meteo-nuages span:nth-child(n+3) { display: none; }
+:root:is([data-bj-meteo="couvert"], [data-bj-meteo="pluie"]) { --bj-nuage: rgba(205, 214, 224, 0.5); }
+:root[data-bj-meteo="orage"] { --bj-nuage: rgba(120, 128, 150, 0.6); }
+:root[data-bj-meteo="neige"] { --bj-nuage: rgba(240, 245, 250, 0.6); }
+:root[data-bj-meteo-nuit="oui"] { --bj-nuage: rgba(150, 165, 195, 0.28); }
+
+/* ---------- Brouillard ---------- */
+.bj-meteo-brume span {
+    position: absolute;
+    left: -20%;
+    width: 140%;
+    height: 45%;
+    background: linear-gradient(180deg, transparent, rgba(235, 240, 245, 0.55) 45%, transparent);
+    filter: blur(28px);
+    animation: bj-brume 60s ease-in-out infinite alternate;
+}
+
+.bj-meteo-brume span:nth-child(1) { top: 20%; }
+.bj-meteo-brume span:nth-child(2) { top: 55%; animation-duration: 80s; animation-direction: alternate-reverse; }
+
+@keyframes bj-brume {
+    to { transform: translateX(10%); }
+}
+
+:root[data-bj-fond="dynamique"]:not([data-bj-meteo-fond="non"])[data-bj-meteo="brouillard"] .bj-meteo-brume { opacity: 1; }
+:root[data-bj-meteo="brouillard"][data-bj-meteo-nuit="oui"] .bj-meteo-brume { filter: brightness(0.45); }
+
+/* ---------- Pluie, neige, étoiles (canvas) ---------- */
+:root[data-bj-fond="dynamique"]:not([data-bj-meteo-fond="non"]):is([data-bj-meteo="pluie"], [data-bj-meteo="neige"], [data-bj-meteo="orage"]) .bj-meteo-canvas,
+:root[data-bj-fond="dynamique"]:not([data-bj-meteo-fond="non"])[data-bj-meteo-nuit="oui"]:is([data-bj-meteo="clair"], [data-bj-meteo="voile"]) .bj-meteo-canvas {
+    opacity: 1;
+}
+
+/* ---------- Éclairs ---------- */
+.bj-meteo-eclair {
+    background: radial-gradient(ellipse at 30% 0%, rgba(235, 240, 255, 0.85), rgba(200, 210, 255, 0.25) 45%, transparent 75%);
+}
+
+:root[data-bj-fond="dynamique"]:not([data-bj-meteo-fond="non"])[data-bj-meteo="orage"] .bj-meteo-eclair {
+    animation: bj-eclair 11s linear infinite;
+}
+
+@keyframes bj-eclair {
+    0%, 61%, 63.5%, 66%, 100% { opacity: 0; }
+    62% { opacity: 0.9; }
+    64.5% { opacity: 0.6; }
+    65% { opacity: 1; }
+}
+
+/* ---------- Couleurs du ciel par mauvais temps ---------- */
+:root[data-bj-fond="dynamique"]:not([data-bj-meteo-fond="non"])[data-bj-meteo="couvert"] {
+    --bj-ciel: linear-gradient(165deg, #4b5d6e 0%, #6f8494 55%, #94a6b3 100%);
+    --bj-blob-1: #b9c7d3; --bj-blob-2: #8ea2b2; --bj-blob-3: #d6dee5;
+}
+:root[data-bj-fond="dynamique"]:not([data-bj-meteo-fond="non"])[data-bj-meteo="pluie"] {
+    --bj-ciel: linear-gradient(165deg, #2f3d4b 0%, #4a5c6b 55%, #687a87 100%);
+    --bj-blob-1: #7f93a5; --bj-blob-2: #55697a; --bj-blob-3: #9aabb8;
+}
+:root[data-bj-fond="dynamique"]:not([data-bj-meteo-fond="non"])[data-bj-meteo="orage"] {
+    --bj-ciel: linear-gradient(165deg, #1b1f2c 0%, #33384b 55%, #4a4e62 100%);
+    --bj-blob-1: #5b5f86; --bj-blob-2: #3a3e5a; --bj-blob-3: #7a6f93;
+}
+:root[data-bj-fond="dynamique"]:not([data-bj-meteo-fond="non"])[data-bj-meteo="neige"] {
+    --bj-ciel: linear-gradient(165deg, #6f849a 0%, #98aabd 55%, #c3d0dc 100%);
+    --bj-blob-1: #e8eef4; --bj-blob-2: #b8c8d8; --bj-blob-3: #ffffff;
+}
+:root[data-bj-fond="dynamique"]:not([data-bj-meteo-fond="non"])[data-bj-meteo="brouillard"] {
+    --bj-ciel: linear-gradient(165deg, #66737f 0%, #8d98a2 55%, #b3bcc3 100%);
+    --bj-blob-1: #d5dbe0; --bj-blob-2: #a9b3bb; --bj-blob-3: #e6eaed;
+}
+
+/* La nuit, le mauvais temps reste sombre */
+:root[data-bj-fond="dynamique"]:not([data-bj-meteo-fond="non"])[data-bj-meteo-nuit="oui"]:is([data-bj-meteo="couvert"], [data-bj-meteo="brouillard"]) {
+    --bj-ciel: linear-gradient(165deg, #10151d 0%, #1e2630 55%, #2d3641 100%);
+    --bj-blob-1: #34404e; --bj-blob-2: #26303c; --bj-blob-3: #3e4a58;
+}
+:root[data-bj-fond="dynamique"]:not([data-bj-meteo-fond="non"])[data-bj-meteo-nuit="oui"][data-bj-meteo="pluie"] {
+    --bj-ciel: linear-gradient(165deg, #0c1219 0%, #18212c 55%, #26313d 100%);
+    --bj-blob-1: #2c3a4a; --bj-blob-2: #1e2935; --bj-blob-3: #364657;
+}
+:root[data-bj-fond="dynamique"]:not([data-bj-meteo-fond="non"])[data-bj-meteo-nuit="oui"][data-bj-meteo="orage"] {
+    --bj-ciel: linear-gradient(165deg, #07090f 0%, #12141f 55%, #1e2030 100%);
+}
+:root[data-bj-fond="dynamique"]:not([data-bj-meteo-fond="non"])[data-bj-meteo-nuit="oui"][data-bj-meteo="neige"] {
+    --bj-ciel: linear-gradient(165deg, #182231 0%, #2a3749 55%, #3f4e63 100%);
+    --bj-blob-1: #5a6d86; --bj-blob-2: #3c4c63; --bj-blob-3: #7d90a8;
+}
+
+/* ---------- Température à côté de la date ---------- */
+.bj-date-ligne {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 6px 14px;
+    margin-top: 10px;
+}
+
+.bj-date-ligne .bj-date {
+    margin-top: 0;
+}
+
+.bj-meteo {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 1.05rem;
+    font-weight: 500;
+    color: var(--bj-texte-doux);
+    cursor: default;
+}
+
+.bj-meteo .bj-ico {
+    width: 22px;
+    height: 22px;
+}
+
+:root[data-bj-meteo-texte="non"] .bj-meteo {
+    display: none;
+}
+
+/* ---------- Réglages : résultats de la recherche de commune ---------- */
+.bj-resultats {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.bj-resultats:empty {
+    display: none;
+}
+
+.bj-resultat {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    width: 100%;
+    padding: 7px 10px;
+    border: 1px solid var(--bj-trait);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.9);
+    color: var(--bj-fenetre-texte);
+    font: 0.9rem var(--bj-police);
+    text-align: left;
+    cursor: pointer;
+}
+
+.bj-resultat:hover {
+    border-color: var(--bj-accent);
+    background: #fff;
+}
+
+.bj-resultat small {
+    font-size: 0.76rem;
+    color: var(--bj-fenetre-doux);
+}
+
+.bj-sous-titre small {
+    margin-left: 6px;
+    font-weight: 400;
+    opacity: 0.8;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .bj-meteo-soleil,
+    .bj-meteo-nuages span,
+    .bj-meteo-brume span {
+        animation: none;
+    }
+
+    :root[data-bj-meteo="orage"] .bj-meteo-eclair {
+        animation: none !important;
+    }
+}
