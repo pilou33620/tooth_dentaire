@@ -53,6 +53,29 @@ DOCUMENTS_DEFAUT = {
     "rappel_dosimetres": {"nextTime": None},
     "record_jeu": 0,
     "positions_interface": {},
+    # Accueil : notes partagées, checklist du jour, minuteurs
+    "notes": {"items": []},
+    "checklist": {
+        "modele": [
+            {"id": "o1", "moment": "ouverture", "libelle": "Purge des circuits d'eau des units"},
+            {"id": "o2", "moment": "ouverture", "libelle": "Test de l'autoclave (Bowie-Dick / Hélix)"},
+            {"id": "o3", "moment": "ouverture", "libelle": "Mise en route aspiration et compresseur"},
+            {"id": "f1", "moment": "fermeture", "libelle": "Désinfection des fauteuils et surfaces"},
+            {"id": "f2", "moment": "fermeture", "libelle": "Nettoyage des aspirations"},
+            {"id": "f3", "moment": "fermeture", "libelle": "Évacuation des DASRI"},
+            {"id": "f4", "moment": "fermeture", "libelle": "Arrêt aspiration et compresseur"},
+        ],
+        "jour": "",
+        "fait": {},
+    },
+    "minuteurs": {
+        "actifs": [],
+        "preselections": [
+            {"libelle": "Bain à ultrasons", "minutes": 10},
+            {"libelle": "Trempage", "minutes": 15},
+            {"libelle": "Séchage", "minutes": 20},
+        ],
+    },
 }
 
 CHAMPS_CONTACT = ("nom", "prenom", "entreprise", "email", "tel_fixe",

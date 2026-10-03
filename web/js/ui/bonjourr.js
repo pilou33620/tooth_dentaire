@@ -25,7 +25,10 @@ export const DEFAUTS = Object.freeze({
     salutation: true,
     nom: "",
     citation: true,
-    widgets: Object.freeze({ planning: true, taches: true, ruptures: true })
+    widgets: Object.freeze({
+        planning: true, taches: true, ruptures: true,
+        notes: true, checklist: true, minuteurs: true
+    })
 });
 
 const FONDS = ["dynamique", "cabinet", "image", "uni"];
@@ -72,11 +75,8 @@ export function normaliserOptions(brut) {
         salutation: typeof o.salutation === "boolean" ? o.salutation : DEFAUTS.salutation,
         nom: typeof o.nom === "string" ? o.nom.trim().slice(0, 40) : DEFAUTS.nom,
         citation: typeof o.citation === "boolean" ? o.citation : DEFAUTS.citation,
-        widgets: {
-            planning: w.planning !== false,
-            taches: w.taches !== false,
-            ruptures: w.ruptures !== false
-        }
+        widgets: Object.fromEntries(
+            Object.keys(DEFAUTS.widgets).map(nom => [nom, w[nom] !== false]))
     };
 }
 

@@ -68,7 +68,9 @@ describe('réglages d\'apparence', () => {
         const o = normaliserOptions(null);
         expect(o.fond).toBe(DEFAUTS.fond);
         expect(o.horloge).toBe('numerique');
-        expect(o.widgets).toEqual({ planning: true, taches: true, ruptures: true });
+        expect(o.widgets).toEqual({
+            planning: true, taches: true, ruptures: true, notes: true, checklist: true, minuteurs: true
+        });
     });
 
     test('les valeurs inconnues sont rejetées et les nombres bornés', () => {
@@ -87,8 +89,10 @@ describe('réglages d\'apparence', () => {
     });
 
     test('un widget n\'est masqué que s\'il est explicitement décoché', () => {
-        const o = normaliserOptions({ widgets: { taches: false, ruptures: 'oui' } });
-        expect(o.widgets).toEqual({ planning: true, taches: false, ruptures: true });
+        const o = normaliserOptions({ widgets: { taches: false, ruptures: 'oui', minuteurs: false, inconnu: false } });
+        expect(o.widgets).toEqual({
+            planning: true, taches: false, ruptures: true, notes: true, checklist: true, minuteurs: false
+        });
     });
 
     test('écriture puis lecture redonnent les mêmes réglages', () => {

@@ -55,6 +55,29 @@
                 <button id="btn-alertes-dosi" class="btn btn-red hidden" title="Rappel Dosimètres">⚠️ Alerte Dosimètres</button>
             </aside>
 
+            <!-- ============ MINUTEURS (coin haut droit) ============ -->
+            <aside id="minuteurs" class="bj-minuteurs bj-widget" data-widget="minuteurs" aria-label="Minuteurs">
+                <button type="button" id="minuteurs-bouton" class="bj-minuteurs-bouton" aria-expanded="false" aria-controls="minuteurs-panneau">
+                    <svg class="bj-ico" viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9.5 2.5h5M12 2.5V5"/></svg>
+                    <span>Minuteurs</span>
+                    <span id="minuteurs-compte" class="bj-compteur"></span>
+                </button>
+                <div id="minuteurs-actifs" class="bj-minuteurs-actifs" aria-live="polite"></div>
+                <div id="minuteurs-panneau" class="bj-carte bj-minuteurs-panneau hidden">
+                    <div class="bj-carte-titre">
+                        <span>Lancer</span>
+                        <button type="button" id="minuteurs-modifier" class="bj-carte-lien">Modifier</button>
+                    </div>
+                    <div id="minuteurs-preselections" class="bj-puces"></div>
+                    <form id="minuteurs-form" class="bj-minuteurs-form" autocomplete="off">
+                        <input type="text" id="minuteurs-nom" placeholder="Nom (facultatif)" maxlength="40">
+                        <input type="text" id="minuteurs-duree" placeholder="min" inputmode="decimal" aria-label="Durée en minutes" required>
+                        <button type="submit" class="bj-mini bj-mini-plein" aria-label="Lancer le minuteur">▶</button>
+                        <label class="bj-garder"><input type="checkbox" id="minuteurs-garder"> Garder en préréglage</label>
+                    </form>
+                </div>
+            </aside>
+
             <!-- ============ CENTRE : HEURE, SALUTATION, RECHERCHE, LIENS ============ -->
             <section class="bj-centre">
                 <div id="datetime-container" class="bj-heure">
@@ -153,25 +176,66 @@
                     </div>
                 </div>
 
-                <!-- Tâches des assistantes -->
-                <div id="tasks-planning-container" class="bj-widget" data-widget="taches">
-                    <div id="btn-open-tasks" class="bj-carte bj-carte-cliquable" role="button" tabindex="0" title="Cliquez pour modifier les tâches">
-                        <header class="bj-carte-titre"><span>Tâches des assistantes</span></header>
-                        <div id="tasks-preview-content" class="bj-carte-corps">
-                            <!-- Généré par JS -->
+                <!-- Tâches et ruptures empilées dans une même colonne -->
+                <div class="bj-pile">
+                    <!-- Tâches des assistantes -->
+                    <div id="tasks-planning-container" class="bj-widget" data-widget="taches">
+                        <div id="btn-open-tasks" class="bj-carte bj-carte-cliquable" role="button" tabindex="0" title="Cliquez pour modifier les tâches">
+                            <header class="bj-carte-titre"><span>Tâches des assistantes</span></header>
+                            <div id="tasks-preview-content" class="bj-carte-corps">
+                                <!-- Généré par JS -->
+                            </div>
+                            <span class="bj-carte-lien">Modifier les tâches</span>
                         </div>
-                        <span class="bj-carte-lien">Modifier les tâches</span>
+                    </div>
+
+                    <!-- Ruptures / à commander (notes) -->
+                    <div id="postit-wrapper" class="bj-widget" data-widget="ruptures">
+                        <div id="postit-container" class="hidden">
+                            <div id="postit-rupture" class="postit bj-carte">
+                                <div class="postit-title">En rupture 📌</div>
+                                <div class="postit-legend-topright">❌ en rupture · ⚠️ limite (HS)</div>
+                                <ul id="postit-list"></ul>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
-                <!-- Ruptures / à commander (notes) -->
-                <div id="postit-wrapper" class="bj-widget" data-widget="ruptures">
-                    <div id="postit-container" class="hidden">
-                        <div id="postit-rupture" class="postit bj-carte">
-                            <div class="postit-title">En rupture 📌</div>
-                            <div class="postit-legend-topright">❌ en rupture · ⚠️ limite (HS)</div>
-                            <ul id="postit-list"></ul>
+                <!-- Checklist d'ouverture / fermeture -->
+                <div id="checklist-widget" class="bj-widget" data-widget="checklist">
+                    <div class="bj-carte">
+                        <header class="bj-carte-titre">
+                            <span>Checklist</span>
+                            <div id="checklist-onglets" class="bj-segment">
+                                <button type="button" data-moment="ouverture">Ouverture <span class="bj-compte"></span></button>
+                                <button type="button" data-moment="fermeture">Fermeture <span class="bj-compte"></span></button>
+                            </div>
+                        </header>
+                        <div class="bj-progression" aria-hidden="true"><span id="checklist-barre"></span></div>
+                        <ul id="checklist-liste" class="bj-checklist"></ul>
+                        <div class="bj-carte-pied">
+                            <label class="bj-qui">Par
+                                <input type="text" id="checklist-qui" list="checklist-qui-liste" placeholder="votre prénom" maxlength="40" autocomplete="off">
+                            </label>
+                            <datalist id="checklist-qui-liste"></datalist>
+                            <button type="button" id="checklist-modifier" class="bj-carte-lien">Modifier la liste</button>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Notes de l'équipe (partagées entre les postes) -->
+                <div id="notes-widget" class="bj-widget" data-widget="notes">
+                    <div class="bj-carte">
+                        <header class="bj-carte-titre">
+                            <span>Notes de l'équipe</span>
+                            <span id="notes-compte" class="bj-compteur"></span>
+                        </header>
+                        <ul id="notes-liste" class="bj-notes"></ul>
+                        <button type="button" id="notes-annuler" class="bj-carte-lien hidden">Note effacée · Annuler</button>
+                        <form id="notes-form" class="bj-saisie" autocomplete="off">
+                            <input type="text" id="notes-saisie" maxlength="500" placeholder="Écrire une note pour l'équipe…" aria-label="Nouvelle note">
+                            <button type="submit" class="bj-mini bj-mini-plein" aria-label="Ajouter la note">+</button>
+                        </form>
                     </div>
                 </div>
             </section>
@@ -1885,6 +1949,9 @@
                     <label class="bj-interrupteur"><input type="checkbox" data-bj-widget="planning"><span>Planning binômes</span></label>
                     <label class="bj-interrupteur"><input type="checkbox" data-bj-widget="taches"><span>Tâches des assistantes</span></label>
                     <label class="bj-interrupteur"><input type="checkbox" data-bj-widget="ruptures"><span>Ruptures / à commander</span></label>
+                    <label class="bj-interrupteur"><input type="checkbox" data-bj-widget="notes"><span>Notes de l'équipe</span></label>
+                    <label class="bj-interrupteur"><input type="checkbox" data-bj-widget="checklist"><span>Checklist</span></label>
+                    <label class="bj-interrupteur"><input type="checkbox" data-bj-widget="minuteurs"><span>Minuteurs</span></label>
 
                     <div class="bj-ligne bj-ligne-boutons">
                         <button id="settings-btn-customization" class="btn">Déplacer les éléments</button>
@@ -2041,6 +2108,25 @@
                 <div class="dialog-buttons centered" style="margin-top: 20px;">
                     <button id="btn-save-tasks" class="btn btn-green" style="font-size: 1.1em; padding: 10px 30px;">💾 Sauvegarder les tâches</button>
                     <button class="btn" data-close="tasks-overlay">Fermer</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============ DIALOG CHECKLIST (modifier la liste) ============ -->
+    <div id="checklist-overlay" class="overlay hidden">
+        <div class="dialog dialog-checklist">
+            <div class="dialog-titlebar">
+                Checklist d'ouverture et de fermeture
+                <button class="dialog-close" data-close="checklist-overlay" aria-label="Fermer">✕</button>
+            </div>
+            <div class="dialog-body">
+                <p class="bj-aide">Les cases cochées repartent à zéro chaque jour. La liste est la même sur tous les postes.</p>
+                <div id="checklist-editeur" class="bj-editeur"></div>
+                <button type="button" id="checklist-ajouter" class="btn">+ Ajouter une tâche</button>
+                <div class="dialog-buttons">
+                    <button type="button" id="checklist-enregistrer" class="btn btn-blue">Enregistrer</button>
+                    <button type="button" class="btn" data-close="checklist-overlay">Annuler</button>
                 </div>
             </div>
         </div>

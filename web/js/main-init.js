@@ -27,6 +27,9 @@ import { initCustomizationMode } from './ui/customization.js';
 import { initZoomIndicator } from './ui/zoom-indicator.js';
 import { initScreensaver } from './ui/screensaver.js';
 import { initBonjourr } from './ui/bonjourr.js';
+import { initNotes, afficherNotes } from './features/notes.js';
+import { initChecklist, rafraichirChecklist } from './features/checklist.js';
+import { initMinuteurs, rafraichirMinuteurs } from './features/minuteurs.js';
 import { initPostitHover, updatePostitListHeight } from './features/alerts.js';
 import { getStock } from './features/stock.js';
 import { showMessage } from './core/utils.js';
@@ -64,6 +67,10 @@ function rafraichirApresModificationDistante() {
     if (typeof window.updateFauteuilIconStatus === "function") window.updateFauteuilIconStatus();
     if (typeof window.checkFauteuilAlert === "function") window.checkFauteuilAlert();
     if (typeof window.checkDosiAlert === "function") window.checkDosiAlert();
+    // Widgets de l'accueil partagés entre postes (sauf saisie en cours dans l'éditeur)
+    afficherNotes();
+    if (!estOuvert("checklist-overlay")) rafraichirChecklist();
+    rafraichirMinuteurs();
 }
 
 window.addEventListener("donnees-modifiees", rafraichirApresModificationDistante);
@@ -390,4 +397,9 @@ Rechargez la page (F5) une fois le serveur relancé.`);
 
     // --- Gestion des dosimètres ---
     initDosimetres();
+
+    // --- Accueil : notes, checklist du jour, minuteurs ---
+    initNotes();
+    initChecklist();
+    initMinuteurs();
 });

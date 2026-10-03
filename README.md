@@ -63,6 +63,15 @@ cabinet, image personnelle ou couleur unie), flou et luminosité du fond, horlog
 numérique ou analogique, taille, secondes, salutation et nom, citation, widgets affichés.
 `Échap` ferme la fenêtre ouverte.
 
+Widgets partagés entre tous les postes (enregistrés en base) :
+- **Notes de l'équipe** : petits messages (`**gras**`, tirets en puces), épinglables,
+  effaçables avec « Annuler » ;
+- **Checklist du jour** : tâches d'ouverture et de fermeture, remises à zéro chaque
+  jour, avec le prénom et l'heure de chaque coche (« Modifier la liste » pour l'adapter) ;
+- **Minuteurs** (coin haut droit) : préréglages (bain à ultrasons, trempage…) ou durée
+  libre (`10`, `2,5`, `1:30`, `1h20`). Visibles sur tous les postes ; la sonnerie
+  retentit sur le poste qui a lancé le minuteur.
+
 ## Reprise de l'ancienne application (PySide6)
 
 ```bash
@@ -97,6 +106,7 @@ web/                  interface (HTML / CSS / JavaScript, sans framework)
   js/core/api.js      échanges avec le serveur + synchronisation entre postes
   js/ui/bonjourr.js   accueil : horloge, salutation, citation, fond, réglages d'apparence
   css/bonjourr.css    thème de l'interface (chargé après css/style.css)
+  js/features/notes.js, checklist.js, minuteurs.js   widgets partagés de l'accueil
   vendor/             PDF.js (lecture des factures, hors ligne)
 tests/                tests Python (pytest)
 web/tests/            tests JavaScript (Jest)
@@ -112,7 +122,7 @@ donnees/              base et configuration — non versionné
 | POST | `/api/produit`, `/api/stock` | création / mise à jour |
 | DELETE | `/api/produit?reference=`, `/api/stock?reference=&utilisateur=` | suppression |
 | POST | `/api/transaction`, `/api/maintenance`, `/api/historique-prix` | ajout |
-| GET / PUT | `/api/documents/<cle>` | planning, couleurs, tâches, dosimètres, rappels… |
+| GET / PUT | `/api/documents/<cle>` | planning, couleurs, tâches, dosimètres, rappels, notes, checklist, minuteurs… |
 | GET / POST / DELETE | `/api/contacts` | carnet d'adresses |
 | POST | `/api/export/stock`, `liste-courses`, `consommation`, `chirurgie` | exports Excel (base64) |
 | GET / POST | `/api/base` | chemin de la base (changement : poste serveur seulement) |

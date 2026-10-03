@@ -594,25 +594,37 @@ body.bj {
 
 /* ---------- Widgets ---------- */
 .bj-widgets {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(290px, 330px));
     justify-content: center;
-    align-items: flex-start;
+    align-items: start;
     gap: 20px;
     width: 100%;
-    max-width: 1180px;
+    max-width: 1440px;
     margin-top: 4vh;
     position: relative;
 }
 
 .bj-widget {
     position: relative;
-    width: 330px;
-    max-width: 100%;
+    width: 100%;
+    min-width: 0;
     z-index: 10;
 }
 
-.bj-widget-masque {
+.bj-pile {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    min-width: 0;
+}
+
+.bj-pile:not(:has(> .bj-widget:not(.bj-widget-masque))) {
+    display: none;
+}
+
+.bj-widget-masque,
+#minuteurs.bj-widget-masque {
     display: none !important;
 }
 
@@ -791,6 +803,502 @@ body.bj {
 #calendar-preview-content .calendar-preview-table tbody tr:nth-child(even) td {
     position: relative;
     top: -1px;
+}
+
+/* ---------- Éléments communs des widgets ---------- */
+.bj-compteur:not(:empty) {
+    min-width: 20px;
+    padding: 1px 7px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.22);
+    color: #fff;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0;
+    text-align: center;
+}
+
+.bj-vide {
+    list-style: none;
+    padding: 10px 4px;
+    color: var(--bj-texte-doux);
+    font-size: 0.86rem;
+    text-align: center;
+}
+
+.bj-mini {
+    display: inline-grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+    font: 600 0.8rem var(--bj-police);
+    cursor: pointer;
+    flex: none;
+    transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.bj-mini:hover {
+    background: rgba(255, 255, 255, 0.28);
+}
+
+.bj-mini:active {
+    transform: scale(0.92);
+}
+
+.bj-mini-plein {
+    width: 32px;
+    height: 32px;
+    background: rgba(255, 255, 255, 0.9);
+    color: #1b2430;
+    font-size: 1rem;
+}
+
+.bj-mini-plein:hover {
+    background: #fff;
+}
+
+.bj-carte-pied {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+/* Champ de saisie dans une carte de verre */
+.bj-saisie {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 4px 4px 12px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.14);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.bj-saisie input,
+.bj-qui input,
+.bj-minuteurs-form input[type="text"] {
+    flex: 1;
+    min-width: 0;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: #fff;
+    font: 400 0.9rem var(--bj-police);
+}
+
+.bj-saisie input::placeholder,
+.bj-qui input::placeholder,
+.bj-minuteurs-form input::placeholder {
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.bj-saisie:focus-within {
+    background: rgba(0, 0, 0, 0.2);
+    border-color: rgba(255, 255, 255, 0.35);
+}
+
+/* ---------- Notes de l'équipe ---------- */
+.bj-notes {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 290px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.35) transparent;
+}
+
+.bj-note {
+    padding: 8px 10px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid transparent;
+}
+
+.bj-note-epinglee {
+    background: rgba(255, 236, 160, 0.2);
+    border-color: rgba(255, 236, 160, 0.35);
+}
+
+.bj-note-texte {
+    font-size: 0.92rem;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+}
+
+.bj-note-pied {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 4px;
+    min-height: 26px;
+}
+
+.bj-note-age {
+    font-size: 0.74rem;
+    color: var(--bj-texte-doux);
+}
+
+.bj-note-actions {
+    display: flex;
+    gap: 4px;
+    opacity: 0.55;
+    transition: opacity 0.15s ease;
+}
+
+.bj-note:hover .bj-note-actions,
+.bj-note:focus-within .bj-note-actions,
+.bj-note-epinglee .bj-note-actions {
+    opacity: 1;
+}
+
+.bj-note [data-action="epingler"][aria-pressed="false"] {
+    filter: grayscale(1);
+}
+
+@media (hover: none) {
+    .bj-note-actions { opacity: 1; }
+}
+
+/* ---------- Checklist du jour ---------- */
+.bj-progression {
+    height: 4px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.16);
+    overflow: hidden;
+}
+
+.bj-progression span {
+    display: block;
+    height: 100%;
+    width: 0;
+    border-radius: inherit;
+    background: #fff;
+    transition: width 0.4s cubic-bezier(0.3, 0.7, 0.3, 1);
+}
+
+.bj-segment button {
+    white-space: nowrap;
+}
+
+.bj-segment button .bj-compte:not(:empty) {
+    margin-left: 2px;
+    opacity: 0.75;
+    font-weight: 500;
+}
+
+.bj-segment button.bj-complet .bj-compte::after {
+    content: " ✓";
+}
+
+.bj-checklist {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.bj-tache {
+    display: grid;
+    grid-template-columns: 22px 1fr auto;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 7px 6px;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: #fff;
+    font: 400 0.9rem/1.3 var(--bj-police);
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.bj-tache:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.bj-coche {
+    position: relative;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 1.6px solid rgba(255, 255, 255, 0.75);
+    transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.bj-tache.fait .bj-coche {
+    background: #fff;
+    border-color: #fff;
+}
+
+.bj-tache.fait .bj-coche::after {
+    content: "";
+    position: absolute;
+    left: 6px;
+    top: 2.5px;
+    width: 5px;
+    height: 10px;
+    border: solid #1b2430;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+
+.bj-tache.fait .bj-tache-libelle {
+    opacity: 0.62;
+    text-decoration: line-through;
+    text-decoration-color: rgba(255, 255, 255, 0.55);
+}
+
+.bj-tache-detail {
+    font-size: 0.72rem;
+    color: var(--bj-texte-doux);
+    white-space: nowrap;
+}
+
+.bj-qui {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    flex: 1;
+    font-size: 0.78rem;
+    color: var(--bj-texte-doux);
+}
+
+.bj-qui input {
+    max-width: 130px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.14);
+    font-size: 0.82rem;
+}
+
+/* Éditeur de la liste (fenêtre claire) */
+.bj .dialog-checklist {
+    width: min(620px, 96vw);
+}
+
+.bj-editeur {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 12px 0;
+    max-height: 55vh;
+    overflow-y: auto;
+}
+
+.bj-editeur-ligne {
+    display: grid;
+    grid-template-columns: 1fr 140px auto;
+    gap: 8px;
+    align-items: center;
+}
+
+/* ---------- Minuteurs (coin haut droit) ---------- */
+#minuteurs.bj-minuteurs {
+    position: absolute;
+    top: 24px;
+    right: 28px;
+    z-index: 25;
+    width: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+    max-width: 320px;
+}
+
+.bj-minuteurs-bouton {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 14px 7px 11px;
+    border-radius: 999px;
+    border: 1px solid var(--bj-verre-bord);
+    background: var(--bj-verre);
+    backdrop-filter: var(--bj-verre-flou);
+    -webkit-backdrop-filter: var(--bj-verre-flou);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+    color: #fff;
+    font: 500 0.88rem var(--bj-police);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.bj-minuteurs-bouton:hover,
+.bj-minuteurs-bouton[aria-expanded="true"] {
+    background: var(--bj-verre-survol);
+}
+
+.bj-minuteurs-bouton .bj-ico {
+    width: 19px;
+    height: 19px;
+}
+
+.bj-minuteurs-actifs {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+}
+
+.bj-minuteur {
+    position: relative;
+    display: grid;
+    grid-template-columns: auto auto auto;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 6px 6px 14px;
+    border-radius: 16px;
+    overflow: hidden;
+    background: var(--bj-verre);
+    border: 1px solid var(--bj-verre-bord);
+    backdrop-filter: var(--bj-verre-flou);
+    -webkit-backdrop-filter: var(--bj-verre-flou);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+    color: #fff;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+}
+
+/* Avancement : une barre fine en bas de la pastille */
+.bj-minuteur::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    height: 3px;
+    width: var(--avance, 0%);
+    background: rgba(255, 255, 255, 0.85);
+    transition: width 1s linear;
+}
+
+.bj-minuteur-nom {
+    font-size: 0.84rem;
+    font-weight: 500;
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.bj-minuteur-temps {
+    font: 300 1.35rem/1 var(--bj-police-titre);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+}
+
+.bj-minuteur.fini {
+    background: rgba(239, 68, 68, 0.55);
+    border-color: rgba(255, 190, 190, 0.6);
+    animation: bj-clignote 1.2s ease-in-out infinite;
+}
+
+.bj-minuteur.fini .bj-minuteur-temps {
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.bj-minuteur.fini::after {
+    content: none;
+}
+
+@keyframes bj-clignote {
+    50% { background: rgba(239, 68, 68, 0.85); }
+}
+
+.bj-minuteurs-panneau {
+    width: 300px;
+    padding: 14px;
+    gap: 12px;
+}
+
+.bj-puces {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.bj-puce {
+    position: relative;
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    padding: 6px 12px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+    font: 500 0.84rem var(--bj-police);
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.bj-puce small {
+    font-size: 0.74rem;
+    color: var(--bj-texte-doux);
+}
+
+.bj-puce:hover {
+    background: rgba(255, 255, 255, 0.24);
+}
+
+.bj-puce-suppr {
+    display: inline-grid;
+    place-items: center;
+    width: 18px;
+    height: 18px;
+    margin: -2px -6px -2px 2px;
+    border-radius: 50%;
+    background: rgba(239, 68, 68, 0.85);
+    font-size: 0.65rem;
+    align-self: center;
+}
+
+.bj-minuteurs-form {
+    display: grid;
+    grid-template-columns: 1fr 58px 32px;
+    align-items: center;
+    gap: 6px;
+}
+
+.bj-minuteurs-form input[type="text"] {
+    padding: 7px 10px;
+    border-radius: 10px;
+    background: rgba(0, 0, 0, 0.16);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.bj-minuteurs-form input[type="text"]:focus {
+    border-color: rgba(255, 255, 255, 0.4);
+}
+
+.bj-garder {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.78rem;
+    color: var(--bj-texte-doux);
+}
+
+.bj-garder input {
+    width: 15px;
+    height: 15px;
+    accent-color: #fff;
 }
 
 /* ---------- Ruptures : bloc-notes ---------- */
@@ -1540,6 +2048,20 @@ body.customization-active .draggable-item {
         justify-content: center;
     }
 
+    #minuteurs.bj-minuteurs {
+        position: static;
+        order: -1;
+        align-items: center;
+        max-width: 100%;
+        margin-top: 10px;
+    }
+
+    .bj-minuteurs-actifs {
+        flex-direction: row;
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
     .bj-centre {
         padding-top: 3vh;
         gap: 26px;
@@ -1579,7 +2101,8 @@ body.customization-active .draggable-item {
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .bj-blob {
+    .bj-blob,
+    .bj-minuteur.fini {
         animation: none;
     }
 
@@ -1602,4 +2125,8 @@ body.customization-active .draggable-item {
     border-radius: 50%;
     font-size: 11px;
     background: rgba(239, 68, 68, 0.85);
+}
+
+.bj select.input {
+    color: var(--bj-fenetre-texte);
 }
