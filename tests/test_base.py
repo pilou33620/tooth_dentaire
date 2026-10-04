@@ -238,6 +238,18 @@ def test_document_corrompu_retombe_sur_le_defaut(base_temp):
     assert base.lire_document("taches") == base.DOCUMENTS_DEFAUT["taches"]
 
 
+def test_documents_lus_ensemble_comme_un_par_un(base_temp):
+    base.ecrire_document("planning", {"even": [{"assistant": "A"}], "odd": []})
+    conn = sqlite3.connect(str(base_temp))
+    conn.execute("INSERT INTO documents (cle, valeur) VALUES ('taches', '{casse')")
+    conn.commit()
+    conn.close()
+    docs = base.lire_documents()
+    assert docs == {cle: base.lire_document(cle) for cle in base.DOCUMENTS_DEFAUT}
+    assert docs["planning"]["even"][0]["assistant"] == "A"
+    assert docs["taches"] == base.DOCUMENTS_DEFAUT["taches"]
+
+
 # ------------------------------------------------------------------
 # Contacts
 # ------------------------------------------------------------------

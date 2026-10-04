@@ -215,19 +215,34 @@ def est_consommation(type_tx, qte):
     upper = (type_tx or "").upper()
     if "MODIFICATION" in upper or "TRANSFERT" in upper:
         return False, 0
-    if type_tx == "SORTIE_STOCK" or "Sortie" in (type_tx or ""):
+    # Insensible a la casse : "SORTIE_STOCK", "Sortie (...)", "SORTIE"...
+    if "SORTIE" in upper:
         return True, qte
     if type_tx == "AJUSTEMENT_MANUEL" and qte < 0:
         return True, abs(qte)
     return False, 0
 
 
-def _mois(date_str):
+def _jour(date_str):
+    """Date (jour) d'une transaction, ou None si illisible.
+
+    Format ISO attendu ; a defaut, on se rabat sur les 10 premiers
+    caracteres (AAAA-MM-JJ) pour ne pas perdre une ligne a l'export.
+    """
+    texte = str(date_str or "").strip()
     try:
-        return datetime.datetime.fromisoformat(
-            str(date_str).replace("Z", "+00:00")).strftime("%Y-%m")
-    except (TypeError, ValueError):
+        return datetime.datetime.fromisoformat(texte.replace("Z", "+00:00")).date()
+    except ValueError:
+        pass
+    try:
+        return datetime.datetime.strptime(texte[:10], "%Y-%m-%d").date()
+    except ValueError:
         return None
+
+
+def _mois(date_str):
+    jour = _jour(date_str)
+    return jour.strftime("%Y-%m") if jour else None
 
 
 def stats_consommation(db, references):
@@ -318,12 +333,8 @@ def extraction_chirurgie(db, date_debut_str, date_fin_str):
                       or (type_tx == "AJUSTEMENT_MANUEL" and qte < 0))
         if not est_sortie:
             continue
-        try:
-            jour = datetime.datetime.fromisoformat(
-                str(t.get("date", "")).replace("Z", "+00:00")).date()
-        except (TypeError, ValueError):
-            continue
-        if debut <= jour <= fin:
+        jour = _jour(t.get("date", ""))
+        if jour and debut <= jour <= fin:
             sorties.append((jour, t, abs(qte)))
 
     if not sorties:

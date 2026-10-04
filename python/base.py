@@ -477,6 +477,16 @@ def _cle_valide(cle):
     return cle
 
 
+def _decoder_document(cle, valeur):
+    """Valeur stockee decodee, ou copie du defaut si absente ou corrompue."""
+    if valeur is not None:
+        try:
+            return json.loads(valeur)
+        except ValueError:
+            pass
+    return json.loads(json.dumps(DOCUMENTS_DEFAUT[cle]))
+
+
 def lire_document(cle):
     _cle_valide(cle)
     conn = connexion()
@@ -484,16 +494,18 @@ def lire_document(cle):
         ligne = conn.execute("SELECT valeur FROM documents WHERE cle = ?", (cle,)).fetchone()
     finally:
         conn.close()
-    if ligne is None:
-        return json.loads(json.dumps(DOCUMENTS_DEFAUT[cle]))
-    try:
-        return json.loads(ligne["valeur"])
-    except ValueError:
-        return json.loads(json.dumps(DOCUMENTS_DEFAUT[cle]))
+    return _decoder_document(cle, ligne["valeur"] if ligne else None)
 
 
 def lire_documents():
-    return {cle: lire_document(cle) for cle in DOCUMENTS_DEFAUT}
+    """Tous les documents en une seule connexion et une seule requete
+    (appele a chaque /api/etat, donc par chaque poste a chaque rechargement)."""
+    conn = connexion()
+    try:
+        valeurs = {r["cle"]: r["valeur"] for r in conn.execute("SELECT cle, valeur FROM documents")}
+    finally:
+        conn.close()
+    return {cle: _decoder_document(cle, valeurs.get(cle)) for cle in DOCUMENTS_DEFAUT}
 
 
 def ecrire_document(cle, valeur):

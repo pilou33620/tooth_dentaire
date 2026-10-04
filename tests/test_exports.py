@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Tests des exports Excel (python/exports.py)."""
 
+import datetime
 import io
 
 import openpyxl
@@ -132,6 +133,8 @@ def test_stats_sans_donnee():
 
 @pytest.mark.parametrize("type_tx, qte, attendu", [
     ("SORTIE_STOCK", 3, (True, 3)),
+    ("SORTIE", 3, (True, 3)),
+    ("Sortie_directe", 3, (True, 3)),
     ("Sortie (Transfert)", 3, (False, 0)),
     ("SORTIE (Modification Réf/Espace)", 3, (False, 0)),
     ("AJUSTEMENT_MANUEL", -2, (True, 2)),
@@ -149,6 +152,19 @@ def test_extraction_chirurgie():
     # Seule la sortie compte : l'ajustement positif est une entree
     assert lignes == [("02/10/2026", "A", "Compresses", 1, "SORTIE_STOCK", "L1", "01/01/2030")]
     assert resultat["nom_fichier"] == "Extraction_Chirurgie_2026-10-01_au_2026-10-31.xlsx"
+
+
+@pytest.mark.parametrize("date, attendu", [
+    ("2026-10-02T09:15:00.000Z", datetime.date(2026, 10, 2)),
+    ("2026-10-02 09:15", datetime.date(2026, 10, 2)),
+    ("2026-10-02", datetime.date(2026, 10, 2)),
+    ("2026-10-02T09:15:00.1234567Z", datetime.date(2026, 10, 2)),
+    ("", None),
+    (None, None),
+    ("02/10/2026", None),
+])
+def test_lecture_des_dates_de_transaction(date, attendu):
+    assert exports._jour(date) == attendu
 
 
 def test_extraction_chirurgie_periode_vide():

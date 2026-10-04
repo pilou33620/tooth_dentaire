@@ -144,3 +144,20 @@ flowchart TD
 1. **Activer le mode WAL (`Write-Ahead Logging`)** : Permet aux lecteurs (`GET /api/etat`, `/api/revision`) de ne jamais attendre les transactions d'écriture.
 2. **Mutualiser les lectures de documents** : Remplacer la boucle de 11 requêtes par un `SELECT` unique.
 3. **Pérenniser la gestion des commandes** : Conserver la valeur entière du nombre de produits commandés.
+
+---
+
+## 6. Suivi des corrections (vérification du rapport)
+
+Chaque point de la section 4 a été revérifié dans le code avant correction :
+
+| Point | Verdict | Action |
+| :--- | :--- | :--- |
+| **Bug 1** — casse dans `est_consommation()` | **Confirmé** (un libellé `"SORTIE"` ou `"SORTIE_DIRECTE"` était ignoré). | Corrigé : test insensible à la casse (`"SORTIE" in upper`) dans `python/exports.py` **et** dans le filtre d'aperçu `web/settings.js`, qui doivent rester alignés. Tests ajoutés. |
+| **Bug 2** — `en_commande` tronqué à `1` | **Faux positif.** `en_commande` est un indicateur oui/non par conception : l'interface n'envoie que `0`/`1` (case à cocher de `product-edit.js`, `alerts.js`) et la liste de courses s'en sert comme booléen. | Aucun changement. Suivre une quantité commandée serait une nouvelle fonctionnalité (nouvelle colonne), pas un correctif. |
+| **Bug 3** — format de date dans les exports | **Largement infondé** : `fromisoformat()` accepte `AAAA-MM-JJ HH:MM` depuis Python 3.7, et l'interface enregistre des dates ISO (`toISOString()`). Seules des dates ISO atypiques (ex. 7 décimales de secondes) pouvaient échouer sous Python < 3.11. | Durci quand même : fonction `_jour()` commune avec repli sur les 10 premiers caractères, utilisée par les statistiques et l'extraction chirurgie. Tests ajoutés. |
+| **Point 4** — Python `3.14.8` inexistant | **Faux positif** (ou obsolète) : Python 3.14.8 a été publié le 30/09/2026. Revenir à 3.12.8 serait une régression (branche 3.12 en fin de vie, sans installateurs Windows récents). | Aucun changement. |
+| **Goulot `/api/etat`** — une connexion SQLite par document | **Confirmé.** | Corrigé : `lire_documents()` lit tous les documents en **une connexion et une requête** (`SELECT cle, valeur FROM documents`), avec le même repli sur la valeur par défaut si un document est absent ou corrompu. Test ajouté. |
+| **Mode WAL** | Non appliqué volontairement. | En WAL, les écritures récentes vivent dans `stock.db-wal` : une copie du seul fichier `stock.db` (sauvegarde manuelle prévue dans `A_FAIRE.md`, import de `migration.py` via `shutil.copy2`) pourrait perdre des données. À reconsidérer seulement avec une sauvegarde via l'API `sqlite3.backup()`. |
+
+Résultat : 184 tests Python et 703 tests JavaScript passent.

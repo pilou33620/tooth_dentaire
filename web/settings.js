@@ -223,7 +223,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 const typeTx = t.type_transaction || "";
                 const upper = typeTx.toUpperCase();
                 if (upper.includes("MODIFICATION") || upper.includes("TRANSFERT")) return false;
-                if (typeTx === "SORTIE_STOCK" || typeTx.includes("Sortie")) return true;
+                if (upper.includes("SORTIE")) return true;
                 if (typeTx === "AJUSTEMENT_MANUEL" && t.quantite < 0) return true;
                 return false;
             });
