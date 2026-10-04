@@ -20,14 +20,15 @@ import os
 import random
 import shutil
 import subprocess
-import sys
 import tempfile
 import threading
 import time
 import urllib.error
 import urllib.request
 
-RACINE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+import serveur_test
+
+RACINE = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 class ResultatsBenchmark:
@@ -87,6 +88,26 @@ class ResultatsBenchmark:
         return "\n".join(lignes)
 
 
+# Latences par route ("GET /api/etat" -> [ms, ...]) : montre ce qui ralentit.
+PAR_ROUTE = {}
+_VERROU_ROUTES = threading.Lock()
+
+
+def _noter_route(methode, chemin, duree_ms):
+    cle = "%s %s" % (methode, chemin.split("?")[0])
+    with _VERROU_ROUTES:
+        PAR_ROUTE.setdefault(cle, []).append(duree_ms)
+
+
+def rapport_par_route():
+    lignes = ["Latence par route (p50 / p95 / max, en ms) :"]
+    for cle, lats in sorted(PAR_ROUTE.items(), key=lambda kv: -sorted(kv[1])[int(len(kv[1]) * 0.95)]):
+        lats = sorted(lats)
+        lignes.append("  %-34s %5d req  %8.1f  %8.1f  %8.1f" % (
+            cle, len(lats), lats[len(lats) // 2], lats[int(len(lats) * 0.95)], lats[-1]))
+    return "\n".join(lignes)
+
+
 class ClientCabinet:
     """Client HTTP simulant un poste de travail du cabinet."""
     def __init__(self, base_url, nom):
@@ -111,10 +132,12 @@ class ClientCabinet:
             with urllib.request.urlopen(req, timeout=10) as resp:
                 contenu = resp.read()
                 duree_ms = (time.perf_counter() - t0) * 1000.0
+                _noter_route(methode, chemin, duree_ms)
                 return duree_ms, True, json.loads(contenu.decode("utf-8")) if contenu else {}
         except Exception as exc:
             duree_ms = (time.perf_counter() - t0) * 1000.0
-            return duree_ms, False, str(exc)
+            _noter_route(methode, chemin, duree_ms)
+            return duree_ms, False, "%s %s : %s" % (methode, chemin.split("?")[0], exc)
 
     def get_etat(self):
         return self._requete("GET", "/api/etat")
@@ -283,23 +306,10 @@ def executer_benchmark(nb_agents=6, iterations=50, test_install=False, port=8159
     if test_install:
         tester_installation_sandbox()
 
-    print(f"\n[+] Demarrage du serveur de benchmark sur le port {port}...")
-    db_test = os.path.join(tempfile.gettempdir(), f"tooth_benchmark_{int(time.time())}.db")
-    
-    cmd_serveur = [
-        sys.executable,
-        os.path.join(RACINE, "serveur.py"),
-        "--port", str(port),
-        "--base", db_test,
-        "--local",
-        "--sans-navigateur",
-        "--sans-pause"
-    ]
-    proc_serveur = subprocess.Popen(cmd_serveur, cwd=RACINE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    time.sleep(1.5)  # Laisser le serveur s'initialiser
-
-    url = f"http://127.0.0.1:{port}"
+    proc_serveur, url, dossier_test = serveur_test.demarrer(port)
+    print(f"\n[+] Serveur de benchmark demarre : {url}")
     stats = ResultatsBenchmark()
+    PAR_ROUTE.clear()
     stats.debut = time.time()
 
     threads = []
@@ -328,21 +338,10 @@ def executer_benchmark(nb_agents=6, iterations=50, test_install=False, port=8159
     stats.fin = time.time()
     print("[+] Tous les agents ont termine leurs operations.")
 
-    # Arret du serveur
-    proc_serveur.terminate()
-    try:
-        proc_serveur.wait(timeout=3)
-    except subprocess.TimeoutExpired:
-        proc_serveur.kill()
-
-    # Nettoyage base temporaire
-    if os.path.isfile(db_test):
-        try:
-            os.remove(db_test)
-        except OSError:
-            pass
+    serveur_test.arreter(proc_serveur, dossier_test)
 
     print("\n" + stats.rapport())
+    print(rapport_par_route())
     return stats
 
 
@@ -351,7 +350,7 @@ def main():
     parser.add_argument("--agents", type=int, default=6, help="Nombre d'agents concurrents (defaut: 6)")
     parser.add_argument("--iterations", type=int, default=40, help="Nombre d'operations par agent (defaut: 40)")
     parser.add_argument("--test-install", action="store_true", help="Tester aussi le workflow d'installation sandbox")
-    parser.add_argument("--port", type=int, default=8159, help="Port de test pour le serveur (defaut: 8159)")
+    parser.add_argument("--port", type=int, default=0, help="Port de test pour le serveur (defaut: un port libre)")
     args = parser.parse_args()
 
     executer_benchmark(nb_agents=args.agents, iterations=args.iterations, test_install=args.test_install, port=args.port)

@@ -19,17 +19,15 @@ pour explorer l'integralite des fonctionnalites et parametres de l'outil :
 import base64
 import json
 import os
-import shutil
-import subprocess
-import sys
-import tempfile
 import threading
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
 
-RACINE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+import serveur_test
+
+RACINE = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 class JournalSimulation:
@@ -484,23 +482,9 @@ def executer_simulation_complete():
     print("LANCEMENT DE LA SIMULATION MULTI-AGENTS DIVERSIFIEE DU CABINET")
     print("=" * 70)
 
-    port = 8175
-    db_test = os.path.join(tempfile.gettempdir(), f"tooth_simul_{int(time.time())}.db")
-
-    cmd = [
-        sys.executable,
-        os.path.join(RACINE, "serveur.py"),
-        "--port", str(port),
-        "--base", db_test,
-        "--local",
-        "--sans-navigateur",
-        "--sans-pause"
-    ]
-    proc = subprocess.Popen(cmd, cwd=RACINE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    time.sleep(1.8)
+    proc, base_url, dossier_test = serveur_test.demarrer()
 
     journal = JournalSimulation()
-    base_url = f"http://127.0.0.1:{port}"
 
     agents = [
         ("Agent_Approvisionneur", scenario_approvisionneur),
@@ -540,17 +524,7 @@ def executer_simulation_complete():
     print(f"    - Cycles d'autoclave valides: {nb_auto}")
     print(f"    - Documents metier remplis  : {nb_docs}")
 
-    proc.terminate()
-    try:
-        proc.wait(timeout=3)
-    except subprocess.TimeoutExpired:
-        proc.kill()
-
-    if os.path.isfile(db_test):
-        try:
-            os.remove(db_test)
-        except OSError:
-            pass
+    serveur_test.arreter(proc, dossier_test)
 
     print("\n" + "=" * 70)
     print("SYNTHESE DE LA SIMULATION METIER DIVERSIFIEE")

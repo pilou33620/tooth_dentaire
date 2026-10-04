@@ -170,6 +170,7 @@ tests/                tests Python (pytest)
 web/tests/            tests JavaScript (Jest)
 installation/         Installer.bat (installateur d'un poste, fichier unique)
 scripts/              lancement des tests
+  benchmark/          benchmarks de charge et audit (voir RAPPORT_BENCHMARK.md)
 donnees/              base et configuration — non versionné
 ```
 

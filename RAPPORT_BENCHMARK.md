@@ -157,7 +157,62 @@ Chaque point de la section 4 a été revérifié dans le code avant correction :
 | **Bug 2** — `en_commande` tronqué à `1` | **Faux positif.** `en_commande` est un indicateur oui/non par conception : l'interface n'envoie que `0`/`1` (case à cocher de `product-edit.js`, `alerts.js`) et la liste de courses s'en sert comme booléen. | Aucun changement. Suivre une quantité commandée serait une nouvelle fonctionnalité (nouvelle colonne), pas un correctif. |
 | **Bug 3** — format de date dans les exports | **Largement infondé** : `fromisoformat()` accepte `AAAA-MM-JJ HH:MM` depuis Python 3.7, et l'interface enregistre des dates ISO (`toISOString()`). Seules des dates ISO atypiques (ex. 7 décimales de secondes) pouvaient échouer sous Python < 3.11. | Durci quand même : fonction `_jour()` commune avec repli sur les 10 premiers caractères, utilisée par les statistiques et l'extraction chirurgie. Tests ajoutés. |
 | **Point 4** — Python `3.14.8` inexistant | **Faux positif** (ou obsolète) : Python 3.14.8 a été publié le 30/09/2026. Revenir à 3.12.8 serait une régression (branche 3.12 en fin de vie, sans installateurs Windows récents). | Aucun changement. |
-| **Goulot `/api/etat`** — une connexion SQLite par document | **Confirmé.** | Corrigé : `lire_documents()` lit tous les documents en **une connexion et une requête** (`SELECT cle, valeur FROM documents`), avec le même repli sur la valeur par défaut si un document est absent ou corrompu. Test ajouté. |
+| **Goulot `/api/etat`** — une connexion SQLite par document | **Confirmé**, mais ce n'est **pas** la cause principale de la lenteur (voir section 7). | Corrigé : `lire_documents()` lit tous les documents en **une connexion et une requête** (`SELECT cle, valeur FROM documents`), avec le même repli sur la valeur par défaut si un document est absent ou corrompu. Test ajouté. |
 | **Mode WAL** | Non appliqué volontairement. | En WAL, les écritures récentes vivent dans `stock.db-wal` : une copie du seul fichier `stock.db` (sauvegarde manuelle prévue dans `A_FAIRE.md`, import de `migration.py` via `shutil.copy2`) pourrait perdre des données. À reconsidérer seulement avec une sauvegarde via l'API `sqlite3.backup()`. |
 
 Résultat : 184 tests Python et 703 tests JavaScript passent.
+
+---
+
+## 7. Nouvelles mesures (après corrections)
+
+Scripts rangés dans `scripts/benchmark/` :
+
+```bash
+python scripts/benchmark/benchmark_agents.py --agents 50     # charge (6 profils de poste)
+python scripts/benchmark/benchmark_complet_cabinet.py        # audit fonctionnel (71 vérifications)
+python scripts/benchmark/simulation_multi_agents_diversifiee.py   # 9 agents métier
+```
+
+Le serveur de test démarre désormais sur un port libre, sur une base neuve dans
+un dossier temporaire supprimé à la fin, et le script attend qu'il réponde. Avant
+cette correction, en enchaînant les paliers, le port du palier précédent restait
+occupé : le serveur partait sur un autre port et **100 % des requêtes échouaient
+sans que le script le signale**.
+
+### Charge (40 opérations par poste, machine de test du dépôt)
+
+| Postes simultanés | Requêtes | Succès | Débit | p50 | p95 | Max |
+| :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| 6 | 608 | **100 %** | 423 req/s | 3,8 ms | 24 ms | 124 ms |
+| 12 | 1 216 | **100 %** | 209 req/s | 11 ms | 155 ms | 0,7 s |
+| 25 | 2 632 | **100 %** | 73 req/s | 25 ms | 1,1 s | 3,3 s |
+| 50 | 5 184 | 99,5 % | 33 req/s | 158 ms | 4,5 s | 10 s (délai dépassé) |
+
+Même script sur le code d'avant les corrections : 25 postes → p95 1,0 s ;
+50 postes → 99,6 % de succès, p95 5,4 s. **Pas de régression** ; les écarts avec
+les sections 1 et 2 viennent de la machine et du nombre d'opérations par poste.
+
+Audit fonctionnel : **71/71** (dont la nouvelle section 13 : lot d'écritures,
+conflit entre deux postes refusé sans transaction orpheline, entrée d'un lot
+périmé refusée, sauvegarde à la demande). Simulation métier : **37/37**.
+
+### Ce qui ralentit vraiment (50 postes, latence par route)
+
+| Route | p50 | p95 |
+| :--- | :---: | :---: |
+| `GET /api/etat` (toute la base) | 2,2 s | 7,5 s |
+| `POST /api/export/stock` | 0,5 s | 2,7 s |
+| `POST /api/transaction` | 0,2 s | 1,2 s |
+| `GET /api/revision` | 3 ms | 24 ms |
+
+Le goulot est **`/api/etat`, qui renvoie toute la base (dont tout l'historique des
+transactions) en JSON**. Le coût grandit avec l'historique et tient au calcul
+Python, pas aux ouvertures de connexion SQLite que le rapport initial désignait.
+Les délais dépassés à 50 postes concernent tous cette route.
+
+**Pour un cabinet de 6 à 12 postes, les temps restent bons.** À surveiller sur la
+durée : chaque enregistrement fait recharger `/api/etat` par tous les autres
+postes, et l'historique ne fait que grossir. Piste si cela devient sensible : ne
+plus envoyer l'historique complet des transactions dans `/api/etat` (le charger à
+la demande, ou ne renvoyer que ce qui a changé depuis la dernière révision).

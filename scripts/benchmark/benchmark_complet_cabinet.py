@@ -21,9 +21,6 @@ Teste l'integralite des fonctionnalites, parametres, manipulations et securite :
 import base64
 import json
 import os
-import shutil
-import subprocess
-import sys
 import tempfile
 import threading
 import time
@@ -31,7 +28,9 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-RACINE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+import serveur_test
+
+RACINE = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 class AuditRapport:
@@ -539,28 +538,57 @@ def tester_stress_concurrence_multithread(client, r, nb_threads=10, ops_par_thre
     r.valider("Concurrence", "Integrite et disponibilite des revisions SQLite", len(revisions_observees) > 0)
 
 
+def tester_lots_conflits_peremption(client, r):
+    print("\n--- 13. LOTS D'ECRITURES, CONFLITS ENTRE POSTES, PEREMPTION, SAUVEGARDE ---")
+    ref = "LOT-AUDIT-%d" % int(time.time())
+    ligne = {"reference": ref, "utilisateur": "Commun", "quantite": 10, "lots_details": "[]"}
+
+    code, res, _ = client.call("POST", "/api/lot", {"operations": [
+        {"action": "updateProduit", "donnees": {"reference": ref, "nom": "Audit lot"}},
+        {"action": "updateStockItem", "donnees": dict(ligne, version=None)},
+    ]})
+    version = (res.get("resultats") or [{}, {}])[1].get("version")
+    r.valider("Lots", "Lot produit + stock enregistre, version 1", code == 200 and version == 1, str(res))
+
+    # Deux postes partent de la meme version : le second est refuse
+    code_a, _, _ = client.call("POST", "/api/lot", {"operations": [
+        {"action": "updateStockItem", "donnees": dict(ligne, quantite=8, version=1)}]})
+    code_b, res_b, _ = client.call("POST", "/api/lot", {"operations": [
+        {"action": "addTransaction", "donnees": {"date": "2026-10-04", "reference": ref,
+                                                 "utilisateur": "Commun",
+                                                 "type_transaction": "SORTIE_STOCK", "quantite": 3}},
+        {"action": "updateStockItem", "donnees": dict(ligne, quantite=7, version=1)}]})
+    r.valider("Lots", "Modification simultanee : second poste refuse (409)",
+              code_a == 200 and code_b == 409 and res_b.get("conflit") is True, "%s %s" % (code_a, code_b))
+
+    _, etat, _ = client.call("GET", "/api/etat")
+    base_ = etat.get("base", {})
+    stock = [x for x in base_.get("stock", []) if x.get("reference") == ref]
+    tx = [t for t in base_.get("transactions", []) if t.get("reference") == ref]
+    r.valider("Lots", "Lot refuse : ni stock ecrase ni transaction orpheline",
+              stock and stock[0]["quantite"] == 8 and not tx, "%s %s" % (stock, tx))
+
+    lots = json.dumps([{"lot": "PERIME", "date": "01/01/2020", "qte": 5}])
+    code, res, _ = client.call("POST", "/api/lot", {"operations": [
+        {"action": "updateStockItem", "donnees": dict(ligne, utilisateur="Salle 1", quantite=5,
+                                                      lots_details=lots, version=None)}]})
+    r.valider("Peremption", "Entree d'un lot perime refusee (400)",
+              code == 400 and "périmé" in res.get("message", ""), "%s %s" % (code, res))
+
+    code, res, _ = client.call("POST", "/api/sauvegardes", {})
+    code2, res2, _ = client.call("GET", "/api/sauvegardes")
+    r.valider("Sauvegarde", "Sauvegarde a la demande puis listee",
+              code == 200 and code2 == 200 and res2.get("nombre", 0) >= 1, "%s %s" % (res, res2))
+
+
 def main():
     print("======================================================================")
     print("DEMARRAGE DU BENCHMARK & AUDIT EXHAUSTIF (tooth_dentaire)")
     print("======================================================================")
 
     rapport = AuditRapport()
-    port = 8162
-    db_test = os.path.join(tempfile.gettempdir(), f"tooth_audit_db_{int(time.time())}.db")
-
-    cmd = [
-        sys.executable,
-        os.path.join(RACINE, "serveur.py"),
-        "--port", str(port),
-        "--base", db_test,
-        "--local",
-        "--sans-navigateur",
-        "--sans-pause"
-    ]
-    proc = subprocess.Popen(cmd, cwd=RACINE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    time.sleep(2.0)  # Laisser le serveur demarrer
-
-    client = ClientApi(f"http://127.0.0.1:{port}")
+    proc, url, dossier_test = serveur_test.demarrer()
+    client = ClientApi(url)
 
     try:
         tester_produits(client, rapport)
@@ -575,17 +603,9 @@ def main():
         tester_changement_base_a_chaud(client, rapport)
         tester_securite_et_robustesse(client, rapport)
         tester_stress_concurrence_multithread(client, rapport, nb_threads=12, ops_par_thread=15)
+        tester_lots_conflits_peremption(client, rapport)
     finally:
-        proc.terminate()
-        try:
-            proc.wait(timeout=3)
-        except subprocess.TimeoutExpired:
-            proc.kill()
-        if os.path.isfile(db_test):
-            try:
-                os.remove(db_test)
-            except OSError:
-                pass
+        serveur_test.arreter(proc, dossier_test)
 
     rapport.afficher()
 
