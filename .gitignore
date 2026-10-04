@@ -37,3 +37,6 @@ web/coverage/
 Thumbs.db
 .vscode/
 .idea/
+
+# Dossier d installation produit par scripts/preparer_installation.py
+dist/

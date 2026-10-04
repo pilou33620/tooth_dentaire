@@ -32,6 +32,21 @@ dans **Réglages**.
 | `--importer "C:\...\ancien dossier"` | reprend les données de l'ancienne application |
 | `--sans-navigateur` | n'ouvre pas le navigateur |
 
+### Installer sur un poste du cabinet
+
+```bash
+python scripts/preparer_installation.py
+```
+
+produit `dist/Installation tooth_dentaire/` (et son `.zip`) : l'outil sans les
+tests, les bibliothèques en wheels (installation sans internet), `Installer.bat`.
+Sur le poste : y placer l'installateur Python (`python-3.x.x-amd64.exe`, inutile si
+Python 3.8+ est déjà installé) et éventuellement un `stock.db` à reprendre, puis
+double-cliquer sur `Installer.bat`. Il installe Python (sans droits administrateur),
+copie l'outil (par défaut dans `C:\tooth_dentaire`) avec un environnement `.venv`,
+garde l'installateur Python à côté de `Lancer.bat`, crée un raccourci sur le Bureau
+puis supprime le dossier d'installation. Une réinstallation ne touche pas à `donnees/`.
+
 Au premier lancement en réseau, Windows demande d'autoriser Python dans le
 pare-feu : accepter pour les **réseaux privés**.
 
@@ -143,6 +158,8 @@ web/                  interface (HTML / CSS / JavaScript, sans framework)
   vendor/             PDF.js (lecture des factures, hors ligne)
 tests/                tests Python (pytest)
 web/tests/            tests JavaScript (Jest)
+installation/         modèles de l'installateur (Installer.bat, installer.ps1)
+scripts/              tests, préparation du dossier d'installation
 donnees/              base et configuration — non versionné
 ```
 
