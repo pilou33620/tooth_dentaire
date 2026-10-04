@@ -2537,3 +2537,20 @@ body.customization-active .draggable-item {
 .maj-reglages-etat {
     white-space: pre-line;
 }
+
+/* Fiche produit : barre de boutons collée en bas, sur le fond de la fenêtre */
+.bj .dialog-edit .dialog-buttons {
+    bottom: -18px;
+    margin: 16px -22px -18px;
+    padding: 12px 22px 18px;
+    background: var(--bj-fenetre);
+    border-top-color: var(--bj-trait);
+}
+
+@media (max-height: 820px) {
+    .bj .dialog-edit .dialog-buttons {
+        margin-top: 10px;
+        padding-top: 8px;
+        padding-bottom: 12px;
+    }
+}

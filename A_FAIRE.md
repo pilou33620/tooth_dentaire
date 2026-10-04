@@ -3,7 +3,6 @@
 ## À faire
 - [ ] Placard ménage
 - [ ] Montant du stock : remonter les totaux tout en haut
-- [ ] Fenêtre « Ajouter un produit » au format paysage (rectangle horizontal)
 
 ## Mise en place
 - [ ] Installer sur le PC serveur du cabinet (`pip install -r requirements.txt`, autoriser Python dans le pare-feu)
@@ -15,6 +14,7 @@
 - [ ] Mot de passe d'accès (si le réseau n'est pas réservé à l'équipe)
 
 ## Fait
+- [x] Fenêtre « Ajouter un produit » au format paysage : 4 colonnes côte à côte, tient sans défilement en 1280×720, boutons toujours visibles
 - [x] Entrée en stock d'un produit périmé **interdite** (fiche produit, entrée par lot, import de facture, et contrôle côté serveur) ; le stock déjà en place qui a périmé reste modifiable et les transferts restent possibles
 - [x] Protection contre deux modifications simultanées de la même ligne de stock (version par ligne, écritures groupées tout ou rien)
 - [x] Sauvegarde automatique quotidienne de la base (`donnees/sauvegardes/`, 30 copies gardées)

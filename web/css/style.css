@@ -1220,7 +1220,7 @@ input[type="checkbox"] {
 
 /* ==== Dialog produit (ajout / modif) - format paysage ==== */
 .dialog-edit {
-    width: 1180px;
+    width: min(1440px, 96vw);
 }
 
 .form-body {
@@ -1232,10 +1232,11 @@ input[type="checkbox"] {
     margin-top: 6px;
 }
 
-/* Grille paysage : 3 colonnes + un bandeau pleine largeur */
+/* Grille paysage : 4 colonnes côte à côte (identification, stock, lots,
+   prix & commande) ; la colonne des lots est un peu plus large. */
 .dialog-edit .edit-grid {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.45fr) minmax(0, 1fr);
     gap: 14px;
     align-items: stretch;
 }
@@ -1248,10 +1249,6 @@ input[type="checkbox"] {
     border: 1px solid #e2e2e2;
     border-radius: 8px;
     padding: 12px 14px 14px;
-}
-
-.dialog-edit .edit-card-wide {
-    grid-column: 1 / -1;
 }
 
 .dialog-edit .edit-card-title {
@@ -1298,6 +1295,24 @@ input[type="checkbox"] {
     overflow-y: auto;
 }
 
+/* Ligne de lot : la date reste lisible en entier, la quantité est courte */
+.dialog-edit #edit-lots-container > div {
+    gap: 6px !important;
+}
+
+.dialog-edit #edit-lots-container .input {
+    min-width: 0;
+}
+
+.dialog-edit #edit-lots-container .date-val {
+    flex: 0 0 116px !important;
+}
+
+.dialog-edit #edit-lots-container .qte-val {
+    flex: 0 0 64px !important;
+    width: 64px !important;
+}
+
 .dialog-edit .edit-rows .btn {
     font-size: 14px;
     padding: 6px 10px;
@@ -1316,12 +1331,11 @@ input[type="checkbox"] {
     gap: 2px;
 }
 
-/* Bandeau prix & commande : champs côte à côte */
+/* Prix & commande : champs les uns sous les autres dans leur colonne */
 .dialog-edit .edit-inline {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 10px 14px;
-    align-items: end;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
 }
 
 .dialog-edit .edit-field {
@@ -1331,13 +1345,8 @@ input[type="checkbox"] {
     min-width: 0;
 }
 
-.dialog-edit .edit-field-check {
-    justify-content: flex-end;
-}
-
 .dialog-edit .edit-field-check .check-label {
-    margin-top: 0;
-    padding-bottom: 6px;
+    margin-top: 12px;
 }
 
 .check-label {
@@ -1358,8 +1367,16 @@ input[type="checkbox"] {
     white-space: nowrap;
 }
 
+/* Boutons toujours visibles, même si le contenu défile */
 .dialog-edit .dialog-buttons {
-    margin-top: 16px;
+    position: sticky;
+    bottom: -16px;
+    margin: 16px -16px -16px;
+    padding: 12px 16px 16px;
+    background: inherit;
+    background-color: #F0F0F0;
+    border-top: 1px solid #e2e2e2;
+    z-index: 1;
 }
 
 .dialog-edit .dialog-buttons .btn {
@@ -1368,16 +1385,54 @@ input[type="checkbox"] {
     padding: 12px;
 }
 
-/* Écrans étroits : on repasse en 2 colonnes puis 1 */
-@media (max-width: 1240px) {
+/* Écrans moins larges : 2 colonnes (toujours plus large que haut), puis 1 */
+@media (max-width: 1100px) {
     .dialog-edit .edit-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 }
 
-@media (max-width: 820px) {
+@media (max-width: 700px) {
     .dialog-edit .edit-grid {
         grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+/* Écrans peu hauts (1366×768, 1280×720…) : fiche plus compacte */
+@media (max-height: 820px) {
+    .dialog-edit .edit-grid {
+        gap: 10px;
+    }
+
+    .dialog-edit .edit-card {
+        padding: 8px 12px 10px;
+    }
+
+    .dialog-edit .edit-card-title {
+        margin-bottom: 2px;
+        padding-bottom: 4px;
+    }
+
+    .dialog-edit .edit-card label {
+        margin-top: 4px;
+    }
+
+    .dialog-edit .edit-card .check-label {
+        margin-top: 8px;
+    }
+
+    .dialog-edit .edit-card .input {
+        padding: 5px 9px;
+    }
+
+    .dialog-edit .dialog-buttons {
+        margin-top: 10px;
+        padding-top: 8px;
+        padding-bottom: 12px;
+    }
+
+    .dialog-edit .dialog-buttons .btn {
+        padding: 8px;
     }
 }
 
