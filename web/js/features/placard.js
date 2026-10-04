@@ -109,12 +109,13 @@ export function refreshPlacardTable() {
 
         let qteText = String(row.quantite);
         
-        if (row.alerte_active && row.quantite <= row.stock_minimum) {
+        if (row.alerte_active && !row.arrete && row.quantite <= row.stock_minimum) {
             qteText = `${qteText} ⚠️ (Min: ${row.stock_minimum})`;
             if (!rowClass) rowClass = "row-pink";
         }
 
         if (rowClass) tr.className = rowClass;
+        if (row.arrete) tr.classList.add("row-arrete");
 
         const tdNum = document.createElement("td");
         tdNum.className = "rownum";
@@ -132,8 +133,14 @@ export function refreshPlacardTable() {
         tdScannette.textContent = row.ref_scannette || "";
         const tdNom = document.createElement("td");
         tdNom.textContent = row.nom;
-        tdNom.title = row.nom;
+        tdNom.title = row.arrete ? `${row.nom} — on ne le commande plus` : row.nom;
         tdNom.className = "td-nom";
+        if (row.arrete) {
+            const badge = document.createElement("span");
+            badge.className = "badge-arrete";
+            badge.textContent = "arrêté";
+            tdNom.append(" ", badge);
+        }
         const tdGrp = document.createElement("td");
         tdGrp.textContent = row.groupe;
 

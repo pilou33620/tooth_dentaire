@@ -48,8 +48,29 @@ la base (`donnees/stock.db` par défaut), et le dossier `donnees/` est exclu de 
 
 - **Sauvegarde** : copier `donnees/stock.db` (serveur arrêté de préférence).
 - **Base ailleurs** (lecteur réseau, dossier synchronisé) : `--base` ou Réglages.
-- Seules les **positions de l'interface** (mode personnalisation) restent propres à
-  chaque poste, car les écrans n'ont pas tous la même taille.
+- **Tout est dans `stock.db`** : stock, produits arrêtés (« ne plus commander »),
+  rappels des mires, fauteuils et dosimètres, maintenance, planning, tâches,
+  contacts, notes, checklist, minuteurs, commune météo. Copier ce seul fichier
+  suffit à transporter l'outil sur un autre poste.
+- Seules des **préférences du poste** restent dans le navigateur, car les écrans
+  n'ont pas tous la même taille : positions des widgets, apparence de l'accueil
+  (fond, horloge…), prénom proposé dans la checklist, minuteurs qui sonnent sur ce
+  poste.
+- **Règle pour les évolutions** : une nouvelle donnée du cabinet va dans la base
+  (un document : `DOCUMENTS_DEFAUT` dans `python/base.py`, `getDocument` /
+  `setDocument` côté navigateur). Le test `tests/test_stockage.py` échoue si du
+  code JavaScript écrit dans le navigateur ailleurs que pour ces préférences.
+
+## Mises à jour
+
+Sur un poste installé par `git clone`, le serveur vérifie toutes les 4 heures si
+la branche `main` a changé sur GitHub (`python/mise_a_jour.py`). Si oui, un
+bandeau propose « Mettre à jour » sur l'accueil : le serveur avance la copie
+locale (`git merge --ff-only`, jamais d'écrasement), réinstalle les dépendances
+si `requirements.txt` a changé, puis redémarre ; les pages se rechargent seules.
+`donnees/` n'est jamais touché. Rien n'est proposé (raison dans Réglages >
+Mises à jour) si le dossier n'est pas un clone git, s'il est sur une autre
+branche ou si des fichiers de l'outil ont été modifiés sur le poste.
 
 ## Interface
 

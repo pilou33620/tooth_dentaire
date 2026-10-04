@@ -12,13 +12,17 @@ import { parsePeremption, daysUntil, todayFR } from '../core/utils.js';
 export let alertsStock = [];
 export let alertsPeremption = [];
 
+// Post-it « À commander » : replié, seules les MAX_POSTIT premières lignes
+// sont rendues ; un clic sur « … et N de plus » affiche toute la liste.
+let postitDeplie = false;
+
 export function checkAlerts() {
     alertsStock = [];
     alertsPeremption = [];
 
     for (const user of USERS) {
         for (const row of getStock(user)) {
-            if (row.alerte_active && row.quantite <= row.stock_minimum) {
+            if (row.alerte_active && !row.arrete && row.quantite <= row.stock_minimum) {
                 alertsStock.push({ user, data: row, reason: "Stock bas" });
             }
 
@@ -106,6 +110,9 @@ export function checkAlerts() {
     let commandesGlobales = {};
     const db = loadDB();
     for (const s of db.stock) {
+        // Produit qu'on n'achète plus : jamais « à commander », même à 0
+        const produit = findProduit(db, s.reference);
+        if (produit && produit.arrete) continue;
         if (!infosGlobales[s.reference]) {
             infosGlobales[s.reference] = { qty: 0, hasAlert: false };
         }
@@ -142,9 +149,11 @@ export function checkAlerts() {
         if (postitTitle) postitTitle.textContent = "À commander 📌";
         postitList.innerHTML = "";
         const MAX_POSTIT = 5;
-        // On n'affiche que les MAX_POSTIT premières lignes : sans ce découpage,
-        // toutes les ruptures étaient rendues ET suivies du « ... et N de plus ».
-        listRuptures.slice(0, MAX_POSTIT).forEach((item) => {
+        const deplie = postitDeplie && listRuptures.length > MAX_POSTIT;
+        document.getElementById("postit-wrapper")?.classList.toggle("postit-deplie", deplie);
+        // Replié, on n'affiche que les MAX_POSTIT premières lignes : sans ce
+        // découpage, toutes les ruptures étaient rendues ET suivies du « ... et N de plus ».
+        (deplie ? listRuptures : listRuptures.slice(0, MAX_POSTIT)).forEach((item) => {
             const li = document.createElement("li");
             li.className = "postit-item";
 
@@ -194,11 +203,30 @@ export function checkAlerts() {
         });
         if (listRuptures.length > MAX_POSTIT) {
             const moreLi = document.createElement("li");
-            moreLi.className = "postit-more";
-            moreLi.textContent = `... et ${listRuptures.length - MAX_POSTIT} de plus`;
+            moreLi.className = deplie ? "postit-more postit-reduire" : "postit-more";
+            moreLi.textContent = deplie
+                ? "▲ Réduire la liste"
+                : `... et ${listRuptures.length - MAX_POSTIT} de plus ▼`;
+            moreLi.title = deplie ? "Ne garder que les premières lignes" : "Afficher toute la liste";
+            moreLi.tabIndex = 0;
+            moreLi.setAttribute("role", "button");
+            moreLi.setAttribute("aria-expanded", String(deplie));
+            const basculer = () => {
+                postitDeplie = !deplie;
+                checkAlerts();
+            };
+            moreLi.addEventListener("click", basculer);
+            moreLi.addEventListener("keydown", (e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    basculer();
+                }
+            });
             postitList.appendChild(moreLi);
         }
     } else {
+        postitDeplie = false;
+        document.getElementById("postit-wrapper")?.classList.remove("postit-deplie");
         if (postitTitle) postitTitle.textContent = "Bravo ! 🎉";
         postitList.innerHTML = "<li style='text-align: center; margin-top: 20px; font-weight: bold; color: #333; list-style-type: none; pointer-events: none; margin-left: -20px; border-bottom: none;'>Tu sais gérer un stock !</li>";
     }

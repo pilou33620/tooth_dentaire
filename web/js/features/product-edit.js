@@ -5,7 +5,7 @@
    ============================================================ */
 
 import { USERS, CONDITIONNEMENTS, estConditionnementGroupe } from '../core/constants.js';
-import { loadDB, saveDB, addTransaction, persister } from '../core/database.js';
+import { loadDB, saveDB, addTransaction, persister, setProduitArrete } from '../core/database.js';
 import { setStockAbsolu } from './stock.js';
 import { normalizeLots, lotsFromStrings } from './lots.js';
 import { fillGroupsDatalist, showMessage, parsePeremption, daysUntil, parseBarcodes, formatBarcodes } from '../core/utils.js';
@@ -307,6 +307,8 @@ export function openEditDialog(row = null) {
     window.toggleCondFields();
     document.getElementById("edit-min").value = isEdit ? row.stock_minimum : 0;
     document.getElementById("edit-alerte").checked = isEdit ? Boolean(row.alerte_active) : false;
+    const arreteInput = document.getElementById("edit-arrete");
+    if (arreteInput) arreteInput.checked = isEdit ? Boolean(row.arrete) : false;
     const delaiInput = document.getElementById("edit-delai-peremption");
     if (delaiInput) {
         delaiInput.value = isEdit && row.delai_peremption !== undefined && row.delai_peremption !== null && row.delai_peremption !== "" ? row.delai_peremption : 30;
@@ -488,6 +490,8 @@ export async function saveEditDialog() {
         en_commande: document.getElementById("edit-en-commande").checked ? 1 : 0,
         date_commande: document.getElementById("edit-date-commande").value.trim()
     });
+    const arreteInput = document.getElementById("edit-arrete");
+    if (arreteInput) setProduitArrete(ref, arreteInput.checked);
 
     document.getElementById("edit-overlay").classList.add("hidden");
     refreshPlacardTable();

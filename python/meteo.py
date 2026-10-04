@@ -20,6 +20,7 @@ import calendar
 import email.utils
 import json
 import re
+import ssl
 import threading
 import time
 import urllib.error
@@ -51,11 +52,31 @@ class MeteoIndisponible(RuntimeError):
 # Accès réseau (remplacé dans les tests)
 # ------------------------------------------------------------------
 
+def _contexte_ssl():
+    """
+    Certificats de Windows + ceux de certifi s'il est installé.
+
+    Windows n'installe certaines autorités racines (dont HARICA, qui signe
+    api.met.no) qu'à la première visite avec un navigateur ; Python ne lit que
+    celles déjà présentes et refusait donc la connexion. certifi les fournit.
+    """
+    contexte = ssl.create_default_context()
+    try:
+        import certifi
+        contexte.load_verify_locations(certifi.where())
+    except (ImportError, OSError, ssl.SSLError):
+        pass
+    return contexte
+
+
+_CONTEXTE_SSL = _contexte_ssl()
+
+
 def ouvrir(url, entetes=None, delai=DELAI_RESEAU):
     """GET HTTP. Renvoie (code, en-têtes, corps en octets). Un 304 n'est pas une erreur."""
     requete = urllib.request.Request(url, headers=dict(entetes or {}, **{"User-Agent": USER_AGENT}))
     try:
-        with urllib.request.urlopen(requete, timeout=delai) as rep:
+        with urllib.request.urlopen(requete, timeout=delai, context=_CONTEXTE_SSL) as rep:
             return rep.status, dict(rep.headers.items()), rep.read()
     except urllib.error.HTTPError as exc:
         if exc.code == 304:
@@ -263,26 +284,48 @@ def meteo_actuelle(lieu, maintenant=None):
         if not meme_lieu:
             _cache.clear()
             _cache["coords"] = coords
-
+        if _cache.get("en_cours"):
+            # Un autre poste interroge déjà le service : on ne l'attend pas
+            # (jusqu'à DELAI_RESEAU secondes), on rend la dernière météo connue.
+            return {"meteo": _cache.get("meteo"), "raison": None, "lieu": nom}
+        _cache["en_cours"] = True
+        brut_connu = _cache.get("brut")
         entetes = {}
-        if _cache.get("modifie_le") and _cache.get("brut") is not None:
+        if _cache.get("modifie_le") and brut_connu is not None:
             entetes["If-Modified-Since"] = _cache["modifie_le"]
-        try:
-            code, reponse, corps = ouvrir(
-                URL_PREVISION.format(lat="%.4f" % coords[0], lon="%.4f" % coords[1]), entetes)
-            if code == 304 and _cache.get("brut") is not None:
-                brut = _cache["brut"]
-            else:
-                brut = json.loads(corps.decode("utf-8"))
-            _cache["brut"] = brut
-            _cache["modifie_le"] = reponse.get("Last-Modified") or reponse.get("last-modified")
-            _cache["meteo"] = resumer(brut, maintenant)
-            _cache["expire"] = maintenant + _duree_cache(reponse, maintenant)
-            _cache.pop("echec_jusqua", None)
-            return {"meteo": _cache["meteo"], "raison": None, "lieu": nom}
-        except (MeteoIndisponible, ValueError, UnicodeDecodeError):
+
+    # Requête hors du verrou : les autres postes ne restent pas bloqués
+    try:
+        code, reponse, corps = ouvrir(
+            URL_PREVISION.format(lat="%.4f" % coords[0], lon="%.4f" % coords[1]), entetes)
+        if code == 304 and brut_connu is not None:
+            brut = brut_connu
+        else:
+            brut = json.loads(corps.decode("utf-8"))
+        resultat = resumer(brut, maintenant)
+    except (MeteoIndisponible, ValueError, UnicodeDecodeError):
+        with _verrou:
+            if _cache.get("coords") != coords:
+                return {"meteo": None, "raison": "hors-ligne", "lieu": nom}
+            _cache.pop("en_cours", None)
             _cache["echec_jusqua"] = maintenant + ATTENTE_APRES_ECHEC
             return {"meteo": _cache.get("meteo"), "raison": "hors-ligne", "lieu": nom}
+    except BaseException:
+        with _verrou:
+            if _cache.get("coords") == coords:
+                _cache.pop("en_cours", None)
+        raise
+
+    with _verrou:
+        # La commune a pu changer pendant la requête : on n'écrase pas son cache
+        if _cache.get("coords") == coords:
+            _cache.pop("en_cours", None)
+            _cache["brut"] = brut
+            _cache["modifie_le"] = reponse.get("Last-Modified") or reponse.get("last-modified")
+            _cache["meteo"] = resultat
+            _cache["expire"] = maintenant + _duree_cache(reponse, maintenant)
+            _cache.pop("echec_jusqua", None)
+    return {"meteo": resultat, "raison": None, "lieu": nom}
 
 
 # ------------------------------------------------------------------

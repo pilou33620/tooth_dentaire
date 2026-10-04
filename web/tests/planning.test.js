@@ -77,6 +77,18 @@ const TACHES = {
 
 let serveur;
 
+// Le dimanche, la parité suit le lundi suivant (voir team-planning.js) : sans
+// date figée, les tests de parité échouaient chaque dimanche. Seule la date
+// est simulée, les minuteurs restent réels.
+const MERCREDI = new Date(2026, 2, 11, 10);   // 11/03/2026, semaine 11
+const MINUTEURS_REELS = ['hrtime', 'nextTick', 'performance', 'queueMicrotask',
+    'requestAnimationFrame', 'cancelAnimationFrame', 'requestIdleCallback',
+    'cancelIdleCallback', 'setImmediate', 'clearImmediate', 'setInterval',
+    'clearInterval', 'setTimeout', 'clearTimeout'];
+
+beforeEach(() => { jest.useFakeTimers({ now: MERCREDI, doNotFake: MINUTEURS_REELS }); });
+afterEach(() => { jest.useRealTimers(); });
+
 async function charger(module, documents = { planning: PLANNING, planning_couleurs: COULEURS, taches: TACHES }) {
     document.body.innerHTML = MARKUP;
     jest.resetModules();

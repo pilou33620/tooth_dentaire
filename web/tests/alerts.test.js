@@ -213,6 +213,15 @@ describe('post-it « à commander »', () => {
         expect(document.querySelector('.postit-title').textContent).toContain('Bravo');
     });
 
+    test('un produit « ne plus commander » n\'y figure pas, même à 0, ni dans les alertes', () => {
+        preparer(
+            [ligne({ quantite: 0, stock_minimum: 5, alerte_active: 1 })],
+            [{ reference: 'REF1', nom: 'Gant', arrete: 1 }]
+        );
+        expect(document.querySelector('.postit-title').textContent).toContain('Bravo');
+        expect(alertsStock).toHaveLength(0);
+    });
+
     test('le total est calculé tous espaces confondus', () => {
         preparer([
             ligne({ utilisateur: 'Cabinet 1', quantite: 0 }),
@@ -232,6 +241,26 @@ describe('post-it « à commander »', () => {
         expect(document.querySelectorAll('#postit-list .postit-item')).toHaveLength(5);
         expect(document.querySelector('.postit-more').textContent)
             .toContain('et 3 de plus');
+    });
+
+    test('un clic sur « et N de plus » déplie toute la liste, puis la replie', () => {
+        const produits = [];
+        const stock = [];
+        for (let i = 0; i < 8; i++) {
+            produits.push({ reference: 'R' + i, nom: 'Produit ' + i });
+            stock.push(ligne({ reference: 'R' + i, quantite: 0 }));
+        }
+        preparer(stock, produits);
+
+        document.querySelector('.postit-more').click();
+        expect(document.querySelectorAll('#postit-list .postit-item')).toHaveLength(8);
+        const reduire = document.querySelector('.postit-more');
+        expect(reduire.textContent).toContain('Réduire');
+        expect(reduire.getAttribute('aria-expanded')).toBe('true');
+
+        reduire.click();
+        expect(document.querySelectorAll('#postit-list .postit-item')).toHaveLength(5);
+        expect(document.querySelector('.postit-more').textContent).toContain('et 3 de plus');
     });
 
     test('sans dépassement, pas de compteur du reste', () => {

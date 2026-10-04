@@ -71,6 +71,18 @@ def test_produit_insere_puis_mis_a_jour(base_temp):
     assert produits[0]["quantite_par_carton"] == 10
 
 
+def test_produit_arrete_conserve_si_non_transmis(base_temp):
+    base.update_produit(produit())
+    assert base.charger_base()["produits"][0]["arrete"] == 0
+    base.update_produit(dict(produit(), arrete=1))
+    assert base.charger_base()["produits"][0]["arrete"] == 1
+    # Un poste qui ne connait pas le champ (import de facture...) ne le remet pas a 0
+    base.update_produit(produit(nom="Renomme"))
+    assert base.charger_base()["produits"][0]["arrete"] == 1
+    base.update_produit(dict(produit(), arrete=0))
+    assert base.charger_base()["produits"][0]["arrete"] == 0
+
+
 def test_produit_sans_reference_refuse(base_temp):
     with pytest.raises(base.ErreurDonnees):
         base.update_produit({"nom": "Sans ref"})

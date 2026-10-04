@@ -179,9 +179,12 @@ def liste_courses(db):
     """Articles en alerte, au minimum ou en dessous, et pas deja commandes."""
     _exiger_openpyxl()
     noms = {p.get("reference"): p.get("nom", "") for p in db.get("produits", [])}
+    arretes = {p.get("reference") for p in db.get("produits", []) if _int(p.get("arrete"))}
     a_commander = {}
     for s in db.get("stock", []):
         if not _int(s.get("alerte_active")) or _int(s.get("en_commande")):
+            continue
+        if s.get("reference") in arretes:     # on ne l'achete plus
             continue
         if _int(s.get("quantite")) <= _int(s.get("stock_minimum")):
             ref = s.get("reference", "")

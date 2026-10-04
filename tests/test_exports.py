@@ -96,6 +96,12 @@ def test_liste_de_courses():
     assert wb.active["C2"].value == "Compresses"
 
 
+def test_liste_de_courses_ignore_les_produits_arretes():
+    db = db_exemple()
+    db["produits"][0]["arrete"] = 1
+    assert "Aucun article" in exports.liste_courses(db)["status"]
+
+
 def test_liste_de_courses_vide():
     db = db_exemple()
     for s in db["stock"]:

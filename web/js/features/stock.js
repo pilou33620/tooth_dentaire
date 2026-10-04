@@ -61,6 +61,7 @@ export function getStock(utilisateur = "Commun") {
                 ref_scannette: (p && p.ref_scannette) || "",
                 type_stockage: (p && p.type_stockage) || "unite",
                 quantite_par_carton: (p && p.quantite_par_carton) || 1,
+                arrete: (p && p.arrete) ? 1 : 0,
                 stock_minimum: s.stock_minimum || 0,
                 alerte_active: s.alerte_active || 0,
                 alerte_peremption_active: s.alerte_peremption_active !== undefined ? s.alerte_peremption_active : 0,

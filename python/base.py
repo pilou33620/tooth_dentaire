@@ -151,6 +151,8 @@ def init_db():
             _ajouter_colonne(cur, "produits", definition)
         _ajouter_colonne(cur, "produits", "type_stockage TEXT DEFAULT 'unite'")
         _ajouter_colonne(cur, "produits", "quantite_par_carton INTEGER DEFAULT 1")
+        # Produit qu'on n'achete plus : hors post-it, alertes et liste de courses
+        _ajouter_colonne(cur, "produits", "arrete INTEGER DEFAULT 0")
 
         cur.execute("""
             CREATE TABLE IF NOT EXISTS stock (
@@ -306,7 +308,7 @@ def charger_base():
         cur = conn.cursor()
         produits = [dict(r) for r in cur.execute(
             "SELECT reference, nom, groupe, ref_scannette, type_stockage,"
-            " quantite_par_carton FROM produits")]
+            " quantite_par_carton, arrete FROM produits")]
         stock = [dict(r) for r in cur.execute(
             "SELECT reference, utilisateur, quantite, stock_minimum, alerte_active,"
             " alerte_peremption_active, delai_peremption, date_peremption, date_import,"
@@ -343,17 +345,22 @@ def update_produit(p):
     if not ref:
         raise ErreurDonnees("La reference du produit est obligatoire.")
 
+    # « arrete » absent (ancien poste, import de facture) : valeur en base conservee
+    arrete = None if p.get("arrete") is None else (1 if safe_int(p.get("arrete")) else 0)
+
     def faire(cur):
         cur.execute("""
-            INSERT INTO produits (reference, nom, groupe, ref_scannette, type_stockage, quantite_par_carton)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO produits (reference, nom, groupe, ref_scannette, type_stockage,
+                                  quantite_par_carton, arrete)
+            VALUES (?, ?, ?, ?, ?, ?, COALESCE(?, 0))
             ON CONFLICT(reference) DO UPDATE SET
               nom=excluded.nom, groupe=excluded.groupe, ref_scannette=excluded.ref_scannette,
-              type_stockage=excluded.type_stockage, quantite_par_carton=excluded.quantite_par_carton
+              type_stockage=excluded.type_stockage, quantite_par_carton=excluded.quantite_par_carton,
+              arrete=COALESCE(?, produits.arrete)
         """, (ref, _texte(p.get("nom")), _texte(p.get("groupe")),
               _texte(p.get("ref_scannette")),
               _texte(p.get("type_stockage")) or "unite",
-              max(1, safe_int(p.get("quantite_par_carton"), 1))))
+              max(1, safe_int(p.get("quantite_par_carton"), 1)), arrete, arrete))
     _ecrire(faire)
 
 

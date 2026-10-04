@@ -16,6 +16,14 @@
 </head>
 <body class="bj">
     <!-- BANDEAU MODE PERSONNALISATION -->
+    <!-- Mise à jour de l'outil disponible / installée (js/ui/mise-a-jour.js) -->
+    <div id="maj-bandeau" class="hidden" role="status" aria-live="polite">
+        <span id="maj-texte"></span>
+        <button type="button" id="maj-installer" class="btn hidden">Mettre à jour</button>
+        <button type="button" id="maj-recharger" class="btn hidden">Recharger</button>
+        <button type="button" id="maj-plus-tard" class="btn hidden">Plus tard</button>
+    </div>
+
     <div id="customization-banner" class="hidden" role="status">
         <span>Mode personnalisation : déplacez les éléments où vous le souhaitez.</span>
         <button id="btn-exit-customization" class="btn">Quitter et sauvegarder</button>
@@ -1421,6 +1429,8 @@
                         <input type="number" id="edit-min" class="input" min="0" max="99999" value="0">
                         <label class="check-label"><input type="checkbox" id="edit-alerte"> Activer l'alerte de stock
                             bas</label>
+                        <label class="check-label" title="Le produit ne s'affiche plus dans « À commander », les alertes ni la liste de courses, même à 0. Le stock restant reste utilisable."><input type="checkbox" id="edit-arrete"> Ne plus commander
+                            (produit arrêté)</label>
                     </section>
 
                     <!-- ---- Colonne 3 : Lots & péremption ---- -->
@@ -1986,6 +1996,15 @@
                 </section>
 
                 <!-- ---------- Cabinet ---------- -->
+                <section class="bj-section">
+                    <h3 class="bj-section-titre">Mises à jour <small>vérifiées toutes les 4 heures</small></h3>
+                    <div id="maj-reglages-etat" class="bj-aide maj-reglages-etat">Chargement...</div>
+                    <div class="bj-ligne">
+                        <button type="button" id="maj-reglages-verifier" class="btn">Vérifier maintenant</button>
+                        <button type="button" id="maj-reglages-installer" class="btn btn-blue hidden">Mettre à jour</button>
+                    </div>
+                </section>
+
                 <section class="bj-section">
                     <h3 class="bj-section-titre">Accès depuis les autres postes</h3>
                     <div id="settings-adresses" class="bj-mono">Chargement...</div>

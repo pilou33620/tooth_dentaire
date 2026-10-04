@@ -176,6 +176,33 @@ def test_hors_ligne_garde_la_derniere_meteo_et_patiente(monkeypatch):
     assert len(reseau.appels) == 2
 
 
+def test_un_poste_n_attend_pas_la_requete_d_un_autre(monkeypatch):
+    import threading
+    entree, sortie = threading.Event(), threading.Event()
+    premier = FauxReseau(ok(prevision("rain")))
+    monkeypatch.setattr(meteo, "ouvrir", premier)
+    meteo.meteo_actuelle(LIEU, maintenant=T)
+
+    def reseau_lent(url, entetes=None, delai=None):
+        entree.set()
+        sortie.wait(5)
+        return ok(prevision("clearsky_day"))
+
+    monkeypatch.setattr(meteo, "ouvrir", reseau_lent)
+    plus_tard = T + meteo.CACHE_MAX + 1
+    fil = threading.Thread(target=meteo.meteo_actuelle, args=(LIEU, plus_tard))
+    fil.start()
+    assert entree.wait(5)
+    # Pendant la requête lente, un autre poste a tout de suite la dernière météo
+    debut = time.monotonic()
+    rep = meteo.meteo_actuelle(LIEU, maintenant=plus_tard)
+    assert time.monotonic() - debut < 1
+    assert rep["meteo"]["categorie"] == "pluie"
+    sortie.set()
+    fil.join(5)
+    assert meteo.meteo_actuelle(LIEU, maintenant=plus_tard + 1)["meteo"]["categorie"] == "clair"
+
+
 def test_jamais_d_internet(monkeypatch):
     monkeypatch.setattr(meteo, "ouvrir", FauxReseau(meteo.MeteoIndisponible("x")))
     rep = meteo.meteo_actuelle(LIEU, maintenant=T)

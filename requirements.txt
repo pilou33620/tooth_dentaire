@@ -2,6 +2,10 @@
 # openpyxl est nécessaire pour les exports Excel : sans lui, le serveur démarre
 # quand même et les exports répondent « indisponible ».
 openpyxl>=3.1.5
+# certifi : certificats racines pour la météo (api.met.no). Sans lui, la météo
+# peut rester « indisponible » sur un poste Windows qui ne connaît pas encore
+# l'autorité HARICA ; le reste de l'outil n'est pas concerné.
+certifi>=2024.2.2
 
 # Tests
 pytest>=7.4.0

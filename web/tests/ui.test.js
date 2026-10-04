@@ -13,6 +13,8 @@ const MARKUP = `
     </div>
     <div id="datetime-container"></div>
     <div id="postit-wrapper"></div>
+    <div id="checklist-widget"></div>
+    <div id="notes-widget"></div>
     <div class="action-area"></div>
     <div class="backsplash"></div>
     <div class="countertop"></div>
@@ -189,6 +191,16 @@ describe('mode personnalisation', () => {
         const cible = document.getElementById('postit-wrapper');
         expect(cible.classList.contains('draggable-item')).toBe(true);
         expect(cible.querySelector('.resize-handle')).not.toBeNull();
+    });
+
+    test('la checklist et les notes de l\'accueil sont déplaçables', () => {
+        custom.initCustomizationMode();
+        window.toggleCustomizationMode(true);
+        for (const id of ['checklist-widget', 'notes-widget']) {
+            const cible = document.getElementById(id);
+            expect(cible.classList.contains('draggable-item')).toBe(true);
+            expect(cible.querySelector('.resize-handle')).not.toBeNull();
+        }
     });
 
     test('les fonds redimensionnables reçoivent leur poignée', () => {

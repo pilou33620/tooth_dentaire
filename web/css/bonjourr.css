@@ -1394,6 +1394,37 @@ body.bj {
     font-size: 0.82rem;
 }
 
+/* « … et N de plus » / « Réduire » : bouton qui déplie la liste. Il reste
+   visible au survol (style.css le masquait, on ne pouvait pas cliquer). */
+.bj #postit-wrapper .postit-more,
+.bj #postit-wrapper.postit-hover-active .postit-more {
+    display: block !important;
+    justify-content: center;
+    cursor: pointer;
+    user-select: none;
+}
+
+.bj #postit-wrapper .postit-more:hover,
+.bj #postit-wrapper .postit-more:focus-visible {
+    color: var(--bj-texte);
+    background: rgba(255, 255, 255, 0.1);
+    outline: none;
+}
+
+/* Déplié : toutes les lignes, liste bornée et défilante */
+.bj #postit-wrapper.postit-deplie #postit-list li.postit-item {
+    display: flex;
+    white-space: normal;
+}
+
+.bj #postit-wrapper.postit-deplie #postit-list {
+    max-height: min(60vh, 520px);
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.4) transparent;
+}
+
 #postit-wrapper.postit-hover-active #postit-list {
     scrollbar-color: rgba(255, 255, 255, 0.4) transparent;
 }
@@ -2442,4 +2473,67 @@ body.customization-active .draggable-item {
    pour que le texte blanc des widgets reste lisible */
 :root:is([data-bj-fond="dynamique"], [data-bj-fond="paysage"]):not([data-bj-meteo-fond="non"]):is([data-bj-meteo="neige"], [data-bj-meteo="brouillard"]) .bj-fond-voile {
     opacity: calc(1.14 - var(--bj-luminosite));
+}
+
+/* ---------- Placard : produit qu'on ne commande plus ---------- */
+.row-arrete td {
+    color: #8a8f98;
+}
+
+.row-arrete td.td-nom {
+    font-style: italic;
+}
+
+.badge-arrete {
+    display: inline-block;
+    margin-left: 4px;
+    padding: 0 6px;
+    border-radius: 999px;
+    background: #e3e5e8;
+    color: #5f6670;
+    font-size: 0.75em;
+    font-style: normal;
+    font-weight: 600;
+    vertical-align: middle;
+}
+
+/* ---------- Bandeau de mise à jour ---------- */
+#maj-bandeau {
+    position: fixed;
+    bottom: 22px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 9998;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    max-width: calc(100vw - 32px);
+    padding: 8px 8px 8px 20px;
+    border-radius: 999px;
+    background: rgba(20, 24, 33, 0.78);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    backdrop-filter: var(--bj-verre-flou);
+    -webkit-backdrop-filter: var(--bj-verre-flou);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+    color: #fff;
+    font-size: 0.92rem;
+}
+
+#maj-bandeau.hidden {
+    display: none;
+}
+
+#maj-bandeau .btn {
+    border-radius: 999px;
+    white-space: nowrap;
+}
+
+#maj-installer {
+    background: #fff;
+    color: #1d2533;
+    font-weight: 600;
+}
+
+.maj-reglages-etat {
+    white-space: pre-line;
 }

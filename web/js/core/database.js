@@ -95,6 +95,17 @@ export function getStockInfo(reference, utilisateur = "Commun") {
     };
 }
 
+/** « Ne plus commander » : produit arrêté, hors post-it, alertes et liste de courses. */
+export function setProduitArrete(reference, arrete) {
+    const db = loadDB();
+    const p = findProduit(db, reference);
+    if (!p) return;
+    const valeur = arrete ? 1 : 0;
+    if ((p.arrete ? 1 : 0) === valeur) return;
+    p.arrete = valeur;
+    persister("updateProduit", JSON.stringify(p));
+}
+
 export function ajouterProduit(db, reference, nom = "", groupe = "", ref_scannette = "", type_stockage = "unite", quantite_par_carton = 1) {
     const p = findProduit(db, reference);
     const formattedScannette = formatBarcodes(ref_scannette);

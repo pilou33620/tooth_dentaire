@@ -43,6 +43,7 @@ import socket
 import socketserver
 import sys
 import threading
+import time
 import traceback
 import urllib.parse
 import webbrowser
@@ -64,6 +65,7 @@ if DOSSIER_PYTHON not in sys.path:
 import base                                   # noqa: E402
 import exports                                # noqa: E402
 import meteo                                  # noqa: E402
+import mise_a_jour                            # noqa: E402
 
 # Origines acceptees pour les requetes qui modifient les donnees (CSRF) :
 # localhost et les adresses des reseaux prives (postes du cabinet).
@@ -262,6 +264,8 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
             self._json({"status": "error", "message": str(exc)}, 400)
         except (exports.ExportIndisponible, meteo.MeteoIndisponible) as exc:
             self._json({"status": "error", "message": str(exc)}, 503)
+        except mise_a_jour.MiseAJourImpossible as exc:
+            self._json({"status": "error", "message": str(exc)}, 409)
         except Exception as exc:                          # noqa: BLE001
             traceback.print_exc()
             self._json({"status": "error", "message": "Erreur serveur : %s" % exc}, 500)
@@ -289,6 +293,8 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
             return self._executer(lambda: {"valeur": base.lire_document(cle)})
         if route == "/api/meteo":
             return self._executer(lambda: meteo.meteo_actuelle(base.lire_document("meteo_lieu")))
+        if route == "/api/mise-a-jour":
+            return self._executer(mise_a_jour.etat)
         if route == "/api/meteo/communes":
             return self._executer(lambda: {"communes": meteo.chercher_communes(q.get("q", ""))})
         if route == "/api/base":
@@ -315,6 +321,8 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
             "/api/historique-prix": lambda d: {"id": base.add_historique_prix(d)},
             "/api/contacts": lambda d: {"contact": base.enregistrer_contact(d)},
             "/api/base": self._changer_base,
+            "/api/mise-a-jour/verifier": lambda d: mise_a_jour.verifier(),
+            "/api/mise-a-jour/installer": self._installer_mise_a_jour,
             "/api/export/stock": lambda d: self._export(exports.export_stock(base.charger_base())),
             "/api/export/liste-courses": lambda d: self._export(
                 exports.liste_courses(base.charger_base())),
@@ -357,7 +365,17 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
         port = self.server.server_address[1]
         adresses = [] if CustomHandler.ECOUTE_LOCALE else \
             ["http://%s:%d/" % (get_local_ip(), port)]
-        return {"version": VERSION, "adresses_reseau": adresses}
+        return {"version": VERSION, "adresses_reseau": adresses,
+                "commit": mise_a_jour.etat()["version_locale"]}
+
+    def _installer_mise_a_jour(self, data):
+        resultat = mise_a_jour.installer()
+        # Laisser partir la réponse, puis arrêter le serveur : lancer() relance
+        # le programme mis à jour (voir mise_a_jour.REDEMARRER).
+        minuteur = threading.Timer(1.0, self.server.shutdown)
+        minuteur.daemon = True
+        minuteur.start()
+        return resultat
 
     def _export(self, resultat):
         contenu = resultat.pop("contenu", None)
@@ -407,6 +425,13 @@ def ouvrir_navigateur(url, delai=0.8):
 
 def start_server(host, port, navigateur=True):
     httpd, erreur = creer_serveur(host, port)
+    # Après une mise à jour, l'ancien serveur libère le port à l'instant : on
+    # l'attend un peu plutôt que de partir sur un autre port (les postes du
+    # cabinet ont l'adresse habituelle en favori).
+    attente = time.time() + 20 if os.environ.get(mise_a_jour.VARIABLE_REDEMARRAGE) else 0
+    while httpd is None and time.time() < attente:
+        time.sleep(0.5)
+        httpd, erreur = creer_serveur(host, port)
     if httpd is None:
         print("[!] Le port %d est indisponible (%s)." % (port, erreur))
         print("[*] Recherche d'un port libre...")
@@ -435,6 +460,7 @@ def start_server(host, port, navigateur=True):
 
     if navigateur:
         ouvrir_navigateur(url)
+    mise_a_jour.demarrer_verifications()
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
@@ -494,6 +520,10 @@ def lancer(argv=None):
     except Exception:                                     # noqa: BLE001
         traceback.print_exc()
         code = 1
+    if mise_a_jour.REDEMARRER.is_set():
+        print("\nMise a jour installee : redemarrage de l'outil...")
+        mise_a_jour.relancer(argv)
+        return 0
     muet = {"--sans-pause", "--help", "-h"}.intersection(argv)
     if os.name == "nt" and not muet and sys.stdin is not None and sys.stdin.isatty():
         try:

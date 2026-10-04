@@ -16,6 +16,8 @@ const DRAGGABLE_ELEMENT_SELECTORS = [
     "#team-planning-container",
     "#tasks-planning-container",
     "#postit-wrapper",
+    "#checklist-widget",
+    "#notes-widget",
     "#btn-annuaire-container",
     "#btn-dosimetre-container",
     ".action-area",
