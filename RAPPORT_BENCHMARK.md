@@ -180,6 +180,11 @@ cette correction, en enchaînant les paliers, le port du palier précédent rest
 occupé : le serveur partait sur un autre port et **100 % des requêtes échouaient
 sans que le script le signale**.
 
+Autre défaut corrigé : l'audit teste le changement de base « à chaud », ce qui
+réécrivait `donnees/config.json` **de l'installation** (sur le poste serveur du
+cabinet, il aurait effacé le chemin de base choisi dans les Réglages). Le serveur
+de test utilise désormais son propre fichier de réglages (`TOOTH_CONFIG`).
+
 ### Charge (40 opérations par poste, machine de test du dépôt)
 
 | Postes simultanés | Requêtes | Succès | Débit | p50 | p95 | Max |

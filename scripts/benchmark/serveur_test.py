@@ -30,7 +30,10 @@ def demarrer(port=0, delai=20):
     cmd = [sys.executable, os.path.join(RACINE, "serveur.py"),
            "--port", str(port), "--base", os.path.join(dossier, "stock.db"),
            "--local", "--sans-navigateur", "--sans-pause"]
-    proc = subprocess.Popen(cmd, cwd=RACINE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    # Reglages propres au test : l'audit change de base a chaud, ce qui ne
+    # doit pas modifier donnees/config.json de l'installation.
+    env = dict(os.environ, TOOTH_CONFIG=os.path.join(dossier, "config.json"))
+    proc = subprocess.Popen(cmd, cwd=RACINE, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     url = "http://127.0.0.1:%d" % port
     fin = time.time() + delai
     while time.time() < fin:

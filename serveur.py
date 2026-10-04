@@ -55,7 +55,9 @@ TAILLE_MAX_CORPS = 20 * 1024 * 1024        # 20 Mo : un planning ou un carnet co
 ROOT = os.path.dirname(os.path.abspath(__file__))
 DOSSIER_WEB = os.path.join(ROOT, "web")
 DOSSIER_DONNEES = os.path.join(ROOT, "donnees")
-FICHIER_CONFIG = os.path.join(DOSSIER_DONNEES, "config.json")
+# TOOTH_CONFIG : autre fichier de reglages (serveurs de test des benchmarks,
+# pour ne pas toucher aux reglages de l'installation).
+FICHIER_CONFIG = os.environ.get("TOOTH_CONFIG") or os.path.join(DOSSIER_DONNEES, "config.json")
 BASE_DEFAUT = os.path.join(DOSSIER_DONNEES, "stock.db")
 
 DOSSIER_PYTHON = os.path.join(ROOT, "python")
@@ -89,7 +91,7 @@ def charger_config():
 
 
 def enregistrer_config(config):
-    os.makedirs(DOSSIER_DONNEES, exist_ok=True)
+    os.makedirs(os.path.dirname(FICHIER_CONFIG), exist_ok=True)
     with open(FICHIER_CONFIG, "w", encoding="utf-8") as f:
         json.dump(config, f, indent=2, ensure_ascii=False)
 
