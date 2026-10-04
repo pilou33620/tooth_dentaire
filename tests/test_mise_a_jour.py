@@ -129,6 +129,14 @@ def test_dossier_qui_n_est_pas_un_clone(tmp_path):
     assert "clone git" in etat["raison"]
 
 
+def test_git_portable_prioritaire(tmp_path, monkeypatch):
+    portable = tmp_path / "git.exe"
+    monkeypatch.setattr(mise_a_jour, "GIT_PORTABLE", str(portable))
+    assert mise_a_jour.commande_git() == "git"
+    portable.write_bytes(b"")
+    assert mise_a_jour.commande_git() == str(portable)
+
+
 def test_sans_internet(depots):
     run(depots["poste"], "remote", "set-url", "origin", os.path.join(depots["poste"], "introuvable"))
     etat = mise_a_jour.verifier(depots["poste"])

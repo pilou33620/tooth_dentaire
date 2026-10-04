@@ -38,5 +38,5 @@ Thumbs.db
 .vscode/
 .idea/
 
-# Dossier d installation produit par scripts/preparer_installation.py
-dist/
+# git portable pose par installation/Installer.bat
+.mingit/

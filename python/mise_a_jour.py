@@ -27,6 +27,9 @@ DISTANT = "origin"
 INTERVALLE = 4 * 60 * 60        # s : une vérification toutes les 4 heures
 PREMIERE_VERIFICATION = 60      # s après le démarrage
 DELAI_GIT = 120                 # s
+# git portable (MinGit) posé par installation/Installer.bat sur les postes
+# où git n'est pas installé ; sinon le git du PATH.
+GIT_PORTABLE = os.path.join(RACINE, ".mingit", "cmd", "git.exe")
 
 _verrou = threading.Lock()
 _etat = {
@@ -53,11 +56,15 @@ class MiseAJourImpossible(RuntimeError):
 # git (remplacé dans les tests)
 # ------------------------------------------------------------------
 
+def commande_git():
+    return GIT_PORTABLE if os.path.isfile(GIT_PORTABLE) else "git"
+
+
 def git(*args, dossier=None, delai=DELAI_GIT):
     """Lance git et renvoie sa sortie (texte). Lève MiseAJourImpossible en cas d'échec."""
     try:
         sortie = subprocess.run(
-            ["git"] + list(args), cwd=dossier or RACINE, capture_output=True, text=True,
+            [commande_git()] + list(args), cwd=dossier or RACINE, capture_output=True, text=True,
             encoding="utf-8", errors="replace", timeout=delai,
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     except FileNotFoundError:

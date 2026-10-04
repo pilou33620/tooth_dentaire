@@ -34,18 +34,22 @@ dans **Réglages**.
 
 ### Installer sur un poste du cabinet
 
-```bash
-python scripts/preparer_installation.py
-```
+Un seul fichier à donner : [`installation/Installer.bat`](installation/Installer.bat).
+Double-clic, sans question ni droits administrateur, il faut seulement internet :
 
-produit `dist/Installation tooth_dentaire/` (et son `.zip`) : l'outil sans les
-tests, les bibliothèques en wheels (installation sans internet), `Installer.bat`.
-Sur le poste : y placer l'installateur Python (`python-3.x.x-amd64.exe`, inutile si
-Python 3.8+ est déjà installé) et éventuellement un `stock.db` à reprendre, puis
-double-cliquer sur `Installer.bat`. Il installe Python (sans droits administrateur),
-copie l'outil (par défaut dans `C:\tooth_dentaire`) avec un environnement `.venv`,
-garde l'installateur Python à côté de `Lancer.bat`, crée un raccourci sur le Bureau
-puis supprime le dossier d'installation. Une réinstallation ne touche pas à `donnees/`.
+1. Python : celui du poste s'il est en 3.8+, sinon **Python 3.14.8** téléchargé sur
+   python.org (signature de la Python Software Foundation vérifiée) ;
+2. git : celui du poste, sinon **MinGit** (git portable officiel, empreinte SHA-256
+   vérifiée) dans `.mingit/` ;
+3. **clone** de ce dépôt (branche `main`) dans `C:\tooth_dentaire` : c'est ce qui
+   permet les mises à jour automatiques ; `donnees/` n'est jamais touché ;
+4. environnement `.venv` avec les bibliothèques de `requirements.txt` ;
+5. raccourci « Lancer tooth_dentaire » dans le dossier de l'installateur (et sur le
+   Bureau), puis **l'installateur se supprime** : il ne reste que le lanceur.
+
+En cas d'erreur, rien n'est supprimé. Relancer `Installer.bat` sur un poste déjà
+installé répare l'installation (code remis sur `main`, base conservée). Pour
+reprendre une base existante : copier son `stock.db` dans `C:\tooth_dentaire\donnees\`.
 
 Au premier lancement en réseau, Windows demande d'autoriser Python dans le
 pare-feu : accepter pour les **réseaux privés**.
@@ -78,7 +82,7 @@ la base (`donnees/stock.db` par défaut), et le dossier `donnees/` est exclu de 
 
 ## Mises à jour
 
-Sur un poste installé par `git clone`, le serveur vérifie toutes les 4 heures si
+Sur un poste installé par `Installer.bat` (ou `git clone`), le serveur vérifie toutes les 4 heures si
 la branche `main` a changé sur GitHub (`python/mise_a_jour.py`). Si oui, un
 bandeau propose « Mettre à jour » sur l'accueil : le serveur avance la copie
 locale (`git merge --ff-only`, jamais d'écrasement), réinstalle les dépendances
@@ -158,8 +162,8 @@ web/                  interface (HTML / CSS / JavaScript, sans framework)
   vendor/             PDF.js (lecture des factures, hors ligne)
 tests/                tests Python (pytest)
 web/tests/            tests JavaScript (Jest)
-installation/         modèles de l'installateur (Installer.bat, installer.ps1)
-scripts/              tests, préparation du dossier d'installation
+installation/         Installer.bat (installateur d'un poste, fichier unique)
+scripts/              lancement des tests
 donnees/              base et configuration — non versionné
 ```
 
