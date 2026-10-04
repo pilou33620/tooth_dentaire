@@ -66,6 +66,7 @@ import base                                   # noqa: E402
 import exports                                # noqa: E402
 import meteo                                  # noqa: E402
 import mise_a_jour                            # noqa: E402
+import sauvegarde                             # noqa: E402
 
 # Origines acceptees pour les requetes qui modifient les donnees (CSRF) :
 # localhost et les adresses des reseaux prives (postes du cabinet).
@@ -302,6 +303,8 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
                 "chemin": base.CHEMIN_BASE,
                 "modifiable": self._client_local(),
             })
+        if route == "/api/sauvegardes":
+            return self._executer(self._sauvegardes)
         self._json({"status": "error", "message": "Route inconnue."}, 404)
 
     def do_HEAD(self):
@@ -321,6 +324,7 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
             "/api/historique-prix": lambda d: {"id": base.add_historique_prix(d)},
             "/api/contacts": lambda d: {"contact": base.enregistrer_contact(d)},
             "/api/base": self._changer_base,
+            "/api/sauvegardes": lambda d: {"sauvegarde": self._sans_chemin(sauvegarde.sauvegarder())},
             "/api/mise-a-jour/verifier": lambda d: mise_a_jour.verifier(),
             "/api/mise-a-jour/installer": self._installer_mise_a_jour,
             "/api/export/stock": lambda d: self._export(exports.export_stock(base.charger_base())),
@@ -367,6 +371,16 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
             ["http://%s:%d/" % (get_local_ip(), port)]
         return {"version": VERSION, "adresses_reseau": adresses,
                 "commit": mise_a_jour.etat()["version_locale"]}
+
+    @staticmethod
+    def _sans_chemin(copie):
+        return {k: v for k, v in copie.items() if k != "chemin"} if copie else None
+
+    def _sauvegardes(self):
+        copies = sauvegarde.lister()
+        return {"dossier": sauvegarde.dossier_sauvegardes(),
+                "derniere": self._sans_chemin(copies[0] if copies else None),
+                "nombre": len(copies)}
 
     def _installer_mise_a_jour(self, data):
         resultat = mise_a_jour.installer()
@@ -448,6 +462,7 @@ def start_server(host, port, navigateur=True):
     print("GESTION DE STOCK - CABINET DENTAIRE  (v%s)" % VERSION)
     print("=" * 62)
     print("  base de donnees : %s" % base.CHEMIN_BASE)
+    print("  sauvegardes     : %s (une par jour)" % sauvegarde.dossier_sauvegardes())
     print("  sur ce poste    : %s" % url)
     if CustomHandler.ECOUTE_LOCALE:
         print("  reseau          : desactive (--local)")
@@ -461,6 +476,7 @@ def start_server(host, port, navigateur=True):
     if navigateur:
         ouvrir_navigateur(url)
     mise_a_jour.demarrer_verifications()
+    sauvegarde.demarrer()
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

@@ -250,3 +250,17 @@ def test_chemin_configure(tmp_path, monkeypatch):
     assert serveur.chemin_base_configure() == str(existant)
     serveur.enregistrer_config({"base": str(tmp_path / "disparu.db")})
     assert serveur.chemin_base_configure() == serveur.BASE_DEFAUT
+
+
+# ------------------------------------------------------------------
+# Sauvegardes
+# ------------------------------------------------------------------
+
+def test_sauvegarde_depuis_les_reglages(srv):
+    code, corps, _ = requete(srv, "GET", "/api/sauvegardes")
+    assert code == 200 and corps["derniere"] is None and corps["nombre"] == 0
+    code, corps, _ = requete(srv, "POST", "/api/sauvegardes", {})
+    assert code == 200 and corps["sauvegarde"]["nom"].startswith("stock-")
+    assert "chemin" not in corps["sauvegarde"]
+    code, corps, _ = requete(srv, "GET", "/api/sauvegardes")
+    assert corps["nombre"] == 1 and corps["dossier"].endswith("sauvegardes")

@@ -50,6 +50,16 @@ async function lancerExport(bouton, type, parametres, messageSucces) {
     }
 }
 
+/** Texte de la section « Sauvegardes » des réglages. */
+function decrireSauvegardes(res) {
+    const dossier = `Copie automatique une fois par jour dans : ${res.dossier}`;
+    if (!res.derniere) return `Aucune sauvegarde pour l'instant. ${dossier}`;
+    const date = new Date(res.derniere.date);
+    const quand = isNaN(date) ? res.derniere.date
+        : `${date.toLocaleDateString("fr-FR")} à ${date.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}`;
+    return `Dernière sauvegarde : ${quand} (${res.nombre} conservée(s)). ${dossier}`;
+}
+
 document.addEventListener("DOMContentLoaded", () => {
     const btnSettings = document.getElementById("btn-settings");
     const settingsOverlay = document.getElementById("settings-overlay");
@@ -87,6 +97,37 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
             } catch (e) {
                 dbPathInput.value = e.message;
+            }
+
+            afficherSauvegardes();
+        });
+    }
+
+    // Sauvegardes automatiques de la base (une par jour, sur le poste serveur)
+    const sauvegardeInfo = document.getElementById("settings-sauvegarde-info");
+    const btnSauvegarder = document.getElementById("settings-btn-sauvegarder");
+
+    async function afficherSauvegardes() {
+        if (!sauvegardeInfo) return;
+        try {
+            const res = await window.api("GET", "/api/sauvegardes");
+            sauvegardeInfo.textContent = decrireSauvegardes(res);
+        } catch (e) {
+            sauvegardeInfo.textContent = e.message;
+        }
+    }
+
+    if (btnSauvegarder) {
+        btnSauvegarder.addEventListener("click", async () => {
+            btnSauvegarder.disabled = true;
+            try {
+                await window.api("POST", "/api/sauvegardes", {});
+                await afficherSauvegardes();
+                await afficherMessage("Sauvegarde", "La base a été sauvegardée.");
+            } catch (e) {
+                await afficherMessage("Sauvegarde", e.message);
+            } finally {
+                btnSauvegarder.disabled = false;
             }
         });
     }

@@ -9,7 +9,7 @@
 ## Mise en place
 - [ ] Installer sur le PC serveur du cabinet (`pip install -r requirements.txt`, autoriser Python dans le pare-feu)
 - [ ] Reprendre les données réelles du cabinet (`python serveur.py --importer "<ancien dossier>"`), puis vérifier les couleurs du planning (onglet 🎨)
-- [ ] Mettre en place une sauvegarde régulière de `donnees/stock.db`
+- [ ] Copier régulièrement `donnees/sauvegardes/` hors du poste serveur (clé USB, NAS)
 
 ## Idées d'amélioration
 - [ ] Écran de consultation de l'historique des prix (déjà enregistré en base)
@@ -17,6 +17,7 @@
 - [ ] Protection contre deux modifications simultanées de la même ligne de stock
 
 ## Fait
+- [x] Sauvegarde automatique quotidienne de la base (`donnees/sauvegardes/`, 30 copies gardées)
 - [x] Version web : serveur Python + interface dans le navigateur, accessible depuis tous les postes du cabinet
 - [x] Toutes les données (personnel, planning, contacts, dosimètres, rappels) en base, aucune dans le code
 - [x] Couleurs du planning réglables (onglet 🎨 Couleurs)

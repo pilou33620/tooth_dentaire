@@ -65,7 +65,12 @@ couleurs du planning, tâches, dosimètres, contacts, rappels, stock : tout est 
 la base (`donnees/stock.db` par défaut), et le dossier `donnees/` est exclu de git
 (voir `.gitignore`). Le dépôt peut donc être publié sans rien exposer.
 
-- **Sauvegarde** : copier `donnees/stock.db` (serveur arrêté de préférence).
+- **Sauvegarde automatique** : une copie par jour (au démarrage du serveur, puis
+  toutes les 24 h) dans `donnees/sauvegardes/stock-AAAAMMJJ-HHMMSS.db` ; les 30
+  plus récentes sont gardées. Réglages → Sauvegardes affiche la dernière copie et
+  permet d'en faire une tout de suite. Pour une copie hors du poste, copier ce
+  dossier (clé USB, NAS). **Restaurer** : arrêter le serveur, remplacer
+  `donnees/stock.db` par la copie voulue renommée en `stock.db`, relancer.
 - **Base ailleurs** (lecteur réseau, dossier synchronisé) : `--base` ou Réglages.
 - **Tout est dans `stock.db`** : stock, produits arrêtés (« ne plus commander »),
   rappels des mires, fauteuils et dosimètres, maintenance, planning, tâches,
@@ -153,6 +158,7 @@ python/
   exports.py          exports Excel (openpyxl)
   meteo.py            météo du fond (MET Norway) et recherche de commune (BAN)
   migration.py        reprise de l'ancienne application
+  sauvegarde.py       sauvegarde automatique quotidienne de la base
   leveldb_lecteur.py  lecture du stockage navigateur de l'ancienne appli
 web/                  interface (HTML / CSS / JavaScript, sans framework)
   js/core/api.js      échanges avec le serveur + synchronisation entre postes
@@ -179,6 +185,7 @@ donnees/              base et configuration — non versionné
 | GET / PUT | `/api/documents/<cle>` | planning, couleurs, tâches, dosimètres, rappels, notes, checklist, minuteurs… |
 | GET / POST / DELETE | `/api/contacts` | carnet d'adresses |
 | POST | `/api/export/stock`, `liste-courses`, `consommation`, `chirurgie` | exports Excel (base64) |
+| GET / POST | `/api/sauvegardes` | dernière sauvegarde / sauvegarder maintenant |
 | GET / POST | `/api/base` | chemin de la base (changement : poste serveur seulement) |
 | GET | `/api/info` | version et adresse réseau |
 | GET | `/api/meteo` | météo actuelle de la commune du cabinet (cache 10 min) |
