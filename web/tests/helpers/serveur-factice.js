@@ -7,7 +7,22 @@
  *   ...                            // actions testées
  *   await attendreEcritures();     // laisse partir les requêtes en file
  *   appelsVers(serveur, "POST", "/api/stock")  // requêtes reçues
+ *
+ * Les lots (POST /api/lot) sont aussi détaillés dans serveur.appels, une
+ * entrée par opération, avec la route d'origine (POST /api/stock...).
+ * serveur.conflitSur = "REF|Espace" : le prochain lot qui écrit cette ligne
+ * est refusé en conflit (409), comme si un autre poste l'avait modifiée.
  */
+
+const ROUTES_LOT = {
+    updateProduit: () => ["POST", "/api/produit"],
+    updateStockItem: () => ["POST", "/api/stock"],
+    addTransaction: () => ["POST", "/api/transaction"],
+    addAutoclave: () => ["POST", "/api/maintenance"],
+    addHistoriquePrix: () => ["POST", "/api/historique-prix"],
+    deleteStockItem: d => ["DELETE", `/api/stock?reference=${encodeURIComponent(d.reference)}&utilisateur=${encodeURIComponent(d.utilisateur)}`],
+    deleteProduit: d => ["DELETE", `/api/produit?reference=${encodeURIComponent(d.reference)}`]
+};
 
 import { jest } from '@jest/globals';
 
@@ -16,7 +31,9 @@ export function installerServeurFactice({ base, documents } = {}) {
         base: base || { produits: [], stock: [], transactions: [], autoclave: [], historique_prix: [], nextTxId: 1, nextAutoId: 1 },
         documents: { ...(documents || {}) },
         revision: 0,
-        appels: []
+        appels: [],
+        lots: [],
+        conflitSur: null
     };
 
     global.fetch = jest.fn(async (url, options = {}) => {
@@ -26,8 +43,31 @@ export function installerServeurFactice({ base, documents } = {}) {
         etat.appels.push({ methode, url: String(url), corps });
 
         let data = {};
-        if (route === "/api/etat") {
-            data = { base: etat.base, documents: etat.documents };
+        if (route === "/api/lot") {
+            const operations = corps.operations || [];
+            etat.lots.push(operations);
+            const enConflit = etat.conflitSur && operations.some(op =>
+                op.action === "updateStockItem"
+                && `${op.donnees.reference}|${op.donnees.utilisateur}` === etat.conflitSur);
+            if (enConflit) {
+                etat.conflitSur = null;
+                return {
+                    ok: false,
+                    status: 409,
+                    json: async () => ({ status: "error", conflit: true, message: "Conflit" })
+                };
+            }
+            data.resultats = operations.map(op => {
+                const [m, u] = ROUTES_LOT[op.action](op.donnees);
+                etat.appels.push({ methode: m, url: u, corps: op.donnees });
+                return op.action === "updateStockItem"
+                    ? { reference: op.donnees.reference, utilisateur: op.donnees.utilisateur, version: (op.donnees.version ?? 0) + 1 }
+                    : {};
+            });
+            etat.revision++;
+        } else if (route === "/api/etat") {
+            // Copie : comme un vrai serveur, l'état renvoyé n'est pas l'objet modifié par l'interface
+            data = JSON.parse(JSON.stringify({ base: etat.base, documents: etat.documents }));
         } else if (route.startsWith("/api/documents/")) {
             const cle = decodeURIComponent(route.slice("/api/documents/".length));
             if (methode === "PUT") {

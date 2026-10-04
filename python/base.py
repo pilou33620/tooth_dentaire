@@ -88,6 +88,10 @@ class ErreurDonnees(ValueError):
     """Donnees envoyees invalides (repondues en 400 par le serveur)."""
 
 
+class ErreurConflit(ErreurDonnees):
+    """Ligne modifiee entre-temps par un autre poste (repondue en 409)."""
+
+
 # ------------------------------------------------------------------
 # Revision
 # ------------------------------------------------------------------
@@ -181,7 +185,10 @@ def init_db():
                            "prix_unitaire_ttc REAL DEFAULT 0",
                            "lots_details TEXT DEFAULT '[]'",
                            "alerte_peremption_active INTEGER DEFAULT 0",
-                           "delai_peremption INTEGER DEFAULT 30"):
+                           "delai_peremption INTEGER DEFAULT 30",
+                           # Numero de version de la ligne : +1 a chaque ecriture.
+                           # Detecte deux postes qui modifient la meme ligne.
+                           "version INTEGER DEFAULT 0"):
             _ajouter_colonne(cur, "stock", definition)
 
         # Une seule fois (user_version) : activer la pre-alerte de peremption
@@ -313,7 +320,7 @@ def charger_base():
             "SELECT reference, utilisateur, quantite, stock_minimum, alerte_active,"
             " alerte_peremption_active, delai_peremption, date_peremption, date_import,"
             " fournisseur, en_commande, date_commande, lot, prix_unitaire_ht,"
-            " prix_unitaire_ttc, lots_details FROM stock")]
+            " prix_unitaire_ttc, lots_details, version FROM stock")]
         transactions = [dict(r) for r in cur.execute(
             "SELECT id, date, reference, utilisateur, type_transaction, quantite,"
             " lot, peremption_sortie FROM transactions ORDER BY id")]
@@ -339,7 +346,7 @@ def charger_base():
 # Stock
 # ------------------------------------------------------------------
 
-def update_produit(p):
+def _maj_produit(cur, p):
     p = _exiger_dict(p)
     ref = _texte(p.get("reference")).strip()
     if not ref:
@@ -347,24 +354,44 @@ def update_produit(p):
 
     # « arrete » absent (ancien poste, import de facture) : valeur en base conservee
     arrete = None if p.get("arrete") is None else (1 if safe_int(p.get("arrete")) else 0)
-
-    def faire(cur):
-        cur.execute("""
-            INSERT INTO produits (reference, nom, groupe, ref_scannette, type_stockage,
-                                  quantite_par_carton, arrete)
-            VALUES (?, ?, ?, ?, ?, ?, COALESCE(?, 0))
-            ON CONFLICT(reference) DO UPDATE SET
-              nom=excluded.nom, groupe=excluded.groupe, ref_scannette=excluded.ref_scannette,
-              type_stockage=excluded.type_stockage, quantite_par_carton=excluded.quantite_par_carton,
-              arrete=COALESCE(?, produits.arrete)
-        """, (ref, _texte(p.get("nom")), _texte(p.get("groupe")),
-              _texte(p.get("ref_scannette")),
-              _texte(p.get("type_stockage")) or "unite",
-              max(1, safe_int(p.get("quantite_par_carton"), 1)), arrete, arrete))
-    _ecrire(faire)
+    cur.execute("""
+        INSERT INTO produits (reference, nom, groupe, ref_scannette, type_stockage,
+                              quantite_par_carton, arrete)
+        VALUES (?, ?, ?, ?, ?, ?, COALESCE(?, 0))
+        ON CONFLICT(reference) DO UPDATE SET
+          nom=excluded.nom, groupe=excluded.groupe, ref_scannette=excluded.ref_scannette,
+          type_stockage=excluded.type_stockage, quantite_par_carton=excluded.quantite_par_carton,
+          arrete=COALESCE(?, produits.arrete)
+    """, (ref, _texte(p.get("nom")), _texte(p.get("groupe")),
+          _texte(p.get("ref_scannette")),
+          _texte(p.get("type_stockage")) or "unite",
+          max(1, safe_int(p.get("quantite_par_carton"), 1)), arrete, arrete))
 
 
-def update_stock_item(s):
+def _verifier_version(cur, ref, espace, s, deja_verifiees):
+    """Refuse l'ecriture si la ligne a change depuis que le poste l'a lue.
+
+    s["version"] absent : ancien poste, pas de controle. None : le poste
+    croit la ligne nouvelle. Une ligne deja ecrite plus tot dans le meme lot
+    n'est controlee qu'une fois (le poste ne connait pas encore sa version).
+    """
+    if "version" not in s or (ref, espace) in deja_verifiees:
+        return
+    deja_verifiees.add((ref, espace))
+    ligne = cur.execute("SELECT version FROM stock WHERE reference = ? AND utilisateur = ?",
+                        (ref, espace)).fetchone()
+    attendue = s.get("version")
+    actuelle = None if ligne is None else safe_int(ligne["version"])
+    if attendue is None:
+        conflit = ligne is not None
+    else:
+        conflit = actuelle is None or actuelle != safe_int(attendue, -1)
+    if conflit:
+        raise ErreurConflit(
+            "« %s » (%s) vient d'être modifié depuis un autre poste." % (ref, espace))
+
+
+def _maj_stock(cur, s, deja_verifiees=None):
     s = _exiger_dict(s)
     ref = _texte(s.get("reference")).strip()
     espace = _texte(s.get("utilisateur")).strip()
@@ -376,94 +403,158 @@ def update_stock_item(s):
     if not isinstance(lots, str):
         lots = json.dumps(lots, ensure_ascii=False)
 
-    def faire(cur):
-        cur.execute("""
-            INSERT INTO stock (reference, utilisateur, quantite, stock_minimum, alerte_active,
-                alerte_peremption_active, delai_peremption, date_peremption, date_import,
-                fournisseur, en_commande, date_commande, lot, prix_unitaire_ht,
-                prix_unitaire_ttc, lots_details)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(reference, utilisateur) DO UPDATE SET
-              quantite=excluded.quantite, stock_minimum=excluded.stock_minimum,
-              alerte_active=excluded.alerte_active,
-              alerte_peremption_active=excluded.alerte_peremption_active,
-              delai_peremption=excluded.delai_peremption,
-              date_peremption=excluded.date_peremption, date_import=excluded.date_import,
-              fournisseur=excluded.fournisseur, en_commande=excluded.en_commande,
-              date_commande=excluded.date_commande, lot=excluded.lot,
-              prix_unitaire_ht=excluded.prix_unitaire_ht,
-              prix_unitaire_ttc=excluded.prix_unitaire_ttc,
-              lots_details=excluded.lots_details
-        """, (ref, espace,
-              max(0, safe_int(s.get("quantite"))), safe_int(s.get("stock_minimum")),
-              1 if safe_int(s.get("alerte_active")) else 0,
-              1 if safe_int(s.get("alerte_peremption_active")) else 0,
-              delai,
-              _texte(s.get("date_peremption")), _texte(s.get("date_import")),
-              _texte(s.get("fournisseur")),
-              1 if safe_int(s.get("en_commande")) else 0,
-              _texte(s.get("date_commande")), _texte(s.get("lot")),
-              safe_float(s.get("prix_unitaire_ht")), safe_float(s.get("prix_unitaire_ttc")),
-              lots or "[]"))
-    _ecrire(faire)
+    _verifier_version(cur, ref, espace, s, set() if deja_verifiees is None else deja_verifiees)
+    cur.execute("""
+        INSERT INTO stock (reference, utilisateur, quantite, stock_minimum, alerte_active,
+            alerte_peremption_active, delai_peremption, date_peremption, date_import,
+            fournisseur, en_commande, date_commande, lot, prix_unitaire_ht,
+            prix_unitaire_ttc, lots_details, version)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+        ON CONFLICT(reference, utilisateur) DO UPDATE SET
+          quantite=excluded.quantite, stock_minimum=excluded.stock_minimum,
+          alerte_active=excluded.alerte_active,
+          alerte_peremption_active=excluded.alerte_peremption_active,
+          delai_peremption=excluded.delai_peremption,
+          date_peremption=excluded.date_peremption, date_import=excluded.date_import,
+          fournisseur=excluded.fournisseur, en_commande=excluded.en_commande,
+          date_commande=excluded.date_commande, lot=excluded.lot,
+          prix_unitaire_ht=excluded.prix_unitaire_ht,
+          prix_unitaire_ttc=excluded.prix_unitaire_ttc,
+          lots_details=excluded.lots_details,
+          version=COALESCE(stock.version, 0) + 1
+    """, (ref, espace,
+          max(0, safe_int(s.get("quantite"))), safe_int(s.get("stock_minimum")),
+          1 if safe_int(s.get("alerte_active")) else 0,
+          1 if safe_int(s.get("alerte_peremption_active")) else 0,
+          delai,
+          _texte(s.get("date_peremption")), _texte(s.get("date_import")),
+          _texte(s.get("fournisseur")),
+          1 if safe_int(s.get("en_commande")) else 0,
+          _texte(s.get("date_commande")), _texte(s.get("lot")),
+          safe_float(s.get("prix_unitaire_ht")), safe_float(s.get("prix_unitaire_ttc")),
+          lots or "[]"))
+    version = cur.execute("SELECT version FROM stock WHERE reference = ? AND utilisateur = ?",
+                          (ref, espace)).fetchone()["version"]
+    return {"reference": ref, "utilisateur": espace, "version": version}
+
+
+def _suppr_stock(cur, reference, utilisateur):
+    cur.execute("DELETE FROM stock WHERE reference = ? AND utilisateur = ?",
+                (_texte(reference), _texte(utilisateur)))
+
+
+def _suppr_produit(cur, reference):
+    cur.execute("DELETE FROM stock WHERE reference = ?", (_texte(reference),))
+    cur.execute("DELETE FROM produits WHERE reference = ?", (_texte(reference),))
+
+
+def _ajout_transaction(cur, t):
+    t = _exiger_dict(t)
+    cur.execute("""
+        INSERT INTO transactions (date, reference, utilisateur, type_transaction,
+                                  quantite, lot, peremption_sortie)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (_texte(t.get("date")), _texte(t.get("reference")),
+          _texte(t.get("utilisateur")), _texte(t.get("type_transaction")),
+          safe_int(t.get("quantite")), _texte(t.get("lot")),
+          _texte(t.get("peremption_sortie"))))
+    return cur.lastrowid
+
+
+def _ajout_autoclave(cur, a):
+    a = _exiger_dict(a)
+    if not _texte(a.get("utilisateur")).strip() or not _texte(a.get("commentaire")).strip():
+        raise ErreurDonnees("Utilisateur et commentaire obligatoires.")
+    cur.execute("""
+        INSERT INTO autoclave (date, machine, utilisateur, commentaire)
+        VALUES (?, ?, ?, ?)
+    """, (_texte(a.get("date")), _texte(a.get("machine")),
+          _texte(a.get("utilisateur")), _texte(a.get("commentaire"))))
+    return cur.lastrowid
+
+
+def _ajout_historique_prix(cur, h):
+    h = _exiger_dict(h)
+    cur.execute("""
+        INSERT INTO historique_prix (reference, date, prix_ht, prix_ttc, fournisseur)
+        VALUES (?, ?, ?, ?, ?)
+    """, (_texte(h.get("reference")), _texte(h.get("date")),
+          safe_float(h.get("prix_ht"), None), safe_float(h.get("prix_ttc"), None),
+          _texte(h.get("fournisseur"))))
+    return cur.lastrowid
+
+
+def update_produit(p):
+    _ecrire(lambda cur: _maj_produit(cur, p))
+
+
+def update_stock_item(s):
+    return _ecrire(lambda cur: _maj_stock(cur, s))
 
 
 def delete_stock_item(reference, utilisateur):
-    _ecrire(lambda cur: cur.execute(
-        "DELETE FROM stock WHERE reference = ? AND utilisateur = ?",
-        (_texte(reference), _texte(utilisateur))))
+    _ecrire(lambda cur: _suppr_stock(cur, reference, utilisateur))
 
 
 def delete_produit(reference):
-    def faire(cur):
-        cur.execute("DELETE FROM stock WHERE reference = ?", (_texte(reference),))
-        cur.execute("DELETE FROM produits WHERE reference = ?", (_texte(reference),))
-    _ecrire(faire)
+    _ecrire(lambda cur: _suppr_produit(cur, reference))
 
 
 def add_transaction(t):
     """Ajoute une transaction ; l'identifiant est attribue par la base."""
-    t = _exiger_dict(t)
-
-    def faire(cur):
-        cur.execute("""
-            INSERT INTO transactions (date, reference, utilisateur, type_transaction,
-                                      quantite, lot, peremption_sortie)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (_texte(t.get("date")), _texte(t.get("reference")),
-              _texte(t.get("utilisateur")), _texte(t.get("type_transaction")),
-              safe_int(t.get("quantite")), _texte(t.get("lot")),
-              _texte(t.get("peremption_sortie"))))
-        return cur.lastrowid
-    return _ecrire(faire)
+    return _ecrire(lambda cur: _ajout_transaction(cur, t))
 
 
 def add_autoclave(a):
-    a = _exiger_dict(a)
-    if not _texte(a.get("utilisateur")).strip() or not _texte(a.get("commentaire")).strip():
-        raise ErreurDonnees("Utilisateur et commentaire obligatoires.")
-
-    def faire(cur):
-        cur.execute("""
-            INSERT INTO autoclave (date, machine, utilisateur, commentaire)
-            VALUES (?, ?, ?, ?)
-        """, (_texte(a.get("date")), _texte(a.get("machine")),
-              _texte(a.get("utilisateur")), _texte(a.get("commentaire"))))
-        return cur.lastrowid
-    return _ecrire(faire)
+    return _ecrire(lambda cur: _ajout_autoclave(cur, a))
 
 
 def add_historique_prix(h):
-    h = _exiger_dict(h)
+    return _ecrire(lambda cur: _ajout_historique_prix(cur, h))
+
+
+# ------------------------------------------------------------------
+# Lot d'ecritures (une operation de l'interface = un lot)
+# ------------------------------------------------------------------
+
+def _operation(cur, op, deja_verifiees):
+    op = _exiger_dict(op)
+    action = op.get("action")
+    d = op.get("donnees")
+    if action == "updateProduit":
+        _maj_produit(cur, d)
+        return {}
+    if action == "updateStockItem":
+        return _maj_stock(cur, d, deja_verifiees)
+    if action == "deleteStockItem":
+        d = _exiger_dict(d)
+        _suppr_stock(cur, d.get("reference"), d.get("utilisateur"))
+        return {}
+    if action == "deleteProduit":
+        _suppr_produit(cur, _exiger_dict(d).get("reference"))
+        return {}
+    if action == "addTransaction":
+        return {"id": _ajout_transaction(cur, d)}
+    if action == "addAutoclave":
+        return {"id": _ajout_autoclave(cur, d)}
+    if action == "addHistoriquePrix":
+        return {"id": _ajout_historique_prix(cur, d)}
+    raise ErreurDonnees("Action inconnue : %s" % action)
+
+
+def executer_lot(operations):
+    """Execute les operations d'une meme action de l'interface (sortie de stock
+    et ses transactions, transfert...) dans UNE transaction SQL : tout ou rien.
+
+    Si un autre poste a modifie entre-temps une ligne de stock concernee,
+    ErreurConflit est levee et rien n'est enregistre.
+    """
+    if not isinstance(operations, list) or not operations:
+        raise ErreurDonnees("Liste d'operations attendue.")
 
     def faire(cur):
-        cur.execute("""
-            INSERT INTO historique_prix (reference, date, prix_ht, prix_ttc, fournisseur)
-            VALUES (?, ?, ?, ?, ?)
-        """, (_texte(h.get("reference")), _texte(h.get("date")),
-              safe_float(h.get("prix_ht"), None), safe_float(h.get("prix_ttc"), None),
-              _texte(h.get("fournisseur"))))
-        return cur.lastrowid
+        deja_verifiees = set()
+        return [_operation(cur, op, deja_verifiees) for op in operations]
     return _ecrire(faire)
 
 

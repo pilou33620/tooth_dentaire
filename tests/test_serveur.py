@@ -264,3 +264,23 @@ def test_sauvegarde_depuis_les_reglages(srv):
     assert "chemin" not in corps["sauvegarde"]
     code, corps, _ = requete(srv, "GET", "/api/sauvegardes")
     assert corps["nombre"] == 1 and corps["dossier"].endswith("sauvegardes")
+
+
+# ------------------------------------------------------------------
+# Lots d'ecritures
+# ------------------------------------------------------------------
+
+def test_lot_enregistre(srv):
+    code, corps, _ = requete(srv, "POST", "/api/lot", {"operations": [
+        {"action": "updateProduit", "donnees": produit()},
+        {"action": "updateStockItem", "donnees": ligne_stock(version=None)},
+    ]})
+    assert code == 200 and corps["resultats"][1]["version"] == 1
+
+
+def test_lot_en_conflit_repond_409(srv):
+    requete(srv, "POST", "/api/lot", {"operations": [
+        {"action": "updateStockItem", "donnees": ligne_stock(version=None)}]})
+    code, corps, _ = requete(srv, "POST", "/api/lot", {"operations": [
+        {"action": "updateStockItem", "donnees": ligne_stock(version=None)}]})
+    assert code == 409 and corps["conflit"] is True and "autre poste" in corps["message"]

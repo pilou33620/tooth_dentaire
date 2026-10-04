@@ -261,6 +261,8 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
             resultat.setdefault("status", "ok")
             resultat.setdefault("revision", base.revision())
             self._json(resultat)
+        except base.ErreurConflit as exc:
+            self._json({"status": "error", "conflit": True, "message": str(exc)}, 409)
         except base.ErreurDonnees as exc:
             self._json({"status": "error", "message": str(exc)}, 400)
         except (exports.ExportIndisponible, meteo.MeteoIndisponible) as exc:
@@ -319,6 +321,7 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
         routes = {
             "/api/produit": lambda d: base.update_produit(d),
             "/api/stock": lambda d: base.update_stock_item(d),
+            "/api/lot": lambda d: {"resultats": base.executer_lot((d or {}).get("operations"))},
             "/api/transaction": lambda d: {"id": base.add_transaction(d)},
             "/api/maintenance": lambda d: {"id": base.add_autoclave(d)},
             "/api/historique-prix": lambda d: {"id": base.add_historique_prix(d)},

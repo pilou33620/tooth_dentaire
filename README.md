@@ -175,10 +175,18 @@ donnees/              base et configuration — non versionné
 
 ### API
 
+L'interface envoie chaque action (sortie de stock et ses transactions, transfert,
+fiche produit…) en un seul lot `POST /api/lot`, exécuté dans une seule transaction
+SQL. Chaque ligne de stock porte un numéro de `version` : si un autre poste l'a
+modifiée depuis qu'elle a été lue, le lot entier est refusé (409), l'écran est
+rechargé et l'utilisateur est invité à recommencer, au lieu d'écraser
+silencieusement la modification de l'autre poste.
+
 | Méthode | Route | Rôle |
 |---|---|---|
 | GET | `/api/etat` | toute la base + documents |
 | GET | `/api/revision` | numéro de révision (surveillance entre postes) |
+| POST | `/api/lot` | écritures d'une action de l'interface, tout ou rien (409 si conflit) |
 | POST | `/api/produit`, `/api/stock` | création / mise à jour |
 | DELETE | `/api/produit?reference=`, `/api/stock?reference=&utilisateur=` | suppression |
 | POST | `/api/transaction`, `/api/maintenance`, `/api/historique-prix` | ajout |

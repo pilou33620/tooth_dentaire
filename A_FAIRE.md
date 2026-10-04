@@ -14,9 +14,9 @@
 ## Idées d'amélioration
 - [ ] Écran de consultation de l'historique des prix (déjà enregistré en base)
 - [ ] Mot de passe d'accès (si le réseau n'est pas réservé à l'équipe)
-- [ ] Protection contre deux modifications simultanées de la même ligne de stock
 
 ## Fait
+- [x] Protection contre deux modifications simultanées de la même ligne de stock (version par ligne, écritures groupées tout ou rien)
 - [x] Sauvegarde automatique quotidienne de la base (`donnees/sauvegardes/`, 30 copies gardées)
 - [x] Version web : serveur Python + interface dans le navigateur, accessible depuis tous les postes du cabinet
 - [x] Toutes les données (personnel, planning, contacts, dosimètres, rappels) en base, aucune dans le code

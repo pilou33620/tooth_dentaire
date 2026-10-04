@@ -317,3 +317,94 @@ def test_ecriture_en_echec_ne_change_pas_la_revision(base_temp):
     (None, 0.0), ("", 0.0), (3, 3.0), ("2,5", 2.5), (" 1 000 ", 1000.0), ("x", 0.0)])
 def test_safe_float(valeur, attendu):
     assert base.safe_float(valeur) == attendu
+
+
+# ------------------------------------------------------------------
+# Lots d'ecritures et conflits entre postes
+# ------------------------------------------------------------------
+
+def _version(ref="REF1", espace="Commun"):
+    return [s for s in base.charger_base()["stock"]
+            if s["reference"] == ref and s["utilisateur"] == espace][0]["version"]
+
+
+def test_version_incrementee_a_chaque_ecriture(base_temp):
+    assert base.update_stock_item(ligne_stock())["version"] == 1
+    assert base.update_stock_item(ligne_stock(quantite=4))["version"] == 2
+    assert _version() == 2
+
+
+def test_ecriture_sur_version_a_jour_acceptee(base_temp):
+    base.update_stock_item(ligne_stock())
+    base.update_stock_item(ligne_stock(quantite=3, version=1))
+    assert _version() == 2
+
+
+def test_ecriture_sur_version_perimee_refusee(base_temp):
+    base.update_stock_item(ligne_stock())                       # v1
+    base.update_stock_item(ligne_stock(quantite=8, version=1))  # poste A -> v2
+    with pytest.raises(base.ErreurConflit):
+        base.update_stock_item(ligne_stock(quantite=7, version=1))  # poste B, lu en v1
+    stock = base.charger_base()["stock"][0]
+    assert stock["quantite"] == 8 and stock["version"] == 2
+
+
+def test_creation_d_une_ligne_deja_creee_ailleurs_refusee(base_temp):
+    base.update_stock_item(ligne_stock(version=None))
+    with pytest.raises(base.ErreurConflit):
+        base.update_stock_item(ligne_stock(version=None))
+
+
+def test_ligne_supprimee_ailleurs_refusee(base_temp):
+    base.update_stock_item(ligne_stock())
+    base.delete_stock_item("REF1", "Commun")
+    with pytest.raises(base.ErreurConflit):
+        base.update_stock_item(ligne_stock(version=1))
+
+
+def test_ancien_poste_sans_version_non_controle(base_temp):
+    base.update_stock_item(ligne_stock())
+    base.update_stock_item(ligne_stock(quantite=1))
+    assert _version() == 2
+
+
+def test_lot_tout_ou_rien(base_temp):
+    base.update_stock_item(ligne_stock())
+    base.update_stock_item(ligne_stock(quantite=9))             # v2 ailleurs
+    revision = base.revision()
+    with pytest.raises(base.ErreurConflit):
+        base.executer_lot([
+            {"action": "addTransaction", "donnees": {"date": "2026-10-04", "reference": "REF1",
+                                                     "utilisateur": "Commun",
+                                                     "type_transaction": "SORTIE_STOCK",
+                                                     "quantite": 2}},
+            {"action": "updateStockItem", "donnees": ligne_stock(quantite=3, version=1)},
+        ])
+    # La transaction n'a pas ete gardee sans sa mise a jour de stock
+    assert base.charger_base()["transactions"] == []
+    assert base.revision() == revision
+
+
+def test_lot_execute_et_resultats(base_temp):
+    resultats = base.executer_lot([
+        {"action": "updateProduit", "donnees": produit()},
+        {"action": "updateStockItem", "donnees": ligne_stock(version=None)},
+        {"action": "updateStockItem", "donnees": ligne_stock(quantite=2, version=None)},
+        {"action": "addTransaction", "donnees": {"date": "d", "reference": "REF1",
+                                                 "utilisateur": "Commun",
+                                                 "type_transaction": "ENTREE", "quantite": 5}},
+    ])
+    assert resultats[1] == {"reference": "REF1", "utilisateur": "Commun", "version": 1}
+    # Meme ligne deux fois dans le lot : controlee une seule fois
+    assert resultats[2]["version"] == 2
+    assert resultats[3]["id"] == 1
+    base.executer_lot([{"action": "deleteStockItem",
+                        "donnees": {"reference": "REF1", "utilisateur": "Commun"}},
+                       {"action": "deleteProduit", "donnees": {"reference": "REF1"}}])
+    assert base.charger_base()["produits"] == []
+
+
+@pytest.mark.parametrize("operations", [None, [], "x", [{"action": "inconnue"}], ["x"]])
+def test_lot_invalide_refuse(base_temp, operations):
+    with pytest.raises(base.ErreurDonnees):
+        base.executer_lot(operations)
