@@ -3,7 +3,6 @@
 ## À faire
 - [ ] Placard ménage
 - [ ] Montant du stock : remonter les totaux tout en haut
-- [ ] ⚠️ Date de péremption déjà passée à l'ajout d'un produit : vérifier par rapport à la date du jour et **interdire** l'entrée en stock d'un produit périmé (aujourd'hui : simple avertissement)
 - [ ] Fenêtre « Ajouter un produit » au format paysage (rectangle horizontal)
 
 ## Mise en place
@@ -16,6 +15,7 @@
 - [ ] Mot de passe d'accès (si le réseau n'est pas réservé à l'équipe)
 
 ## Fait
+- [x] Entrée en stock d'un produit périmé **interdite** (fiche produit, entrée par lot, import de facture, et contrôle côté serveur) ; le stock déjà en place qui a périmé reste modifiable et les transferts restent possibles
 - [x] Protection contre deux modifications simultanées de la même ligne de stock (version par ligne, écritures groupées tout ou rien)
 - [x] Sauvegarde automatique quotidienne de la base (`donnees/sauvegardes/`, 30 copies gardées)
 - [x] Version web : serveur Python + interface dans le navigateur, accessible depuis tous les postes du cabinet

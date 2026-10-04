@@ -6,7 +6,7 @@
 import { jest } from '@jest/globals';
 import {
     parseLots, normalizeLots, serializeLots, totalLots, lotsLabel, lotsFromStrings,
-    sortLotsFEFO, mergeLots, retirerDesLots, retirerFEFO
+    sortLotsFEFO, mergeLots, retirerDesLots, retirerFEFO, estPerime, lotsPerimesEntrants
 } from '../js/features/lots.js';
 import { getStock, ajouterStockParLots, sortirStockDetail } from '../js/features/stock.js';
 import { setDbCache, loadDB } from '../js/core/database.js';
@@ -270,5 +270,49 @@ describe('stock.js - entrées / sorties par lot', () => {
         expect(tx).toHaveLength(1);
         expect(tx[0].lot).toBe('');
         expect(tx[0].quantite).toBe(2);
+    });
+});
+
+
+describe('produits périmés', () => {
+    const jour = (n) => {
+        const d = new Date();
+        d.setDate(d.getDate() + n);
+        const pad = x => String(x).padStart(2, '0');
+        return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+    };
+
+    test('estPerime : hier oui, aujourd\'hui et demain non, vide ou illisible non', () => {
+        expect(estPerime(jour(-1))).toBe(true);
+        expect(estPerime(jour(0))).toBe(false);
+        expect(estPerime(jour(1))).toBe(false);
+        expect(estPerime('2020-01-31')).toBe(true);
+        expect(estPerime('')).toBe(false);
+        expect(estPerime('bientôt')).toBe(false);
+    });
+
+    test('lotsPerimesEntrants : nouveau lot périmé ou quantité qui augmente', () => {
+        const vieux = { lot: 'V', date: jour(-5) };
+        expect(lotsPerimesEntrants([], [{ ...vieux, qte: 3 }])).toEqual([{ ...vieux, qte: 3 }]);
+        expect(lotsPerimesEntrants([{ ...vieux, qte: 3 }], [{ ...vieux, qte: 5 }])).toEqual([{ ...vieux, qte: 2 }]);
+    });
+
+    test('lotsPerimesEntrants : stock déjà là qui a périmé, ou qui diminue, accepté', () => {
+        const vieux = { lot: 'V', date: jour(-5) };
+        expect(lotsPerimesEntrants([{ ...vieux, qte: 3 }], [{ ...vieux, qte: 3 }])).toEqual([]);
+        expect(lotsPerimesEntrants([{ ...vieux, qte: 3 }], [{ ...vieux, qte: 1 }])).toEqual([]);
+        expect(lotsPerimesEntrants([], [{ lot: 'N', date: jour(30), qte: 9 }])).toEqual([]);
+    });
+
+    test('ajouterStockParLots refuse un lot périmé', () => {
+        setDbCache({
+            produits: [{ reference: 'R', nom: '', type_stockage: 'unite', quantite_par_carton: 1 }],
+            stock: [{ reference: 'R', utilisateur: 'Commun', quantite: 0, lots_details: '[]', lot: '', date_peremption: '' }],
+            transactions: [], historique_prix: [], nextTxId: 1
+        });
+        const res = ajouterStockParLots('R', 'Commun', [{ lot: 'V', date: jour(-1), qte: 2 }]);
+        expect(res.ok).toBe(false);
+        expect(res.message).toContain('Entrée refusée');
+        expect(loadDB().stock[0].quantite).toBe(0);
     });
 });

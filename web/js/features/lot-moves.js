@@ -9,7 +9,7 @@
    ============================================================ */
 
 import { parsePeremption, daysUntil, showMessage } from '../core/utils.js';
-import { sortLotsFEFO, toInt } from './lots.js';
+import { sortLotsFEFO, toInt, lotsPerimesEntrants, messageLotsPerimes } from './lots.js';
 import { sortirStockDetail, ajouterStockParLots } from './stock.js';
 
 /** Lignes de saisie du dialogue en cours. */
@@ -352,24 +352,17 @@ async function validerEntree(row) {
         return false;
     }
 
-    // Avertissement (non bloquant) si un lot ajouté est déjà périmé
-    const perimes = entrees.filter(e => {
-        const d = parsePeremption(e.date);
-        return d && daysUntil(d) < 0;
-    });
+    // Un produit déjà périmé ne peut pas entrer en stock
+    const perimes = lotsPerimesEntrants([], entrees);
+    if (perimes.length > 0) {
+        await showMessage("⛔ Produit périmé", messageLotsPerimes(perimes));
+        return false;
+    }
 
     const res = ajouterStockParLots(row.reference, row.utilisateur, entrees);
     if (!res.ok) {
         await showMessage("Entrée impossible", res.message);
         return false;
-    }
-
-    if (perimes.length > 0) {
-        const liste = perimes.map(e => `- ${e.lot || "(sans n° de lot)"} : ${e.date}`).join("\n");
-        await showMessage(
-            "⚠️ Attention - Lot périmé",
-            `Le(s) lot(s) suivant(s) sont déjà périmés :\n${liste}`
-        );
     }
     return true;
 }

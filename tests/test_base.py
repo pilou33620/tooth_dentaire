@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Tests de la couche base de donnees (python/base.py)."""
 
+import datetime
 import json
 import sqlite3
 
@@ -408,3 +409,91 @@ def test_lot_execute_et_resultats(base_temp):
 def test_lot_invalide_refuse(base_temp, operations):
     with pytest.raises(base.ErreurDonnees):
         base.executer_lot(operations)
+
+
+# ------------------------------------------------------------------
+# Produits perimes
+# ------------------------------------------------------------------
+
+def _jour(n):
+    return (datetime.date.today() + datetime.timedelta(days=n)).strftime("%d/%m/%Y")
+
+
+def _lots(*lots):
+    return json.dumps([{"lot": l, "date": d, "qte": q} for l, d, q in lots])
+
+
+def _maj(**autres):
+    return {"action": "updateStockItem", "donnees": ligne_stock(**autres)}
+
+
+@pytest.mark.parametrize("texte, attendu", [
+    ("31/12/2026", datetime.date(2026, 12, 31)), ("2026-12-31", datetime.date(2026, 12, 31)),
+    ("1/2/2027", datetime.date(2027, 2, 1)), ("", None), ("bientot", None), (None, None),
+])
+def test_date_peremption(texte, attendu):
+    assert base.date_peremption(texte) == attendu
+
+
+def test_entree_d_un_lot_perime_refusee(base_temp):
+    with pytest.raises(base.ErreurDonnees, match="périmé"):
+        base.update_stock_item(ligne_stock(quantite=3, lots_details=_lots(("V", _jour(-1), 3))))
+    assert base.charger_base()["stock"] == []
+
+
+def test_entree_d_un_lot_du_jour_acceptee(base_temp):
+    base.update_stock_item(ligne_stock(quantite=3, lots_details=_lots(("A", _jour(0), 3))))
+
+
+def test_stock_deja_perime_reste_modifiable(base_temp):
+    base.update_stock_item(ligne_stock(quantite=3, lots_details=_lots(("V", _jour(5), 3))))
+    # Le lot a perime depuis : on simule en recrivant la date directement
+    conn = sqlite3.connect(str(base_temp))
+    conn.execute("UPDATE stock SET lots_details = ?", (_lots(("V", _jour(-2), 3)),))
+    conn.commit()
+    conn.close()
+    base.update_stock_item(ligne_stock(quantite=2, stock_minimum=9,
+                                       lots_details=_lots(("V", _jour(-2), 2))))
+    with pytest.raises(base.ErreurDonnees):
+        base.update_stock_item(ligne_stock(quantite=5, lots_details=_lots(("V", _jour(-2), 5))))
+
+
+def test_lot_sans_quantite_qui_recoit_le_reste(base_temp):
+    with pytest.raises(base.ErreurDonnees):
+        base.update_stock_item(ligne_stock(quantite=5, lots_details=json.dumps(
+            [{"lot": "A", "date": _jour(9), "qte": 2}, {"lot": "V", "date": _jour(-9)}])))
+
+
+def test_ligne_sans_detail_par_lot(base_temp):
+    with pytest.raises(base.ErreurDonnees):
+        base.update_stock_item(ligne_stock(quantite=5, date_peremption=_jour(-3)))
+    base.update_stock_item(ligne_stock(quantite=5, date_peremption=_jour(30)))
+
+
+def test_transfert_d_un_lot_perime_accepte(base_temp):
+    vieux = ("V", _jour(-4), 4)
+    conn = sqlite3.connect(str(base_temp))
+    conn.execute("INSERT INTO stock (reference, utilisateur, quantite, lots_details)"
+                 " VALUES ('REF1', 'Reserve', 4, ?)", (_lots(vieux),))
+    conn.commit()
+    conn.close()
+    base.executer_lot([
+        _maj(espace="Reserve", quantite=0, lots_details="[]"),
+        _maj(espace="Salle 1", quantite=4, lots_details=_lots(vieux)),
+    ])
+    # ... mais pas une entree qui en ajoute au passage
+    with pytest.raises(base.ErreurDonnees):
+        base.executer_lot([_maj(espace="Salle 1", quantite=6,
+                                lots_details=_lots(("V", vieux[1], 6)))])
+
+
+def test_lot_refuse_ne_garde_rien(base_temp):
+    with pytest.raises(base.ErreurDonnees):
+        base.executer_lot([
+            {"action": "addTransaction", "donnees": {"date": "d", "reference": "REF1",
+                                                     "utilisateur": "Commun",
+                                                     "type_transaction": "ENTREE_LOT",
+                                                     "quantite": 2}},
+            _maj(quantite=2, lots_details=_lots(("V", _jour(-1), 2))),
+        ])
+    assert base.charger_base()["transactions"] == []

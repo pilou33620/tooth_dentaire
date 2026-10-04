@@ -12,7 +12,7 @@
    déjà en place.
    ============================================================ */
 
-import { parsePeremption } from '../core/utils.js';
+import { parsePeremption, daysUntil } from '../core/utils.js';
 
 /** Convertit une valeur en entier >= 0, ou null si non renseignée. */
 function toQte(val) {
@@ -272,4 +272,48 @@ export function appliquerLots(entry, lots) {
     entry.lots_details = serializeLots(clean);
     entry.lot = lotsToString(clean);
     entry.date_peremption = datesToString(clean);
+}
+
+
+/* ---------------- Produits périmés ---------------- */
+
+/** Vrai si la date de péremption (JJ/MM/AAAA ou AAAA-MM-JJ) est déjà passée. */
+export function estPerime(date) {
+    const d = parsePeremption(String(date ?? "").trim());
+    return Boolean(d) && daysUntil(d) < 0;
+}
+
+/**
+ * Lots périmés qui ENTRENT en stock : lots absents avant, ou dont la quantité
+ * augmente. Un lot déjà en stock qui a périmé depuis n'est pas concerné (il
+ * reste signalé par les alertes de péremption).
+ *
+ * @param {Array} avant lots avant l'opération [{lot, date, qte}]
+ * @param {Array} apres lots après l'opération (ou lots entrants seuls, avant = [])
+ * @returns {Array} [{lot, date, qte}] qte = quantité périmée ajoutée
+ */
+export function lotsPerimesEntrants(avant, apres) {
+    const cle = l => `${String(l.lot ?? "").trim()}|${String(l.date ?? "").trim()}`;
+    const cumuler = (lots) => {
+        const m = new Map();
+        for (const l of lots || []) {
+            const c = cle(l);
+            const prec = m.get(c);
+            m.set(c, { lot: String(l.lot ?? "").trim(), date: String(l.date ?? "").trim(), qte: (prec ? prec.qte : 0) + toInt(l.qte) });
+        }
+        return m;
+    };
+    const qAvant = cumuler(avant);
+    const resultat = [];
+    for (const [c, l] of cumuler(apres)) {
+        const ajout = l.qte - (qAvant.has(c) ? qAvant.get(c).qte : 0);
+        if (ajout > 0 && estPerime(l.date)) resultat.push({ lot: l.lot, date: l.date, qte: ajout });
+    }
+    return resultat;
+}
+
+/** Message d'entrée refusée pour des lots périmés. */
+export function messageLotsPerimes(lots, article = "") {
+    const liste = lots.map(l => `- ${l.lot || "(sans n° de lot)"} : périmé le ${l.date}`).join("\n");
+    return `Entrée refusée${article ? ` pour ${article}` : ""} : on ne peut pas mettre en stock un produit déjà périmé.\n\n${liste}\n\nCorrigez la date de péremption ou retirez ce lot.`;
 }

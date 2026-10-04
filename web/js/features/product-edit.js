@@ -5,9 +5,9 @@
    ============================================================ */
 
 import { USERS, CONDITIONNEMENTS, estConditionnementGroupe } from '../core/constants.js';
-import { loadDB, saveDB, addTransaction, persister, setProduitArrete } from '../core/database.js';
+import { loadDB, saveDB, addTransaction, persister, setProduitArrete, findStockEntry } from '../core/database.js';
 import { setStockAbsolu } from './stock.js';
-import { normalizeLots, lotsFromStrings } from './lots.js';
+import { normalizeLots, lotsFromStrings, lotsPerimesEntrants, messageLotsPerimes } from './lots.js';
 import { fillGroupsDatalist, showMessage, parsePeremption, daysUntil, parseBarcodes, formatBarcodes } from '../core/utils.js';
 import { checkAlerts } from './alerts.js';
 import { refreshPlacardTable, placardUser } from './placard.js';
@@ -326,10 +326,7 @@ export function openEditDialog(row = null) {
             // Lots déjà quantifiés par getStock()
             lotsArray = row.lots.map(l => ({ lot: l.lot, date: l.date, qte: l.qte }));
         } else {
-            lotsArray = normalizeLots(row.lots_details, row.quantite);
-            if (lotsArray.length === 0 && (row.lot || row.date_peremption)) {
-                lotsArray = lotsFromStrings(row.lot, row.date_peremption, row.quantite);
-            }
+            lotsArray = lotsAffiches(row);
         }
     }
     window.renderEditLots(lotsArray);
@@ -350,6 +347,16 @@ export function openEditDialog(row = null) {
     if (dialogBody) {
         dialogBody.scrollTop = 0;
     }
+}
+
+/** Lots d'une ligne de stock tels que le dialogue les présente. */
+function lotsAffiches(row) {
+    if (!row) return [];
+    const lots = normalizeLots(row.lots_details, row.quantite);
+    if (lots.length === 0 && (row.lot || row.date_peremption)) {
+        return lotsFromStrings(row.lot, row.date_peremption, row.quantite);
+    }
+    return lots;
 }
 
 export async function saveEditDialog() {
@@ -394,18 +401,6 @@ export async function saveEditDialog() {
     const newUser = userSelect.value;
     const oldUser = userSelect.dataset.originalUser;
     const oldRef = document.getElementById("edit-ref").dataset.originalRef;
-
-    if (oldRef && oldUser && (oldRef !== ref || oldUser !== newUser)) {
-        let db = loadDB();
-        const idx = db.stock.findIndex(s => s.reference === oldRef && s.utilisateur === oldUser);
-        if (idx !== -1) {
-            const oldQte = db.stock[idx].quantite;
-            db.stock.splice(idx, 1);
-            addTransaction(db, oldRef, oldUser, "SORTIE (Modification Réf/Espace)", oldQte);
-            persister("deleteStockItem", oldRef, oldUser);
-            saveDB(db);
-        }
-    }
 
     const parsePrix = (val) => {
         if (!val || typeof val !== "string") return null;
@@ -453,6 +448,16 @@ export async function saveEditDialog() {
         return;
     }
 
+    // Un produit déjà périmé ne peut pas entrer en stock : lot périmé nouveau,
+    // ou dont la quantité augmente. Le stock déjà présent qui a périmé depuis
+    // reste modifiable (il est signalé par les alertes).
+    const ligneAvant = (oldRef && oldUser) ? findStockEntry(loadDB(), oldRef, oldUser) : null;
+    const perimes = lotsPerimesEntrants(lotsAffiches(ligneAvant), normalizeLots(lotsDetailsVal, totalQte));
+    if (perimes.length > 0) {
+        await showMessage("⛔ Produit périmé", messageLotsPerimes(perimes));
+        return;
+    }
+
     let alertePerempChecked = document.getElementById("edit-alerte-peremption") ? document.getElementById("edit-alerte-peremption").checked : true;
     
     // Alerte immédiate si la date de péremption est déjà passée
@@ -467,6 +472,20 @@ export async function saveEditDialog() {
                     `Attention : la date de péremption saisie (${datePeremptionVal}) est déjà dépassée depuis ${Math.abs(delta)} jour(s) !\n\nCe produit sera marqué comme périmé avec une alerte active.`
                 );
             }
+        }
+    }
+
+    // Changement de référence ou d'espace : l'ancienne ligne n'est retirée
+    // qu'une fois la saisie validée (avant, une erreur de saisie la perdait).
+    if (oldRef && oldUser && (oldRef !== ref || oldUser !== newUser)) {
+        const db = loadDB();
+        const idx = db.stock.findIndex(s => s.reference === oldRef && s.utilisateur === oldUser);
+        if (idx !== -1) {
+            const oldQte = db.stock[idx].quantite;
+            db.stock.splice(idx, 1);
+            addTransaction(db, oldRef, oldUser, "SORTIE (Modification Réf/Espace)", oldQte);
+            persister("deleteStockItem", oldRef, oldUser);
+            saveDB(db);
         }
     }
 

@@ -398,3 +398,44 @@ describe('factures en double', () => {
         expect(lignes()).toHaveLength(1);
     });
 });
+
+describe('produits périmés sur la facture', () => {
+
+    function dateDansNJours(n) {
+        const d = new Date();
+        d.setDate(d.getDate() + n);
+        const pad = x => String(x).padStart(2, '0');
+        return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+    }
+
+    function poserLot(tr, lot, date) {
+        const ligneLot = tr.querySelector('.import-lot-container > div > div');
+        ligneLot.querySelector('.lot-val').value = lot;
+        ligneLot.querySelector('.date-val').value = date;
+    }
+
+    beforeEach(() => {
+        preparerImport([article(), article({ reference: 'REF2', designation: 'Masque' })]);
+        lignes().forEach((tr, i) => poserCodeBarres(tr, `340${i}`));
+    });
+
+    test('un lot périmé bloque toute la facture, rien n\'est importé', async () => {
+        poserLot(lignes()[1], 'L-OLD', dateDansNJours(-2));
+        await validerAvecMessages();
+        expect(loadDB().stock).toHaveLength(0);
+        expect(document.getElementById('msg-text').textContent).toContain("l'article REF2");
+    });
+
+    test('une ligne périmée écartée (quantité 0) ne bloque pas le reste', async () => {
+        poserLot(lignes()[1], 'L-OLD', dateDansNJours(-2));
+        lignes()[1].querySelector('.import-qte-base').value = '0';
+        await validerAvecMessages();
+        expect(loadDB().stock.map(s => s.reference)).toEqual(['REF1']);
+    });
+
+    test('des lots valides sont importés normalement', async () => {
+        poserLot(lignes()[0], 'L-NEW', dateDansNJours(90));
+        await validerAvecMessages();
+        expect(loadDB().stock).toHaveLength(2);
+    });
+});

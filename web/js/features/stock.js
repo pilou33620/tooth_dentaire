@@ -7,7 +7,8 @@
 import { loadDB, saveDB, findProduit, findStockEntry, ajouterProduit, addTransaction, persister } from '../core/database.js';
 import {
     normalizeLots, serializeLots, mergeLots, totalLots, lotsToString, datesToString,
-    lotsLabel, lotsFromStrings, retirerDesLots, retirerFEFO, appliquerLots, toInt
+    lotsLabel, lotsFromStrings, retirerDesLots, retirerFEFO, appliquerLots, toInt,
+    lotsPerimesEntrants, messageLotsPerimes
 } from './lots.js';
 
 /**
@@ -292,6 +293,11 @@ export function ajouterStockParLots(reference, utilisateur, entrees, options = {
 
     if (propres.length === 0) {
         return { ok: false, message: "Aucune quantité à ajouter.", entrees: [], total: 0 };
+    }
+
+    const perimes = lotsPerimesEntrants([], propres);
+    if (perimes.length > 0) {
+        return { ok: false, message: messageLotsPerimes(perimes), entrees: [], total: 0 };
     }
 
     const ancienneQte = Math.max(0, toInt(entry.quantite));

@@ -8,6 +8,7 @@ import { CONDITIONNEMENTS, estConditionnementGroupe } from '../core/constants.js
 import { getAllGroups, getStockInfo } from '../core/database.js';
 import { fillUserSelect, todayFR, showMessage, parseBarcodes, formatBarcodes } from '../core/utils.js';
 import { ajouterStock } from './stock.js';
+import { estPerime, messageLotsPerimes } from './lots.js';
 import { checkAlerts } from './alerts.js';
 
 export let importItems = [];
@@ -354,12 +355,50 @@ export function populateImportTable() {
     });
 }
 
+/** Lots saisis sur une ligne de l'import ; qte null = part du reste de la quantité. */
+function lireLotsImport(tr) {
+    const lotsArray = [];
+    for (const row of tr.querySelectorAll(".import-lot-container > div > div")) {
+        const lVal = row.querySelector(".lot-val").value.trim();
+        const dVal = row.querySelector(".date-val").value.trim();
+        const qInput = row.querySelector(".qte-val");
+        const qVal = qInput ? qInput.value.trim() : "";
+        if (lVal || dVal) {
+            // qte null => la quantité importée est répartie sur les lots saisis
+            lotsArray.push({ lot: lVal, date: dVal, qte: qVal === "" ? null : (parseInt(qVal, 10) || 0) });
+        }
+    }
+    return lotsArray;
+}
+
+/** Message listant les articles de la facture qui portent un lot déjà périmé. */
+function controlerPeremptionsImport(rows) {
+    const messages = [];
+    for (let idx = 0; idx < rows.length; idx++) {
+        const item = importItems[idx];
+        if (!item) continue;
+        const qteSaisie = parseInt(rows[idx].querySelector(".import-qte-base").value, 10);
+        if ((Number.isNaN(qteSaisie) ? item.quantite : qteSaisie) <= 0) continue;   // ligne écartée
+        const perimes = lireLotsImport(rows[idx])
+            .filter(l => (l.qte === null || l.qte > 0) && estPerime(l.date));
+        if (perimes.length > 0) messages.push(messageLotsPerimes(perimes, `l'article ${item.reference}`));
+    }
+    return messages.join("\n\n");
+}
+
 export async function validateImport() {
     const { loadDB, findProduit } = await import('../core/database.js');
     
     const rows = document.querySelectorAll("#import-tbody tr");
     const lignes = [];
     const db = loadDB();
+
+    // Contrôle avant tout ajout : la facture n'est pas importée à moitié
+    const perimes = controlerPeremptionsImport(rows);
+    if (perimes) {
+        await showMessage("⛔ Produit périmé", `${perimes}\n\nAucun article n'a été importé.`);
+        return;
+    }
 
     for (let idx = 0; idx < rows.length; idx++) {
         const tr = rows[idx];
@@ -371,18 +410,7 @@ export async function validateImport() {
         const stockMin = parseInt(tr.querySelector(".import-min").value, 10) || 0;
         const alerte = tr.querySelector(".import-alerte").checked ? 1 : 0;
         
-        const lotsDivs = tr.querySelectorAll(".import-lot-container > div > div");
-        const lotsArray = [];
-        for (const row of lotsDivs) {
-            const lVal = row.querySelector(".lot-val").value.trim();
-            const dVal = row.querySelector(".date-val").value.trim();
-            const qInput = row.querySelector(".qte-val");
-            const qVal = qInput ? qInput.value.trim() : "";
-            if (lVal || dVal) {
-                // qte null => la quantité importée est répartie sur les lots saisis
-                lotsArray.push({ lot: lVal, date: dVal, qte: qVal === "" ? null : (parseInt(qVal, 10) || 0) });
-            }
-        }
+        const lotsArray = lireLotsImport(tr);
         const lotsDetailsJson = JSON.stringify(lotsArray);
         const datePeremption = lotsArray.map(a => a.date).filter(Boolean).join(", ");
         const lot = lotsArray.map(a => a.lot).filter(Boolean).join(", ");

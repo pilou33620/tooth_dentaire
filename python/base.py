@@ -22,6 +22,7 @@ AUCUNE donnee propre au cabinet (noms du personnel, contacts...) n'est ecrite
 dans le code : tout est en base, et la base n'est pas versionnee.
 """
 
+import datetime
 import json
 import os
 import sqlite3
@@ -489,7 +490,15 @@ def update_produit(p):
 
 
 def update_stock_item(s):
-    return _ecrire(lambda cur: _maj_stock(cur, s))
+    s = _exiger_dict(s)
+    ligne = (_texte(s.get("reference")).strip(), _texte(s.get("utilisateur")).strip())
+
+    def faire(cur):
+        avant = _photo_peremption(cur, [ligne])
+        resultat = _maj_stock(cur, s)
+        _refuser_entrees_perimees(cur, [ligne], avant)
+        return resultat
+    return _ecrire(faire)
 
 
 def delete_stock_item(reference, utilisateur):
@@ -511,6 +520,100 @@ def add_autoclave(a):
 
 def add_historique_prix(h):
     return _ecrire(lambda cur: _ajout_historique_prix(cur, h))
+
+
+# ------------------------------------------------------------------
+# Produits perimes : aucune entree en stock
+# ------------------------------------------------------------------
+
+def date_peremption(texte):
+    """Date d'un texte JJ/MM/AAAA ou AAAA-MM-JJ, sinon None."""
+    texte = _texte(texte).strip()
+    for fmt in ("%d/%m/%Y", "%Y-%m-%d"):
+        try:
+            return datetime.datetime.strptime(texte, fmt).date()
+        except ValueError:
+            pass
+    return None
+
+
+def _est_perime(texte, aujourdhui):
+    d = date_peremption(texte)
+    return d is not None and d < aujourdhui
+
+
+def _lots_quantifies(lots_details, quantite):
+    """[(lot, date, qte)] ; les lots sans quantite se partagent le reste."""
+    try:
+        lots = json.loads(lots_details or "[]")
+    except (TypeError, ValueError):
+        return []
+    if not isinstance(lots, list):
+        return []
+    lots = [l for l in lots if isinstance(l, dict)]
+    sans = [l for l in lots if l.get("qte") in (None, "")]
+    connu = sum(max(0, safe_int(l.get("qte"))) for l in lots if l not in sans)
+    reste = max(0, quantite - connu)
+    part, extra = (divmod(reste, len(sans)) if sans else (0, 0))
+    resultat = []
+    for l in lots:
+        if l in sans:
+            qte = part + (1 if extra > 0 else 0)
+            extra -= 1
+        else:
+            qte = max(0, safe_int(l.get("qte")))
+        resultat.append((_texte(l.get("lot")).strip(), _texte(l.get("date")).strip(), qte))
+    return resultat
+
+
+def _photo_peremption(cur, lignes):
+    """Lots et dates de peremption des lignes de stock donnees (ref, espace)."""
+    lots, dates, quantites = {}, set(), {}
+    for ref, espace in lignes:
+        r = cur.execute("SELECT quantite, lots_details, date_peremption FROM stock"
+                        " WHERE reference = ? AND utilisateur = ?", (ref, espace)).fetchone()
+        if r is None:
+            continue
+        quantite = max(0, safe_int(r["quantite"]))
+        quantites[(ref, espace)] = quantite
+        detail = _lots_quantifies(r["lots_details"], quantite)
+        for lot, date, qte in detail:
+            lots[(lot, date)] = lots.get((lot, date), 0) + qte
+            dates.add(date)
+        if not detail:
+            dates.update(d.strip() for d in _texte(r["date_peremption"]).replace(";", ",").split(",")
+                         if d.strip())
+    return {"lots": lots, "dates": dates, "quantites": quantites}
+
+
+def _refuser_entrees_perimees(cur, lignes, avant):
+    """Refuse un lot d'ecritures qui fait entrer du stock deja perime.
+
+    Comparaison globale avant / apres sur les lignes touchees : un transfert
+    ou un deplacement d'espace ne fait rien « entrer », il est accepte ; le
+    stock deja en place qui a perime depuis reste modifiable.
+    """
+    aujourdhui = datetime.date.today()
+    apres = _photo_peremption(cur, lignes)
+    perimes = [(lot, date) for (lot, date), qte in apres["lots"].items()
+               if qte > avant["lots"].get((lot, date), 0) and _est_perime(date, aujourdhui)]
+    # Lignes sans detail par lot : une date perimee nouvelle avec une quantite en hausse
+    for (ref, espace), qte in apres["quantites"].items():
+        if qte <= avant["quantites"].get((ref, espace), 0):
+            continue
+        r = cur.execute("SELECT lots_details, date_peremption FROM stock"
+                        " WHERE reference = ? AND utilisateur = ?", (ref, espace)).fetchone()
+        if _lots_quantifies(r["lots_details"], qte):
+            continue
+        for date in _texte(r["date_peremption"]).replace(";", ",").split(","):
+            date = date.strip()
+            if date and date not in avant["dates"] and _est_perime(date, aujourdhui):
+                perimes.append(("", date))
+    if perimes:
+        detail = ", ".join("%s%s" % ("lot %s, " % lot if lot else "", "périmé le %s" % date)
+                           for lot, date in perimes)
+        raise ErreurDonnees(
+            "Entrée refusée : on ne peut pas mettre en stock un produit déjà périmé (%s)." % detail)
 
 
 # ------------------------------------------------------------------
@@ -553,9 +656,30 @@ def executer_lot(operations):
         raise ErreurDonnees("Liste d'operations attendue.")
 
     def faire(cur):
+        lignes = _lignes_touchees(cur, operations)
+        avant = _photo_peremption(cur, lignes)
         deja_verifiees = set()
-        return [_operation(cur, op, deja_verifiees) for op in operations]
+        resultats = [_operation(cur, op, deja_verifiees) for op in operations]
+        _refuser_entrees_perimees(cur, lignes, avant)
+        return resultats
     return _ecrire(faire)
+
+
+def _lignes_touchees(cur, operations):
+    """Lignes de stock (ref, espace) qu'un lot d'operations peut modifier."""
+    lignes = set()
+    for op in operations:
+        d = op.get("donnees") if isinstance(op, dict) else None
+        if not isinstance(d, dict):
+            continue
+        ref = _texte(d.get("reference")).strip()
+        action = op.get("action")
+        if action in ("updateStockItem", "deleteStockItem"):
+            lignes.add((ref, _texte(d.get("utilisateur")).strip()))
+        elif action == "deleteProduit":
+            lignes.update((ref, r["utilisateur"]) for r in cur.execute(
+                "SELECT utilisateur FROM stock WHERE reference = ?", (ref,)))
+    return sorted(lignes)
 
 
 # ------------------------------------------------------------------

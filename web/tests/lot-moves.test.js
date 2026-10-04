@@ -192,6 +192,25 @@ describe('Dialogue mouvement par lot', () => {
         expect(await promesse).toBe(false);
     });
 
+    test('mode entrée : un lot déjà périmé est refusé', async () => {
+        const promesse = openLotMoveDialog(row(), 'entree');
+
+        document.getElementById('lot-move-add').click();
+        const nouvelle = lignes()[2];
+        nouvelle.querySelector('.lot-move-lot').value = 'VIEUX';
+        nouvelle.querySelector('.lot-move-date').value = '01/01/2020';
+        nouvelle.querySelector('.lot-move-qte').value = '2';
+        document.getElementById('lot-move-save').click();
+
+        await Promise.resolve();
+        expect(document.getElementById('msg-title').textContent).toContain('Produit périmé');
+        expect(entry().quantite).toBe(8);
+
+        document.getElementById('msg-ok').click();
+        document.getElementById('lot-move-cancel').click();
+        expect(await promesse).toBe(false);
+    });
+
     test('aucun lot enregistré : saisie libre du n° de lot à la sortie', async () => {
         const db = stockDeTest();
         db.stock[0].lot = '';

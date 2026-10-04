@@ -430,16 +430,34 @@ describe('enregistrement', () => {
             .toContain('Quantités incohérentes');
     });
 
-    test('une date déjà dépassée force l\'alerte de péremption', async () => {
+    test('un nouveau produit déjà périmé est refusé', async () => {
         remplirNouveauProduit();
-        cocher('edit-alerte-peremption', false);
         window.renderEditLots([{ lot: 'A', date: dateDansNJours(-3), qte: 1 }]);
         saisir('edit-qte', '15');
         await enregistrer();
 
-        expect(ligneStock().alerte_peremption_active).toBe(1);
+        expect(loadDB().stock).toHaveLength(0);
+        expect(document.getElementById('msg-title').textContent).toContain('Produit périmé');
+        expect(document.getElementById('msg-text').textContent).toContain('Entrée refusée');
     });
 
+    test('un lot périmé sans quantité, qui recevrait le reste du stock, est refusé', async () => {
+        remplirNouveauProduit();
+        window.renderEditLots([
+            { lot: 'A', date: dateDansNJours(30), qte: 5 },
+            { lot: 'B', date: dateDansNJours(-1), qte: null }
+        ]);
+        saisir('edit-qte', '15');
+        await enregistrer();
+        expect(loadDB().stock).toHaveLength(0);
+    });
+
+    test('une date du jour n\'est pas considérée comme périmée', async () => {
+        remplirNouveauProduit();
+        window.renderEditLots([{ lot: 'A', date: dateDansNJours(0), qte: 15 }]);
+        await enregistrer();
+        expect(ligneStock().quantite).toBe(15);
+    });
     test('le délai de pré-alerte saisi est enregistré', async () => {
         remplirNouveauProduit();
         saisir('edit-delai-peremption', '60');
@@ -527,5 +545,53 @@ describe('enregistrement', () => {
         window.renderEditScannettes('3401, 3402, 3401');
         await enregistrer();
         expect(loadDB().produits[0].ref_scannette).toBe('3401, 3402');
+    });
+});
+
+
+describe('stock déjà en place qui a périmé', () => {
+
+    const lotPerime = () => ({ lot: 'OLD', date: dateDansNJours(-10), qte: 4 });
+
+    beforeEach(() => {
+        preparer(
+            [{ reference: 'REF1', nom: 'Gant', groupe: 'G', ref_scannette: '3401',
+               type_stockage: 'unite', quantite_par_carton: 1 }],
+            [{ reference: 'REF1', utilisateur: 'Cabinet 1', quantite: 4,
+               stock_minimum: 0, alerte_active: 0, alerte_peremption_active: 0,
+               delai_peremption: 30, date_peremption: lotPerime().date, date_import: '',
+               fournisseur: '', lot: 'OLD', lots_details: JSON.stringify([lotPerime()]),
+               prix_unitaire_ht: 0, prix_unitaire_ttc: 0 }]);
+        openEditDialog(getStock('Cabinet 1')[0]);
+    });
+
+    test('la fiche reste modifiable et l\'alerte de péremption est forcée', async () => {
+        cocher('edit-alerte-peremption', false);
+        saisir('edit-min', '2');
+        await enregistrer();
+        expect(ligneStock()).toMatchObject({ stock_minimum: 2, quantite: 4, alerte_peremption_active: 1 });
+    });
+
+    test('augmenter la quantité du lot périmé est refusé', async () => {
+        saisir('edit-qte', '6');
+        window.renderEditLots([{ ...lotPerime(), qte: 6 }]);
+        await enregistrer();
+        expect(ligneStock().quantite).toBe(4);
+        expect(document.getElementById('msg-title').textContent).toContain('Produit périmé');
+    });
+
+    test('ajouter un lot valide à côté reste possible', async () => {
+        saisir('edit-qte', '10');
+        window.renderEditLots([lotPerime(), { lot: 'NEW', date: dateDansNJours(200), qte: 6 }]);
+        await enregistrer();
+        expect(ligneStock().quantite).toBe(10);
+    });
+
+    test('changer d\'espace avec une saisie refusée ne perd pas la ligne d\'origine', async () => {
+        document.getElementById('edit-user').value = 'Cabinet 2';
+        saisir('edit-qte', '2');                   // somme des lots (4) > quantité (2)
+        await enregistrer();
+        expect(getStock('Cabinet 1')).toHaveLength(1);
+        expect(getStock('Cabinet 2')).toHaveLength(0);
     });
 });
