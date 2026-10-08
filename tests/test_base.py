@@ -315,9 +315,25 @@ def test_ecriture_en_echec_ne_change_pas_la_revision(base_temp):
 
 
 @pytest.mark.parametrize("valeur, attendu", [
-    (None, 0.0), ("", 0.0), (3, 3.0), ("2,5", 2.5), (" 1 000 ", 1000.0), ("x", 0.0)])
+    (None, 0.0), ("", 0.0), (3, 3.0), ("2,5", 2.5), (" 1 000 ", 1000.0), ("x", 0.0),
+    ("1e999", 0.0), (float("inf"), 0.0), ("nan", 0.0), (10 ** 400, 0.0)])
 def test_safe_float(valeur, attendu):
     assert base.safe_float(valeur) == attendu
+
+
+@pytest.mark.parametrize("valeur, attendu", [
+    (None, 0), ("", 0), ("12", 12), (3.9, 3), ("x", 0), ("1e999", 0), (float("inf"), 0),
+    ("nan", 0), (10 ** 30, 0), (2 ** 63 - 1, 2 ** 63 - 1), (-2 ** 63, -2 ** 63)])
+def test_safe_int(valeur, attendu):
+    assert base.safe_int(valeur) == attendu
+
+
+def test_nombres_hors_limites_ne_bloquent_pas_l_ecriture(base_temp):
+    base.update_stock_item({"reference": "A", "utilisateur": "Reserve", "quantite": "1e999",
+                            "stock_minimum": 10 ** 30, "prix_unitaire_ht": "1e999"})
+    ligne = base.charger_base()["stock"][0]
+    assert ligne["quantite"] == 0 and ligne["stock_minimum"] == 0
+    assert ligne["prix_unitaire_ht"] == 0
 
 
 # ------------------------------------------------------------------

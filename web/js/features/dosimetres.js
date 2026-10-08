@@ -130,8 +130,8 @@ function renderDosimetresTable() {
                 ${escapeHtml(item.note || "-")}
             </td>
             <td style="padding: 10px 12px; text-align: center;">
-                <button class="btn btn-blue btn-edit-dosi" data-id="${item.id}" title="Modifier ce dosimètre" style="padding: 4px 8px; font-size: 0.85em; margin-right: 4px;">✏️</button>
-                <button class="btn btn-red btn-delete-dosi" data-id="${item.id}" title="Supprimer ce dosimètre" style="padding: 4px 8px; font-size: 0.85em;">🗑️</button>
+                <button class="btn btn-blue btn-edit-dosi" data-id="${escapeHtml(item.id)}" title="Modifier ce dosimètre" style="padding: 4px 8px; font-size: 0.85em; margin-right: 4px;">✏️</button>
+                <button class="btn btn-red btn-delete-dosi" data-id="${escapeHtml(item.id)}" title="Supprimer ce dosimètre" style="padding: 4px 8px; font-size: 0.85em;">🗑️</button>
             </td>
         `;
         tbody.appendChild(tr);

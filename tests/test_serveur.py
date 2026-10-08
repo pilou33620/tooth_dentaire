@@ -158,6 +158,21 @@ def test_json_invalide_400(srv):
     conn.close()
 
 
+@pytest.mark.parametrize("corps", [
+    b'{"items": [], "x": NaN}', b'{"items": [], "x": Infinity}', b'{"items": [], "x": -Infinity}',
+    b'{"items": [], "x": 1e999}'])
+def test_nombres_non_finis_refuses(srv, corps):
+    # Enregistrés, ils rendraient /api/etat illisible pour les navigateurs
+    conn = http.client.HTTPConnection("127.0.0.1", srv, timeout=10)
+    conn.request("PUT", "/api/documents/notes", body=corps,
+                 headers={"Host": "127.0.0.1", "Content-Type": "application/json"})
+    rep = conn.getresponse()
+    assert rep.status == 400
+    conn.close()
+    code, data, rep = requete(srv, "GET", "/api/etat")
+    assert code == 200 and isinstance(data, dict)
+
+
 def test_route_inconnue_404(srv):
     assert requete(srv, "GET", "/api/rien")[0] == 404
     assert requete(srv, "POST", "/api/rien", {})[0] == 404

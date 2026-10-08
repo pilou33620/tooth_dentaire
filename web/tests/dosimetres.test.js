@@ -244,6 +244,19 @@ describe('formulaire ajout / modification / suppression', () => {
     });
 });
 
+describe('identifiant piégé en base', () => {
+    test('l\'identifiant d\'un dosimètre est échappé dans les boutons', async () => {
+        const dosi = await chargerModule({
+            dosimetres: { manager: '', generalNote: '',
+                          dosimetres: [{ id: '1"><img src=x id="injecte">', number: 'D1', user: 'U', note: '' }] }
+        });
+        dosi.initDosimetres();
+        dosi.openDosimetresDialog();
+        expect(document.getElementById('injecte')).toBeNull();
+        expect(document.querySelector('.btn-edit-dosi').dataset.id).toBe('1"><img src=x id="injecte">');
+    });
+});
+
 describe('tableau et recherche', () => {
     let dosi;
 

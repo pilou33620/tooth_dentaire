@@ -66,9 +66,11 @@ la base (`donnees/stock.db` par défaut), et le dossier `donnees/` est exclu de 
 (voir `.gitignore`). Le dépôt peut donc être publié sans rien exposer.
 
 - **Sauvegarde automatique** : une copie par jour (au démarrage du serveur, puis
-  toutes les 24 h) dans `donnees/sauvegardes/stock-AAAAMMJJ-HHMMSS.db` ; les 30
-  plus récentes sont gardées. Réglages → Sauvegardes affiche la dernière copie et
-  permet d'en faire une tout de suite. Pour une copie hors du poste, copier ce
+  toutes les 24 h) dans `donnees/sauvegardes/stock-AAAAMMJJ-HHMMSS.db`. Sont
+  gardées : la dernière copie de chacun des 30 derniers jours, plus les 5 copies
+  les plus récentes (des clics répétés sur « Sauvegarder maintenant » n'effacent
+  donc jamais les jours précédents). Réglages → Sauvegardes affiche la dernière
+  copie et permet d'en faire une tout de suite. Pour une copie hors du poste, copier ce
   dossier (clé USB, NAS). **Restaurer** : arrêter le serveur, remplacer
   `donnees/stock.db` par la copie voulue renommée en `stock.db`, relancer.
 - **Base ailleurs** (lecteur réseau, dossier synchronisé) : `--base` ou Réglages.

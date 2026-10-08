@@ -10,7 +10,12 @@ Une copie par jour dans le dossier « sauvegardes » a cote de la base :
 
 La copie passe par l'API de sauvegarde de SQLite (sqlite3.backup) : elle est
 coherente meme si un poste enregistre au meme moment, contrairement a une
-simple copie du fichier. Les GARDER plus recentes sont conservees.
+simple copie du fichier.
+
+Conservation : la copie la plus recente de chacun des GARDER derniers jours,
+plus les GARDER_RECENTES dernieres copies. Des clics repetes sur
+« Sauvegarder maintenant » ne remplacent donc que des copies du jour : ils ne
+peuvent pas effacer l'historique des jours precedents.
 
 Restaurer : arreter le serveur, remplacer stock.db par la copie voulue
 (renommee en stock.db), relancer.
@@ -24,7 +29,8 @@ import threading
 
 import base
 
-GARDER = 30                              # nombre de copies conservees
+GARDER = 30                              # nombre de jours conserves (une copie par jour)
+GARDER_RECENTES = 5                      # dernieres copies gardees en plus, quel que soit le jour
 INTERVALLE = 24 * 3600                   # une copie par 24 h
 VERIFICATION = 3600                      # le fil se reveille toutes les heures
 NOM_DOSSIER = "sauvegardes"
@@ -32,6 +38,9 @@ MOTIF = re.compile(r"^stock-(\d{8}-\d{6})\.db$")
 
 _fil = None
 _arret = threading.Event()
+# Une copie a la fois : le bouton et la copie quotidienne peuvent tomber dans
+# la meme seconde, donc sur le meme nom de fichier.
+_verrou_copie = threading.Lock()
 
 
 def dossier_sauvegardes(chemin_base=None):
@@ -80,25 +89,39 @@ def sauvegarder(chemin_base=None, dossier=None, garder=GARDER, maintenant=None):
     final = os.path.join(dossier, nom)
     temporaire = final + ".partiel"
 
-    # Sous le verrou d'ecriture : aucun poste n'ecrit pendant la copie (quelques ms).
-    with base._VERROU:
-        source = sqlite3.connect(chemin_base, timeout=15)
-        try:
-            cible = sqlite3.connect(temporaire)
+    with _verrou_copie:
+        # Sous le verrou d'ecriture : aucun poste n'ecrit pendant la copie (quelques ms).
+        with base._VERROU:
+            source = sqlite3.connect(chemin_base, timeout=15)
             try:
-                source.backup(cible)
+                cible = sqlite3.connect(temporaire)
+                try:
+                    source.backup(cible)
+                finally:
+                    cible.close()
             finally:
-                cible.close()
-        finally:
-            source.close()
-    os.replace(temporaire, final)
-    _nettoyer(dossier, garder)
-    return {"nom": nom, "chemin": final, "date": maintenant.isoformat(),
-            "taille": os.path.getsize(final)}
+                source.close()
+        os.replace(temporaire, final)
+        _nettoyer(dossier, garder)
+        return {"nom": nom, "chemin": final, "date": maintenant.isoformat(),
+                "taille": os.path.getsize(final)}
 
 
 def _nettoyer(dossier, garder):
-    for copie in lister(dossier)[max(1, garder):]:
+    """Garde la derniere copie de chacun des `garder` derniers jours, plus les
+    min(GARDER_RECENTES, garder) dernieres copies ; supprime le reste."""
+    garder = max(1, garder)
+    copies = lister(dossier)                     # de la plus recente a la plus ancienne
+    gardees = {c["nom"] for c in copies[:min(GARDER_RECENTES, garder)]}
+    jours = set()
+    for copie in copies:
+        jour = copie["nom"][len("stock-"):len("stock-AAAAMMJJ")]
+        if jour not in jours and len(jours) < garder:
+            jours.add(jour)
+            gardees.add(copie["nom"])
+    for copie in copies:
+        if copie["nom"] in gardees:
+            continue
         try:
             os.remove(copie["chemin"])
         except OSError:

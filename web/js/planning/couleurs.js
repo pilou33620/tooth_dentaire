@@ -101,10 +101,20 @@ export function couleurTache(texte, couleurs = getCouleurs()) {
     return { inactif: false, couleur: regle ? (regle.couleur || "") : "" };
 }
 
+/**
+ * Couleur CSS sûre à insérer dans un style (#rgb, nom, rgb()/hsl()), sinon "".
+ * Une valeur comme "red; background-image: url(...)" ne doit pas passer.
+ */
+export function couleurSure(couleur) {
+    const c = String(couleur ?? "").trim();
+    return /^(#[0-9a-f]{3,8}|[a-z]+|(rgb|hsl)a?\([\d\s.,%/a-z]*\))$/i.test(c) ? c : "";
+}
+
 /** Attributs HTML (class + style) d'une case colorée. */
 export function attributsCouleur(resultat, styleEnPlus = "") {
     const classe = resultat.inactif ? "cell-inactive" : "";
-    const fond = resultat.couleur ? `background-color: ${escapeHtml(resultat.couleur)};` : "";
+    const couleur = couleurSure(resultat.couleur);
+    const fond = couleur ? `background-color: ${escapeHtml(couleur)};` : "";
     return `class="${classe}" style="${fond}${styleEnPlus}"`;
 }
 
@@ -116,7 +126,7 @@ export function renderLegende(containerId) {
     if (!el) return;
     el.innerHTML = getCouleurs().legende.map(l => `
         <div style="display: flex; align-items: center; gap: 8px;">
-            <div style="width: 16px; height: 16px; background-color: ${escapeHtml(l.couleur)}; border-radius: 3px; border: 1px solid #ddd;"></div>
+            <div style="width: 16px; height: 16px; background-color: ${escapeHtml(couleurSure(l.couleur))}; border-radius: 3px; border: 1px solid #ddd;"></div>
             <span>${escapeHtml(l.libelle)}</span>
         </div>`).join("");
 }

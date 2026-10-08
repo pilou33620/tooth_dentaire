@@ -232,6 +232,32 @@ describe('couleurs du planning (règles en base)', () => {
             .toContain(`background-color: ${ROUGE}`);
     });
 
+    test('couleurSure : seules les vraies couleurs CSS passent', () => {
+        for (const c of ['#abc', '#cf2727', '#cf2727cc', 'red', 'rgb(1, 2, 3)', 'rgba(1,2,3,0.5)', 'hsl(10 50% 50%)']) {
+            expect(couleurs.couleurSure(c)).toBe(c);
+        }
+        for (const c of ['red; background-image: url(http://x)', 'url(x)', 'expression(alert(1))',
+                         '#fff" onmouseover="x', '', null, undefined]) {
+            expect(couleurs.couleurSure(c)).toBe('');
+        }
+    });
+
+    test('une couleur piégée en base n\'est pas insérée dans le style', async () => {
+        const piege = 'red; background-image: url(http://exemple.invalid/x.png)';
+        const team = await chargerTeam({
+            planning: PLANNING,
+            planning_couleurs: { legende: [{ libelle: 'L', couleur: piege }],
+                                 regles: [{ cible: 'praticien', nom: 'Dr Alpha', couleur: piege }] },
+            taches: TACHES,
+        });
+        team.updateTeamPlanning(10);
+        expect(document.getElementById('calendar-preview-content').innerHTML).not.toContain('url(');
+        const c = await import('../js/planning/couleurs.js');
+        document.body.insertAdjacentHTML('beforeend', '<div id="legende-test"></div>');
+        c.renderLegende('legende-test');
+        expect(document.getElementById('legende-test').innerHTML).not.toContain('url(');
+    });
+
     test('getCellClass reste compatible ("cell-inactive" ou "")', async () => {
         const team = await chargerTeam();
         expect(team.getCellClass('Repos', 'Assistante A', 'LUNDI', 'am')).toBe('cell-inactive');

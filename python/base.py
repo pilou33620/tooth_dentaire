@@ -24,6 +24,7 @@ dans le code : tout est en base, et la base n'est pas versionnee.
 
 import datetime
 import json
+import math
 import os
 import sqlite3
 import threading
@@ -275,24 +276,33 @@ def _ecrire(fonction):
 # Conversions tolerantes
 # ------------------------------------------------------------------
 
+# Entiers acceptes par SQLite (64 bits)
+ENTIER_MIN, ENTIER_MAX = -2 ** 63, 2 ** 63 - 1
+
+
 def safe_float(val, default=0.0):
+    """Nombre fini, sinon default : un infini ou NaN en base rendrait la
+    reponse /api/etat illisible pour les navigateurs (JSON invalide)."""
     if val is None or val == "":
         return default
-    if isinstance(val, (int, float)):
-        return float(val)
     try:
-        return float(str(val).replace(" ", "").replace(",", ".").strip())
-    except (ValueError, TypeError):
+        if isinstance(val, (int, float)):
+            nombre = float(val)
+        else:
+            nombre = float(str(val).replace(" ", "").replace(",", ".").strip())
+    except (ValueError, TypeError, OverflowError):
         return default
+    return nombre if math.isfinite(nombre) else default
 
 
 def safe_int(val, default=0):
     if val is None or val == "":
         return default
     try:
-        return int(float(val))
-    except (ValueError, TypeError):
+        nombre = int(val) if isinstance(val, int) else int(float(val))
+    except (ValueError, TypeError, OverflowError):
         return default
+    return nombre if ENTIER_MIN <= nombre <= ENTIER_MAX else default
 
 
 def _texte(val):

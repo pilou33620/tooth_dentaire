@@ -403,7 +403,12 @@
                 renderList();
             } catch (e) {
                 const listEl = document.getElementById('contact-list');
-                if (listEl) listEl.innerHTML = '<li class="contact-item">' + e.message + '</li>';
+                if (listEl) {
+                    const li = document.createElement('li');
+                    li.className = 'contact-item';
+                    li.textContent = e.message;
+                    listEl.replaceChildren(li);
+                }
             }
         }
         window.rechargerContacts = rechargerContacts;

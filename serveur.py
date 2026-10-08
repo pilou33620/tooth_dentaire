@@ -36,6 +36,7 @@ import base64
 import http.server
 import ipaddress
 import json
+import math
 import os
 import posixpath
 import re
@@ -141,6 +142,17 @@ def est_boucle_locale(adresse):
 # ------------------------------------------------------------------
 # Gestionnaire HTTP
 # ------------------------------------------------------------------
+
+def _refuser_constante(nom):
+    raise ValueError("valeur non numerique : %s" % nom)
+
+
+def _nombre_fini(texte):
+    nombre = float(texte)
+    if not math.isfinite(nombre):            # 1e999 -> infini
+        raise ValueError("nombre trop grand : %s" % texte)
+    return nombre
+
 
 class CustomHandler(http.server.SimpleHTTPRequestHandler):
     """Sert web/ sans cache, et l'API JSON /api/*."""
@@ -250,7 +262,10 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
         if not brut:
             return None
         try:
-            return json.loads(brut.decode("utf-8"))
+            # NaN / Infinity : acceptes par Python mais pas par les navigateurs ;
+            # enregistres, ils rendraient /api/etat illisible sur tous les postes.
+            return json.loads(brut.decode("utf-8"), parse_constant=_refuser_constante,
+                              parse_float=_nombre_fini)
         except (UnicodeDecodeError, ValueError):
             raise base.ErreurDonnees("JSON invalide.")
 
