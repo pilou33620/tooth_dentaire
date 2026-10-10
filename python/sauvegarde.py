@@ -62,10 +62,10 @@ def lister(dossier=None):
             continue
         chemin = os.path.join(dossier, nom)
         try:
+            date = datetime.datetime.strptime(m.group(1), "%Y%m%d-%H%M%S")
             taille = os.path.getsize(chemin)
-        except OSError:
+        except (ValueError, OSError):            # date impossible (stock-99999999-...)
             continue
-        date = datetime.datetime.strptime(m.group(1), "%Y%m%d-%H%M%S")
         copies.append({"nom": nom, "chemin": chemin, "date": date.isoformat(), "taille": taille})
     copies.sort(key=lambda c: c["nom"], reverse=True)
     return copies
@@ -126,6 +126,16 @@ def _nettoyer(dossier, garder):
             os.remove(copie["chemin"])
         except OSError:
             pass
+
+
+def copie_recente(secondes, maintenant=None, dossier=None):
+    """Derniere copie si elle a moins de `secondes` secondes, sinon None."""
+    copie = derniere(dossier)
+    if copie is None:
+        return None
+    maintenant = maintenant or datetime.datetime.now()
+    age = (maintenant - datetime.datetime.fromisoformat(copie["date"])).total_seconds()
+    return copie if 0 <= age < secondes else None
 
 
 def sauvegarde_due(maintenant=None, dossier=None):

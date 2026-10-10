@@ -328,12 +328,82 @@ def test_safe_int(valeur, attendu):
     assert base.safe_int(valeur) == attendu
 
 
-def test_nombres_hors_limites_ne_bloquent_pas_l_ecriture(base_temp):
-    base.update_stock_item({"reference": "A", "utilisateur": "Reserve", "quantite": "1e999",
-                            "stock_minimum": 10 ** 30, "prix_unitaire_ht": "1e999"})
+def test_prix_hors_limites_ne_bloquent_pas_l_ecriture(base_temp):
+    base.update_stock_item({"reference": "A", "utilisateur": "Reserve", "quantite": "x",
+                            "prix_unitaire_ht": "1e999"})
     ligne = base.charger_base()["stock"][0]
-    assert ligne["quantite"] == 0 and ligne["stock_minimum"] == 0
-    assert ligne["prix_unitaire_ht"] == 0
+    assert ligne["quantite"] == 0 and ligne["prix_unitaire_ht"] == 0
+
+
+@pytest.mark.parametrize("champ, valeur", [
+    ("quantite", "1e999"), ("quantite", 2 ** 53), ("stock_minimum", 10 ** 30),
+    ("stock_minimum", -2 ** 53), ("delai_peremption", 1e16)])
+def test_entiers_inexacts_en_javascript_refuses(base_temp, champ, valeur):
+    # Le navigateur les arrondirait : refus plutot qu'une valeur fausse
+    with pytest.raises(base.ErreurDonnees, match="trop grand"):
+        base.update_stock_item(ligne_stock(**{champ: valeur}))
+    assert base.charger_base()["stock"] == []
+
+
+def test_plus_grand_entier_exact_accepte(base_temp):
+    base.update_stock_item(ligne_stock(quantite=2 ** 53 - 1, stock_minimum=-(2 ** 53 - 1)))
+    ligne = base.charger_base()["stock"][0]
+    assert ligne["quantite"] == 2 ** 53 - 1 and ligne["stock_minimum"] == -(2 ** 53 - 1)
+
+
+def test_quantite_de_transaction_trop_grande_refusee(base_temp):
+    with pytest.raises(base.ErreurDonnees):
+        base.add_transaction({"date": "d", "reference": "R", "utilisateur": "Commun",
+                              "type_transaction": "SORTIE_STOCK", "quantite": -2 ** 60})
+    assert base.charger_base()["transactions"] == []
+
+
+@pytest.mark.parametrize("valeur, attendu", [
+    (0, 1), ("", 1), (None, 1), ("abc", 1), (1, 1), (12, 12), ("24", 24), (100000, 100000)])
+def test_quantite_par_carton_acceptee(base_temp, valeur, attendu):
+    base.update_produit(produit(quantite_par_carton=valeur))
+    assert base.charger_base()["produits"][0]["quantite_par_carton"] == attendu
+
+
+@pytest.mark.parametrize("valeur", [100001, -3, 10 ** 30, "1e999"])
+def test_quantite_par_carton_hors_bornes_refusee(base_temp, valeur):
+    with pytest.raises(base.ErreurDonnees):
+        base.update_produit(produit(quantite_par_carton=valeur))
+    assert base.charger_base()["produits"] == []
+
+
+@pytest.mark.parametrize("fonction, donnees", [
+    ("update_produit", produit(nom={"a": 1})),
+    ("update_produit", produit(reference=["REF1"])),
+    ("update_stock_item", ligne_stock(fournisseur=["F"])),
+    ("update_stock_item", ligne_stock(reference={"x": 1})),
+    ("add_transaction", {"date": {}, "reference": "R", "utilisateur": "Commun",
+                         "type_transaction": "SORTIE_STOCK", "quantite": 1}),
+    ("add_autoclave", {"date": "d", "utilisateur": "P", "commentaire": ["c"]}),
+    ("add_historique_prix", {"reference": "R", "date": "d", "fournisseur": {"nom": "F"}}),
+    ("enregistrer_contact", {"nom": "Labo", "note": ["x"]}),
+])
+def test_objet_ou_liste_dans_un_champ_texte_refuse(base_temp, fonction, donnees):
+    with pytest.raises(base.ErreurDonnees, match="texte attendu"):
+        getattr(base, fonction)(donnees)
+
+
+@pytest.mark.parametrize("lots", ["{}", "pas du json", '{"lot": "A"}', {"lot": "A"}, 12])
+def test_lots_details_doit_etre_un_tableau(base_temp, lots):
+    with pytest.raises(base.ErreurDonnees, match="lots_details"):
+        base.update_stock_item(ligne_stock(lots_details=lots))
+
+
+@pytest.mark.parametrize("lots", [None, "", "[]"])
+def test_lots_details_vide_accepte(base_temp, lots):
+    base.update_stock_item(ligne_stock(lots_details=lots))
+    assert base.charger_base()["stock"][0]["lots_details"] == "[]"
+
+
+def test_lots_details_texte_stocke_dans_la_base_toujours_tolere(base_temp):
+    # _texte reste tolerant pour le JSON deja en base (_lots_quantifies)
+    assert base._lots_quantifies("{casse", 3) == []
+    assert base._lots_quantifies('{"lot": "A"}', 3) == []
 
 
 # ------------------------------------------------------------------
@@ -446,9 +516,33 @@ def _maj(**autres):
 @pytest.mark.parametrize("texte, attendu", [
     ("31/12/2026", datetime.date(2026, 12, 31)), ("2026-12-31", datetime.date(2026, 12, 31)),
     ("1/2/2027", datetime.date(2027, 2, 1)), ("", None), ("bientot", None), (None, None),
+    ("5/3/2027", datetime.date(2027, 3, 5)), (" 05/03/2027 ", datetime.date(2027, 3, 5)),
+    # JJ/MM/AA : an 2000 + AA
+    ("05/03/27", datetime.date(2027, 3, 5)), ("5/3/27", datetime.date(2027, 3, 5)),
+    # Mois seul : dernier jour du mois
+    ("05/2024", datetime.date(2024, 5, 31)), ("2/2028", datetime.date(2028, 2, 29)),
+    ("2027-02", datetime.date(2027, 2, 28)), ("2026-4", datetime.date(2026, 4, 30)),
+    ("2026-1-5", datetime.date(2026, 1, 5)),
+    # Dates impossibles ou formats refuses
+    ("31/02/2027", None), ("2027-02-30", None), ("13/2027", None), ("2027-13", None),
+    ("00/2027", None), ("0/0/27", None), ("05/03/027", None), ("2027/03/05", None),
+    ("05-03-2027", None), ("5/3/2027 10:00", None), ("2027", None),
 ])
 def test_date_peremption(texte, attendu):
     assert base.date_peremption(texte) == attendu
+
+
+def test_entree_datee_d_un_mois_passe_refusee(base_temp):
+    with pytest.raises(base.ErreurDonnees, match="périmé le 05/2024"):
+        base.update_stock_item(ligne_stock(quantite=3, date_peremption="05/2024"))
+    with pytest.raises(base.ErreurDonnees, match="périmé"):
+        base.update_stock_item(ligne_stock(quantite=3, lots_details=_lots(("L", "05/2024", 3))))
+    assert base.charger_base()["stock"] == []
+
+
+def test_entree_datee_du_mois_en_cours_acceptee(base_temp):
+    mois = datetime.date.today().strftime("%m/%Y")
+    base.update_stock_item(ligne_stock(quantite=3, date_peremption=mois))
 
 
 def test_entree_d_un_lot_perime_refusee(base_temp):
@@ -513,3 +607,144 @@ def test_lot_refuse_ne_garde_rien(base_temp):
             _maj(quantite=2, lots_details=_lots(("V", _jour(-1), 2))),
         ])
     assert base.charger_base()["transactions"] == []
+
+
+# ------------------------------------------------------------------
+# Versions et validation des documents
+# ------------------------------------------------------------------
+
+def test_document_facture_importees_par_defaut(base_temp):
+    assert base.lire_document("factures_importees") == {"empreintes": []}
+
+
+def test_version_de_document_incrementee(base_temp):
+    assert base.lire_document_et_version("notes") == {"valeur": {"items": []}, "version": 0}
+    assert base.ecrire_document("notes", {"items": ["a"]}) == 1
+    assert base.ecrire_document("notes", {"items": ["b"]}, version_attendue=1) == 2
+    assert base.lire_document_et_version("notes") == {"valeur": {"items": ["b"]}, "version": 2}
+    docs, versions = base.lire_documents_et_versions()
+    assert set(versions) == set(base.DOCUMENTS_DEFAUT)
+    assert versions["notes"] == 2 and versions["planning"] == 0
+    assert docs["notes"] == {"items": ["b"]}
+
+
+def test_document_modifie_ailleurs_refuse(base_temp):
+    base.ecrire_document("notes", {"items": ["poste A"]})
+    base.ecrire_document("notes", {"items": ["poste B"]}, version_attendue=1)
+    r = base.revision()
+    with pytest.raises(base.ErreurConflit) as erreur:
+        base.ecrire_document("notes", {"items": ["poste A encore"]}, version_attendue=1)
+    assert erreur.value.version == 2 and "autre poste" in str(erreur.value)
+    assert base.lire_document("notes") == {"items": ["poste B"]}
+    assert base.revision() == r
+
+
+def test_document_jamais_ecrit_attendu_en_version_0(base_temp):
+    with pytest.raises(base.ErreurConflit):
+        base.ecrire_document("taches", {"rows": []}, version_attendue=3)
+    assert base.ecrire_document("taches", {"rows": []}, version_attendue=0) == 1
+
+
+def test_ancienne_table_documents_completee(tmp_path):
+    chemin = tmp_path / "ancienne.db"
+    conn = sqlite3.connect(str(chemin))
+    conn.execute("CREATE TABLE documents (cle TEXT PRIMARY KEY, valeur TEXT NOT NULL,"
+                 " modifie_le TEXT)")
+    conn.execute("""INSERT INTO documents (cle, valeur) VALUES ('notes', '{"items": [1]}')""")
+    conn.commit()
+    conn.close()
+    base.definir_chemin(str(chemin))
+    assert base.lire_document_et_version("notes") == {"valeur": {"items": [1]}, "version": 0}
+    assert base.ecrire_document("notes", {"items": []}, version_attendue=0) == 1
+
+
+@pytest.mark.parametrize("cle, valeur", [
+    ("record_jeu", 0), ("record_jeu", 12), ("record_jeu", 3.5),
+    ("planning", {"even": [], "odd": []}), ("planning", {}),
+    ("notes", {"items": [{"texte": "x"}]}), ("minuteurs", {"actifs": [], "preselections": []}),
+    ("checklist", {"modele": [], "jour": "", "fait": {}}), ("dosimetres", {"dosimetres": []}),
+    ("taches", {"rows": []}), ("rappels_mire", {}), ("rappel_dosimetres", {"nextTime": None}),
+    ("factures_importees", {"empreintes": ["abc"]}),
+])
+def test_document_valide_accepte(base_temp, cle, valeur):
+    base.ecrire_document(cle, valeur)
+    assert base.lire_document(cle) == valeur
+
+
+@pytest.mark.parametrize("cle, valeur", [
+    ("record_jeu", -1), ("record_jeu", True), ("record_jeu", "12"), ("record_jeu", None),
+    ("record_jeu", {}), ("record_jeu", float("inf")), ("record_jeu", float("nan")),
+    ("planning", []), ("planning", {"even": {}, "odd": []}), ("planning", {"even": [], "odd": None}),
+    ("notes", {"items": "x"}), ("minuteurs", {"actifs": {}}), ("minuteurs", {"preselections": 1}),
+    ("checklist", {"modele": "x"}), ("dosimetres", {"dosimetres": {}}), ("taches", {"rows": None}),
+    ("rappels_mire", []), ("meteo_lieu", "Bordeaux"), ("positions_interface", None),
+    ("notes", {"items": [], "x": float("nan")}),
+])
+def test_document_au_mauvais_format_refuse(base_temp, cle, valeur):
+    with pytest.raises(base.ErreurDonnees, match="Format invalide pour le document « %s »" % cle):
+        base.ecrire_document(cle, valeur)
+    assert not base.document_present(cle)
+
+
+def test_document_trop_volumineux_refuse(base_temp):
+    with pytest.raises(base.ErreurDonnees, match="trop volumineux"):
+        base.ecrire_document("notes", {"items": ["é" * (1024 * 1024 + 10)]})
+    base.ecrire_document("notes", {"items": ["x" * (1024 * 1024)]})
+
+
+# ------------------------------------------------------------------
+# Reponse /api/etat allegee
+# ------------------------------------------------------------------
+
+def _tx(date, quantite=1):
+    return {"date": date, "reference": "R", "utilisateur": "Commun",
+            "type_transaction": "SORTIE_STOCK", "quantite": quantite}
+
+
+def test_charger_base_limite_aux_derniers_jours(base_temp):
+    recent = (datetime.date.today() - datetime.timedelta(days=10)).isoformat() + "T10:00:00Z"
+    limite = (datetime.date.today() - datetime.timedelta(days=400)).isoformat()
+    vieux = (datetime.date.today() - datetime.timedelta(days=401)).isoformat()
+    for date in (vieux + "T08:00:00Z", recent, "date illisible", limite, vieux):
+        base.add_transaction(_tx(date))
+    base.add_historique_prix({"reference": "R", "date": vieux, "prix_ht": 1})
+    base.add_historique_prix({"reference": "R", "date": recent, "prix_ht": 2})
+    complet = base.charger_base()
+    assert len(complet["transactions"]) == 5 and len(complet["historique_prix"]) == 2
+    leger = base.charger_base(jours_transactions=400)
+    assert [t["date"] for t in leger["transactions"]] == [recent, "date illisible", limite]
+    assert [h["prix_ht"] for h in leger["historique_prix"]] == [2]
+    # Identifiants suivants calcules sur toute la table
+    assert leger["nextTxId"] == complet["nextTxId"] == complet["transactions"][-1]["id"] + 1
+
+
+def test_identifiant_suivant_apres_la_derniere_transaction_filtree(base_temp):
+    vieux = (datetime.date.today() - datetime.timedelta(days=900)).isoformat()
+    ident = base.add_transaction(_tx(vieux))
+    leger = base.charger_base(jours_transactions=400)
+    assert leger["transactions"] == [] and leger["nextTxId"] == ident + 1
+
+
+# ------------------------------------------------------------------
+# Changement de base et migrations de schema
+# ------------------------------------------------------------------
+
+def test_fichier_non_sqlite_ne_remplace_pas_la_base(base_temp, tmp_path):
+    base.update_produit(produit())
+    faux = tmp_path / "faux.db"
+    faux.write_bytes(b"ceci n'est pas une base SQLite, juste du texte" * 10)
+    with pytest.raises(sqlite3.DatabaseError):
+        base.definir_chemin(str(faux))
+    assert base.CHEMIN_BASE == str(base_temp)
+    assert base.charger_base()["produits"][0]["reference"] == "REF1"
+
+
+def test_ajout_de_colonne_ne_masque_que_les_doublons(base_temp):
+    conn = sqlite3.connect(str(base_temp))
+    try:
+        cur = conn.cursor()
+        base._ajouter_colonne(cur, "produits", "nom TEXT DEFAULT ''")        # deja presente
+        with pytest.raises(sqlite3.OperationalError, match="no such table"):
+            base._ajouter_colonne(cur, "table_absente", "x TEXT")
+    finally:
+        conn.close()

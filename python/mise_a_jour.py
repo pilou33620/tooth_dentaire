@@ -224,13 +224,40 @@ def installer_dependances(dossier):
 VARIABLE_REDEMARRAGE = "TOOTH_DENTAIRE_REDEMARRAGE"
 
 
+def _option(argument, nom):
+    """Vrai si argument désigne l'option nom (argparse accepte aussi un préfixe : --import)."""
+    option = argument.split("=", 1)[0]
+    return len(option) > 2 and nom.startswith(option)
+
+
+def arguments_relance(argv):
+    """
+    Options du serveur relancé : les mêmes, sans --importer <dossier> ni
+    --forcer (l'import ne doit pas être rejoué sur la base du cabinet), et
+    avec --sans-navigateur.
+    """
+    arguments = []
+    sauter = False
+    for a in argv:
+        if sauter:
+            sauter = False
+            continue
+        if _option(a, "--importer"):
+            sauter = "=" not in a                 # « --importer X » : X est sauté aussi
+            continue
+        if _option(a, "--forcer") or a == "--sans-navigateur":
+            continue
+        arguments.append(a)
+    return arguments + ["--sans-navigateur"]
+
+
 def relancer(argv):
     """
     Lance le serveur mis à jour (mêmes options, sans rouvrir le navigateur).
     Sous Windows, dans une nouvelle fenêtre : celle-ci se ferme ensuite.
     """
     script = os.path.join(RACINE, "serveur.py")
-    arguments = [a for a in argv if a != "--sans-navigateur"] + ["--sans-navigateur"]
+    arguments = arguments_relance(argv)
     env = dict(os.environ, **{VARIABLE_REDEMARRAGE: "1"})
     if os.name == "nt":
         subprocess.Popen([sys.executable, script] + arguments, cwd=RACINE, env=env,

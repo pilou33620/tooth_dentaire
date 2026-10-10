@@ -98,6 +98,12 @@ async function charger(module, documents = { planning: PLANNING, planning_couleu
     return import(module);
 }
 
+/** Fige la date au mercredi de la semaine ISO `n` de 2026 puis met l'aperçu à jour. */
+function afficherSemaine(module, n) {
+    jest.setSystemTime(new Date(2025, 11, 31 + (n - 1) * 7, 10));
+    module.updateTeamPlanning(n);
+}
+
 const chargerTeam = (docs) => charger('../js/planning/team-planning.js', docs);
 const chargerTasks = (docs) => charger('../js/planning/tasks-planning.js', docs);
 const chargerCouleurs = (docs) => charger('../js/planning/couleurs.js', docs);
@@ -227,7 +233,7 @@ describe('couleurs du planning (règles en base)', () => {
 
     test('les couleurs sont appliquées en style dans les cases', async () => {
         const team = await chargerTeam();
-        team.updateTeamPlanning(10);
+        afficherSemaine(team, 10);
         expect(document.getElementById('calendar-preview-content').innerHTML)
             .toContain(`background-color: ${ROUGE}`);
     });
@@ -250,7 +256,7 @@ describe('couleurs du planning (règles en base)', () => {
                                  regles: [{ cible: 'praticien', nom: 'Dr Alpha', couleur: piege }] },
             taches: TACHES,
         });
-        team.updateTeamPlanning(10);
+        afficherSemaine(team, 10);
         expect(document.getElementById('calendar-preview-content').innerHTML).not.toContain('url(');
         const c = await import('../js/planning/couleurs.js');
         document.body.insertAdjacentHTML('beforeend', '<div id="legende-test"></div>');
@@ -292,7 +298,7 @@ describe('données du calendrier', () => {
 
     test('sans document, le planning est vide (aucun nom par défaut)', async () => {
         const vide = await chargerTeam({});
-        expect(vide.getCalendarData()).toEqual({ even: [], odd: [] });
+        expect(vide.getCalendarData()).toEqual({ even: [], odd: [], alternance: 'continue' });
     });
 
     test('chaque ligne couvre les six jours travaillés', () => {
@@ -344,32 +350,32 @@ describe('parité de la semaine', () => {
     beforeEach(async () => { team = await chargerTeam(); });
 
     test('semaine paire / impaire', () => {
-        team.updateTeamPlanning(10);
+        afficherSemaine(team, 10);
         expect(team.getActualParity()).toBe('even');
-        team.updateTeamPlanning(11);
+        afficherSemaine(team, 11);
         expect(team.getActualParity()).toBe('odd');
     });
 
     test('l\'aperçu suit la parité réelle par défaut', () => {
-        team.updateTeamPlanning(12);
+        afficherSemaine(team, 12);
         expect(team.getPreviewParity()).toBe('even');
     });
 
     test('l\'aperçu peut être forcé sur l\'autre parité', () => {
-        team.updateTeamPlanning(12);
+        afficherSemaine(team, 12);
         team.setPreviewParity('odd');
         expect(team.getPreviewParity()).toBe('odd');
         expect(team.getActualParity()).toBe('even');
     });
 
     test('les boutons de parité marquent la semaine réelle d\'une étoile', () => {
-        team.updateTeamPlanning(10);
+        afficherSemaine(team, 10);
         expect(document.getElementById('btn-preview-even').innerHTML).toBe('Paire ★');
         expect(document.getElementById('btn-preview-odd').innerHTML).toBe('Impaire');
     });
 
     test('le bouton de la semaine affichée porte la classe « actif »', () => {
-        team.updateTeamPlanning(10);
+        afficherSemaine(team, 10);
         team.setPreviewParity('odd');
         expect(document.getElementById('btn-preview-odd').classList.contains('actif')).toBe(true);
         expect(document.getElementById('btn-preview-even').classList.contains('actif')).toBe(false);
@@ -395,7 +401,7 @@ describe('aperçu et tableaux du planning', () => {
     beforeEach(async () => { team = await chargerTeam(); });
 
     test('l\'aperçu affiche une ligne par assistante', () => {
-        team.updateTeamPlanning(10);
+        afficherSemaine(team, 10);
         const html = document.getElementById('calendar-preview-content').innerHTML;
         for (const l of team.getCalendarData().even) {
             expect(html).toContain(l.assistant);
@@ -404,19 +410,19 @@ describe('aperçu et tableaux du planning', () => {
 
     test('une demi-journée sans praticien affiche « Repos »', async () => {
         const t = await chargerTeam({ planning: { even: [ligne('Assistante A', '')], odd: [] } });
-        t.updateTeamPlanning(10);
+        afficherSemaine(t, 10);
         expect(document.getElementById('calendar-preview-content').innerHTML).toContain('Repos');
     });
 
     test('un planning vide invite à le remplir', async () => {
         const t = await chargerTeam({});
-        t.updateTeamPlanning(10);
+        afficherSemaine(t, 10);
         expect(document.getElementById('calendar-preview-content').textContent)
             .toContain('Planning vide');
     });
 
     test('les flèches de navigation changent le jour affiché', () => {
-        team.updateTeamPlanning(10);
+        afficherSemaine(team, 10);
         const avant = document.getElementById('calendar-preview-content').innerHTML;
         window.navPlanningDay(1);
         const apres = document.getElementById('calendar-preview-content').innerHTML;
@@ -427,7 +433,7 @@ describe('aperçu et tableaux du planning', () => {
     });
 
     test('revenir à aujourd\'hui annule le décalage de jour', () => {
-        team.updateTeamPlanning(10);
+        afficherSemaine(team, 10);
         const initial = document.getElementById('calendar-preview-content').innerHTML;
         window.navPlanningDay(3);
         window.resetPlanningDay();
@@ -481,7 +487,7 @@ describe('aperçu et tableaux du planning', () => {
     });
 
     test('la fenêtre du planning s\'ouvre sur l\'onglet de la parité courante', () => {
-        team.updateTeamPlanning(11);            // impaire
+        afficherSemaine(team, 11);            // impaire
         team.openCalendarModal();
         expect(document.getElementById('calendar-overlay').classList.contains('hidden'))
             .toBe(false);
@@ -529,7 +535,7 @@ describe('tableau des tâches', () => {
     test('les modifications sont envoyées au serveur à l\'enregistrement', async () => {
         tasks.ouvrirTaches();
         tasks.getTasksData().rows[0].col1 = 'Assistante Z';
-        tasks.saveTasksData();
+        await tasks.saveTasksData();
         await attendreEcritures();
         const envoi = appelsVers(serveur, 'PUT', '/api/documents/taches');
         expect(envoi).toHaveLength(1);

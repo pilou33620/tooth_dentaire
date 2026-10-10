@@ -6,11 +6,11 @@
    ============================================================ */
 
 import { getDocument, setDocument, pret } from '../core/api.js';
+import { tempsRappel } from '../core/utils.js';
 
 function prochaineEcheance() {
     const doc = getDocument("rappel_dosimetres") || {};
-    const n = parseInt(doc.nextTime, 10);
-    return Number.isFinite(n) ? n : null;
+    return tempsRappel(doc.nextTime);
 }
 
 // Meme principe que pour la Mire : "Ignorer pour l'instant" suspend la

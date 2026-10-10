@@ -279,7 +279,11 @@ def importer(dossier_ancien, chemin_base, forcer=False):
         if valeur is None:
             lignes.append("  - %-20s : rien a reprendre" % cle)
             return
-        base.ecrire_document(cle, valeur)
+        try:
+            base.ecrire_document(cle, valeur)
+        except base.ErreurDonnees as exc:          # format inattendu : on passe au suivant
+            lignes.append("  - %-20s : ignore (%s)" % (cle, exc))
+            return
         lignes.append("  - %-20s : %s" % (cle, origine))
 
     planning = _json(ls.get("teamCalendarData"))

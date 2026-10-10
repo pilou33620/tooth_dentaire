@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; frame-src 'self'; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self';">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; frame-src 'self'; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self';">
     <link rel="icon" href="logo.ico">
     <title>Cabinet — Accueil</title>
     <link rel="stylesheet" href="css/style.css">
@@ -272,19 +272,7 @@
                 <svg class="bj-ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
             </button>
 
-        <script>
-            // Réinitialisation UNIQUE des positions après un changement de structure de l'interface.
-            // Les positions de l'ancienne interface n'ont pas de sens dans la nouvelle : on repart
-            // d'une disposition vide ("{}" et non une suppression, sinon la disposition importée
-            // de l'ancienne application serait rechargée par le mode personnalisation).
-            (function () {
-                const LAYOUT_VERSION = "layout-bonjourr-2026-10";
-                if (localStorage.getItem("ui-layout-version") !== LAYOUT_VERSION) {
-                    localStorage.setItem("ui-positions", "{}");
-                    localStorage.setItem("ui-layout-version", LAYOUT_VERSION);
-                }
-            })();
-        </script>
+        <script src="js/ui/version-disposition.js"></script>
 
         </main>
     </div>
@@ -1412,7 +1400,7 @@
                     <section class="edit-card">
                         <h3 class="edit-card-title">📦 Conditionnement &amp; stock</h3>
                         <label>Type de conditionnement :</label>
-                        <select id="edit-type-stockage" class="input" onchange="toggleCondFields()">
+                        <select id="edit-type-stockage" class="input">
                             <option value="unite">À l'unité</option>
                             <option value="carton">En cartons</option>
                             <option value="boite">En boîtes</option>
@@ -2051,7 +2039,7 @@
         <div class="dialog" style="width: 95vw; height: 95vh; max-width: 1000px; display: flex; flex-direction: column;">
             <div class="dialog-titlebar">
                 Carnets d'Adresses
-                <button class="dialog-close" onclick="document.getElementById('annuaire-overlay').classList.add('hidden')">✕</button>
+                <button class="dialog-close" data-close="annuaire-overlay">✕</button>
             </div>
             <div class="dialog-body" style="flex: 1; padding: 0; overflow: hidden;">
                 <iframe src="html/annuaire.html" style="width: 100%; height: 100%; border: none;"></iframe>
@@ -2110,7 +2098,7 @@
         <div class="dialog">
             <div class="easter-egg-header">
                 <h2>🦷 Dino Run: Sauve ta dent !</h2>
-                <button class="btn btn-red" onclick="hideEasterEgg()">Fermer</button>
+                <button class="btn btn-red" id="easter-egg-fermer" type="button">Fermer</button>
             </div>
             <canvas id="easter-egg-canvas" width="600" height="200"></canvas>
             <div class="easter-egg-instructions">Appuie sur <b>Espace</b> ou <b>Clique</b> sur le cadre pour sauter.
@@ -2137,7 +2125,13 @@
                 <div id="calendar-container-even" class="calendar-wrapper active"></div>
                 <div id="calendar-container-odd" class="calendar-wrapper hidden"></div>
                 <div id="calendar-container-couleurs" class="calendar-wrapper hidden"></div>
-                
+
+                <label style="display: flex; gap: 8px; align-items: flex-start; justify-content: center; font-size: 0.9em; color: #444;">
+                    <input type="checkbox" id="planning-alternance-iso" style="margin-top: 3px;">
+                    <span>Suivre le numéro de semaine officiel (après une année de 53 semaines, deux semaines « impaires » se suivent).
+                    Décoché : les semaines paires et impaires alternent toujours.</span>
+                </label>
+
                 <div class="dialog-buttons centered" style="margin-top: 20px;">
                     <button id="btn-save-calendar" class="btn btn-green" style="font-size: 1.1em; padding: 10px 30px;">💾 Sauvegarder le planning</button>
                     <button class="btn" data-close="calendar-overlay">Fermer</button>
@@ -2191,7 +2185,7 @@
 
     <!-- ============ ECRAN DE VEILLE (SCREENSAVER) ============ -->
     <div id="screensaver-overlay" class="hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.95); z-index: 10000; display: flex; justify-content: center; align-items: center; opacity: 0; transition: opacity 1s ease;">
-        <iframe class="cabinet-animation" src="html/cabinet-dentaire.html" style="width: 100%; height: 100%; border: none; pointer-events: none;" scrolling="no" title="Animation Cabinet Dentaire"></iframe>
+        <iframe class="cabinet-animation" data-src="html/cabinet-dentaire.html" style="width: 100%; height: 100%; border: none; pointer-events: none;" scrolling="no" title="Animation Cabinet Dentaire"></iframe>
     </div>
 
     <script type="module" src="js/main-init.js"></script>

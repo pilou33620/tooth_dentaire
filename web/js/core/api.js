@@ -9,17 +9,32 @@
                           ses transactions...) partent en un seul lot, tout
                           ou rien ; une ligne de stock modifiée entre-temps
                           par un autre poste fait refuser le lot (conflit).
-   - getDocument / setDocument : planning, tâches, dosimètres, rappels...
+   - getDocument / modifierDocument / setDocument : planning, tâches,
+                          dosimètres, rappels... Chaque document a une version :
+                          une modification faite sur une copie périmée est
+                          refusée par le serveur (409) puis rejouée sur la
+                          version à jour, au lieu d'écraser l'autre poste.
    - surveillance       : recharge les données quand un autre poste
-                          du cabinet a modifié quelque chose.
+                          du cabinet a modifié quelque chose (sauf pendant une
+                          saisie : la fenêtre ouverte garde les données lues).
    ============================================================ */
 
 import { setDbCache, loadDB, findStockEntry } from './database.js';
 
 const INTERVALLE_SURVEILLANCE = 4000; // ms
 
+// Documents : vue affichée = dernière valeur confirmée par le serveur
+// + modifications de ce poste pas encore confirmées (rejouées dans l'ordre).
 let documents = {};
+let confirmes = {};          // cle -> { valeur, version } (version null : inconnue)
+let enAttente = {};          // cle -> [fonctions de modification pas encore envoyées]
+let enCours = {};            // cle -> [fonctions en cours d'envoi]
+const envoisPrevus = new Map();
 let revisionConnue = null;
+// Écart entre l'horloge du serveur et celle de ce poste (ms)
+let decalageHorloge = 0;
+// Fonction qui indique qu'une saisie est en cours (surveillance suspendue)
+let pauseSurveillance = null;
 let fileEcriture = Promise.resolve();
 let ecrituresEnCours = 0;
 let resoudrePret;
@@ -53,8 +68,8 @@ function numeroRevision(revision, reference) {
 }
 
 /** Appel JSON au serveur. Rejette avec un message lisible en cas d'erreur. */
-export async function api(methode, route, corps) {
-    const options = { method: methode, headers: {} };
+export async function api(methode, route, corps, entetes = {}) {
+    const options = { method: methode, headers: { ...entetes } };
     if (corps !== undefined) {
         options.headers["Content-Type"] = "application/json";
         options.body = JSON.stringify(corps);
@@ -75,17 +90,47 @@ export async function api(methode, route, corps) {
         const erreur = new Error(data.message || `Erreur ${reponse.status}`);
         erreur.status = reponse.status;
         erreur.conflit = Boolean(data.conflit);
+        erreur.data = data;
         throw erreur;
     }
     return data;
 }
 
-/** Charge (ou recharge) toutes les données depuis le serveur. */
-export async function chargerEtat() {
+/** Heure du serveur (ms), estimée à partir des réponses reçues. */
+export function maintenantServeur() {
+    return Date.now() + decalageHorloge;
+}
+
+function noterHeureServeur(data, debut, fin) {
+    const heure = Number(data && data.heure);
+    if (Number.isFinite(heure) && heure > 0) decalageHorloge = heure - (debut + fin) / 2;
+}
+
+/** Une écriture de ce poste est-elle en préparation ou en route ? */
+function ecritureEnAttente() {
+    return lotCourant !== null || ecrituresEnCours > 0;
+}
+
+/**
+ * Charge (ou recharge) toutes les données depuis le serveur.
+ * Si ce poste a commencé une écriture pendant la requête, l'état reçu est
+ * ignoré (renvoie null) : il effacerait la modification qui vient d'être
+ * faite à l'écran ; la surveillance rechargera après l'écriture.
+ * `force` : rechargement après un échec (les écritures en file sont abandonnées).
+ */
+export async function chargerEtat({ force = false } = {}) {
+    const debut = Date.now();
     const data = await api("GET", "/api/etat");
+    if (!force && revisionConnue !== null && ecritureEnAttente()) return null;
+    noterHeureServeur(data, debut, Date.now());
     setDbCache(data.base);
     versionsSuivies = new Map();
-    documents = data.documents || {};
+    const versions = data.versions_documents || {};
+    confirmes = {};
+    for (const [cle, valeur] of Object.entries(data.documents || {})) {
+        confirmes[cle] = { valeur, version: Number.isInteger(versions[cle]) ? versions[cle] : null };
+    }
+    for (const cle of new Set([...Object.keys(confirmes), ...Object.keys(documents)])) recalculerVue(cle);
     revisionConnue = data.revision;
     resoudrePret();
     return data;
@@ -98,29 +143,6 @@ function suivreRevision(data) {
     if (n !== null && attendu !== null && n === attendu + 1) {
         revisionConnue = data.revision;
     }
-}
-
-/**
- * Écriture ordonnée : les requêtes partent l'une après l'autre, dans l'ordre
- * où l'interface les a demandées (une sortie de stock suit son transfert...).
- */
-function ecrire(methode, route, corps) {
-    ecrituresEnCours++;
-    const tache = fileEcriture.then(async () => {
-        try {
-            const data = await api(methode, route, corps);
-            suivreRevision(data);
-            return data;
-        } catch (e) {
-            console.error(`Erreur d'enregistrement [${methode} ${route}] :`, e);
-            alert(`Erreur de sauvegarde : ${e.message}`);
-            return null;
-        } finally {
-            ecrituresEnCours--;
-        }
-    });
-    fileEcriture = tache;
-    return tache;
 }
 
 const enc = encodeURIComponent;
@@ -154,7 +176,7 @@ function retenirVersion(envoyee, resultat) {
 async function apresEchec(e) {
     generation++;
     try {
-        await chargerEtat();
+        await chargerEtat({ force: true });
         window.dispatchEvent(new CustomEvent("donnees-modifiees"));
     } catch (erreur) {
         /* serveur injoignable : on garde l'affichage actuel */
@@ -227,15 +249,175 @@ export function persister(action, ...args) {
 
 /* ---------------- Documents (planning, tâches, rappels...) ---------------- */
 
+function appliquer(fonctions, valeur) {
+    let v = copie(valeur);
+    for (const f of fonctions) {
+        const r = f(v);
+        if (r !== undefined) v = r;
+    }
+    return v;
+}
+
+/** Vue d'un document = valeur confirmée + modifications locales en attente. */
+function recalculerVue(cle) {
+    const fonctions = [...(enCours[cle] || []), ...(enAttente[cle] || [])];
+    if (!confirmes[cle] && fonctions.length === 0) {
+        delete documents[cle];
+        return;
+    }
+    documents[cle] = appliquer(fonctions, confirmes[cle] ? confirmes[cle].valeur : null);
+}
+
 /** Copie du document en cache (les modifications ne sont pas enregistrées). */
 export function getDocument(cle, defaut = null) {
     return cle in documents ? copie(documents[cle]) : copie(defaut);
 }
 
-/** Enregistre un document (cache local immédiat + envoi au serveur). */
+/** Version du document connue par ce poste (null si le serveur ne la donne pas). */
+export function versionDocument(cle) {
+    return confirmes[cle] ? confirmes[cle].version : null;
+}
+
+function entetesVersion(version) {
+    return Number.isInteger(version) ? { "X-Version-Document": String(version) } : {};
+}
+
+async function relireDocument(cle) {
+    const data = await api("GET", `/api/documents/${enc(cle)}`);
+    confirmes[cle] = { valeur: data.valeur, version: Number.isInteger(data.version) ? data.version : null };
+}
+
+function apresEchecDocument(cle, e) {
+    console.error(`Erreur d'enregistrement du document « ${cle} » :`, e);
+    recalculerVue(cle);
+    window.dispatchEvent(new CustomEvent("donnees-modifiees"));
+    alert(`Erreur de sauvegarde : ${e.message}\n\nCette modification n'a pas été enregistrée.`);
+}
+
+/** Envoie les modifications en attente d'un document (dans la file d'écriture). */
+async function envoyerDocument(cle) {
+    enCours[cle] = enAttente[cle] || [];
+    enAttente[cle] = [];
+    try {
+        for (let essai = 0; essai < 4; essai++) {
+            const confirme = confirmes[cle];
+            const valeur = appliquer(enCours[cle], confirme.valeur);
+            try {
+                const data = await api("PUT", `/api/documents/${enc(cle)}`, valeur, entetesVersion(confirme.version));
+                suivreRevision(data);
+                confirmes[cle] = {
+                    valeur,
+                    version: Number.isInteger(data.version) ? data.version
+                        : (Number.isInteger(confirme.version) ? confirme.version + 1 : null)
+                };
+                enCours[cle] = [];
+                recalculerVue(cle);
+                return data;
+            } catch (e) {
+                if (!e.conflit || essai === 3) throw e;
+                // Un autre poste a écrit entre-temps : on rejoue sur sa version.
+                await relireDocument(cle);
+                recalculerVue(cle);
+            }
+        }
+        return null;
+    } catch (e) {
+        enCours[cle] = [];
+        apresEchecDocument(cle, e);
+        return null;
+    }
+}
+
+/**
+ * Modifie un document : `modification(copie)` reçoit une copie de la valeur
+ * et la modifie (ou renvoie la nouvelle valeur). Appliquée tout de suite à
+ * l'écran, puis envoyée au serveur ; si un autre poste a écrit le document
+ * entre-temps, elle est rejouée sur sa version au lieu de l'écraser.
+ * Résolue avec la réponse du serveur, ou null en cas d'échec.
+ */
+export function modifierDocument(cle, modification) {
+    if (!confirmes[cle]) {
+        // Document jamais reçu du serveur : on part de la valeur affichée
+        confirmes[cle] = { valeur: cle in documents ? copie(documents[cle]) : null, version: null };
+    }
+    if (!enAttente[cle]) enAttente[cle] = [];
+    enAttente[cle].push(modification);
+    recalculerVue(cle);
+    if (envoisPrevus.has(cle)) return envoisPrevus.get(cle);
+    ecrituresEnCours++;
+    const tache = fileEcriture.then(async () => {
+        envoisPrevus.delete(cle);
+        try {
+            return await envoyerDocument(cle);
+        } finally {
+            ecrituresEnCours--;
+        }
+    });
+    fileEcriture = tache;
+    envoisPrevus.set(cle, tache);
+    return tache;
+}
+
+/** Remplace tout le document (la dernière écriture l'emporte). */
 export function setDocument(cle, valeur) {
-    documents[cle] = copie(valeur);
-    return ecrire("PUT", `/api/documents/${enc(cle)}`, valeur);
+    const nouvelle = copie(valeur);
+    return modifierDocument(cle, () => copie(nouvelle));
+}
+
+/**
+ * Enregistre un document édité dans une fenêtre (planning, tâches...) à
+ * condition qu'il n'ait pas changé depuis `versionLue` (versionDocument() à
+ * l'ouverture). Résolue avec { conflit: true } si un autre poste l'a
+ * modifié entre-temps : rien n'est écrit, l'appelant demande quoi faire.
+ */
+export function enregistrerBrouillon(cle, valeur, versionLue) {
+    ecrituresEnCours++;
+    const tache = fileEcriture.then(async () => {
+        try {
+            const data = await api("PUT", `/api/documents/${enc(cle)}`, valeur, entetesVersion(versionLue));
+            suivreRevision(data);
+            confirmes[cle] = {
+                valeur: copie(valeur),
+                version: Number.isInteger(data.version) ? data.version : null
+            };
+            recalculerVue(cle);
+            return data;
+        } catch (e) {
+            if (e.conflit) return { conflit: true };
+            apresEchecDocument(cle, e);
+            return null;
+        } finally {
+            ecrituresEnCours--;
+        }
+    });
+    fileEcriture = tache;
+    return tache;
+}
+
+/**
+ * Enregistre ce qui a été saisi dans une fenêtre d'édition. Si le document
+ * a été modifié ailleurs depuis l'ouverture, on demande avant d'écraser.
+ * Résolue avec true si c'est enregistré.
+ */
+export async function enregistrerEdition(cle, valeur, versionLue, libelle) {
+    const r = await enregistrerBrouillon(cle, valeur, versionLue);
+    if (r && r.conflit) {
+        const ecraser = confirm(`${libelle} vient d'être modifié sur un autre poste pendant votre saisie.\n\n`
+            + "OK : enregistrer votre version (les modifications de l'autre poste seront remplacées).\n"
+            + "Annuler : ne rien enregistrer et revenir à votre saisie.");
+        if (!ecraser) return false;
+        return Boolean(await setDocument(cle, valeur));
+    }
+    return Boolean(r);
+}
+
+/** Recharge tout depuis le serveur et prévient l'interface (après un conflit...). */
+export async function recharger() {
+    try {
+        if (await chargerEtat({ force: true })) window.dispatchEvent(new CustomEvent("donnees-modifiees"));
+    } catch (e) {
+        /* serveur injoignable : on garde l'affichage actuel */
+    }
 }
 
 /* ---------------- Fichiers ---------------- */
@@ -266,13 +448,33 @@ export async function exporter(type, parametres = {}) {
 
 /* ---------------- Surveillance des autres postes ---------------- */
 
-async function verifierRevision() {
-    if (ecrituresEnCours > 0 || document.hidden) return;
+/**
+ * `fonction()` vraie pendant une saisie (fenêtre de modification ouverte) :
+ * les données ne sont alors pas rechargées sous la fenêtre. L'enregistrement
+ * part avec la version lue à l'ouverture ; si un autre poste a modifié la
+ * même ligne entre-temps, le serveur le refuse (conflit) au lieu d'écraser.
+ */
+export function definirPauseSurveillance(fonction) {
+    pauseSurveillance = typeof fonction === "function" ? fonction : null;
+}
+
+function enPause() {
     try {
+        return Boolean(pauseSurveillance && pauseSurveillance());
+    } catch (e) {
+        return false;
+    }
+}
+
+export async function verifierRevision() {
+    if (ecrituresEnCours > 0 || document.hidden || enPause()) return;
+    try {
+        const debut = Date.now();
         const data = await api("GET", "/api/revision");
-        if (revisionConnue !== null && data.revision !== revisionConnue && ecrituresEnCours === 0) {
-            await chargerEtat();
-            window.dispatchEvent(new CustomEvent("donnees-modifiees"));
+        noterHeureServeur(data, debut, Date.now());
+        if (revisionConnue !== null && data.revision !== revisionConnue
+                && ecrituresEnCours === 0 && !enPause()) {
+            if (await chargerEtat()) window.dispatchEvent(new CustomEvent("donnees-modifiees"));
         }
     } catch (e) {
         /* serveur momentanément injoignable : on réessaiera */
@@ -294,6 +496,7 @@ if (typeof window !== "undefined") {
     window.api = api;
     window.getDocument = getDocument;
     window.setDocument = setDocument;
+    window.modifierDocument = modifierDocument;
     window.exporter = exporter;
     window.donneesPretes = pret;
 }

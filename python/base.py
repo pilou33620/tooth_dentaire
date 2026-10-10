@@ -22,10 +22,12 @@ AUCUNE donnee propre au cabinet (noms du personnel, contacts...) n'est ecrite
 dans le code : tout est en base, et la base n'est pas versionnee.
 """
 
+import calendar
 import datetime
 import json
 import math
 import os
+import re
 import sqlite3
 import threading
 import uuid
@@ -80,6 +82,23 @@ DOCUMENTS_DEFAUT = {
             {"libelle": "Séchage", "minutes": 20},
         ],
     },
+    # Empreintes des factures PDF deja importees (alerte en cas de re-import)
+    "factures_importees": {"empreintes": []},
+}
+
+# Taille maximale d'un document (JSON serialise)
+TAILLE_MAX_DOCUMENT = 2 * 1024 * 1024
+
+# Champs qui doivent etre des listes quand ils sont presents (controle simple,
+# pas de schema complet : evite qu'un poste enregistre un document illisible
+# pour tous les autres).
+LISTES_DOCUMENTS = {
+    "planning": ("even", "odd"),
+    "notes": ("items",),
+    "minuteurs": ("actifs", "preselections"),
+    "checklist": ("modele",),
+    "dosimetres": ("dosimetres",),
+    "taches": ("rows",),
 }
 
 CHAMPS_CONTACT = ("nom", "prenom", "entreprise", "email", "tel_fixe",
@@ -91,7 +110,15 @@ class ErreurDonnees(ValueError):
 
 
 class ErreurConflit(ErreurDonnees):
-    """Ligne modifiee entre-temps par un autre poste (repondue en 409)."""
+    """Ligne modifiee entre-temps par un autre poste (repondue en 409).
+
+    version : version actuelle d'un document en conflit (renvoyee au poste),
+    None pour une ligne de stock.
+    """
+
+    def __init__(self, message, version=None):
+        super().__init__(message)
+        self.version = version
 
 
 # ------------------------------------------------------------------
@@ -119,8 +146,15 @@ def definir_chemin(chemin):
     if dossier:
         os.makedirs(dossier, exist_ok=True)
     with _VERROU:
+        precedent = CHEMIN_BASE
         CHEMIN_BASE = chemin
-        init_db()
+        try:
+            init_db()
+        except Exception:
+            # Fichier inutilisable (pas une base SQLite...) : on garde l'ancienne
+            # base, sinon toutes les requetes suivantes echoueraient.
+            CHEMIN_BASE = precedent
+            raise
         _incrementer_revision()
     return chemin
 
@@ -136,8 +170,10 @@ def connexion():
 def _ajouter_colonne(cur, table, definition):
     try:
         cur.execute("ALTER TABLE %s ADD COLUMN %s" % (table, definition))
-    except sqlite3.OperationalError:
-        pass                                   # colonne deja presente
+    except sqlite3.OperationalError as exc:
+        if "duplicate column name" not in str(exc).lower():
+            raise                              # base verrouillee, en lecture seule...
+        # colonne deja presente
 
 
 def init_db():
@@ -251,6 +287,8 @@ def init_db():
                 valeur      TEXT NOT NULL,
                 modifie_le  TEXT DEFAULT (datetime('now', 'localtime'))
             )""")
+        # Numero de version du document : +1 a chaque ecriture (conflits entre postes)
+        _ajouter_colonne(cur, "documents", "version INTEGER DEFAULT 0")
         conn.commit()
     finally:
         conn.close()
@@ -309,6 +347,67 @@ def _texte(val):
     return "" if val is None else str(val)
 
 
+def _champ_texte(d, cle):
+    """Champ texte recu d'un poste. Un objet ou une liste est refuse : str()
+    l'enregistrerait sous la forme « {'a': 1} »."""
+    val = d.get(cle)
+    if isinstance(val, (dict, list)):
+        raise ErreurDonnees("Champ « %s » invalide (texte attendu)." % cle)
+    return _texte(val)
+
+
+# Entiers exacts en JavaScript (Number.MAX_SAFE_INTEGER)
+ENTIER_JS_MAX = 2 ** 53 - 1
+
+
+def _entier_js(d, cle, default=0):
+    """Entier recu d'un poste (comme safe_int) ; au-dela de ±(2**53-1), le
+    navigateur l'arrondirait : ErreurDonnees."""
+    val = d.get(cle)
+    if isinstance(val, int):
+        trop_grand = abs(val) > ENTIER_JS_MAX
+    elif isinstance(val, (float, str)):
+        try:
+            trop_grand = abs(float(val)) > ENTIER_JS_MAX        # "1e999" -> infini
+        except ValueError:
+            trop_grand = False
+    else:
+        trop_grand = False
+    if trop_grand:
+        raise ErreurDonnees("Champ « %s » : nombre trop grand." % cle)
+    return safe_int(val, default)
+
+
+QUANTITE_PAR_CARTON_MAX = 100000
+
+
+def _quantite_par_carton(p):
+    quantite = _entier_js(p, "quantite_par_carton", 1)
+    if quantite == 0:
+        quantite = 1                    # 0, vide ou illisible : 1 (comportement historique)
+    if not 1 <= quantite <= QUANTITE_PAR_CARTON_MAX:
+        raise ErreurDonnees("La quantité par carton doit être comprise entre 1 et %d."
+                            % QUANTITE_PAR_CARTON_MAX)
+    return quantite
+
+
+def _lots_details(s):
+    """lots_details : tableau JSON (liste, ou texte qui en contient une)."""
+    lots = s.get("lots_details")
+    if lots is None or lots == "":
+        return "[]"
+    if isinstance(lots, str):
+        try:
+            valide = isinstance(json.loads(lots), list)
+        except ValueError:
+            valide = False
+        if valide:
+            return lots
+    elif isinstance(lots, list):
+        return json.dumps(lots, ensure_ascii=False)
+    raise ErreurDonnees("Champ « lots_details » invalide (tableau attendu).")
+
+
 def _exiger_dict(data):
     if not isinstance(data, dict):
         raise ErreurDonnees("Format de donnees invalide (objet attendu).")
@@ -319,8 +418,23 @@ def _exiger_dict(data):
 # Lecture complete
 # ------------------------------------------------------------------
 
-def charger_base():
-    """Toute la base au format attendu par l'interface (ancien app.js)."""
+def _date_recente(texte, limite):
+    """Vrai si la date ISO (AAAA-MM-JJ...) est >= limite ; une date illisible est gardee."""
+    texte = _texte(texte).strip()
+    try:
+        datetime.datetime.strptime(texte[:10], "%Y-%m-%d")
+    except ValueError:
+        return True
+    return texte[:10] >= limite
+
+
+def charger_base(jours_transactions=None):
+    """Toute la base au format attendu par l'interface (ancien app.js).
+
+    jours_transactions : ne renvoyer que les transactions et l'historique des
+    prix des N derniers jours (reponse /api/etat plus legere). Les exports
+    appellent charger_base() sans limite.
+    """
     conn = connexion()
     try:
         cur = conn.cursor()
@@ -340,16 +454,24 @@ def charger_base():
         historique_prix = [dict(r) for r in cur.execute(
             "SELECT id, reference, date, prix_ht, prix_ttc, fournisseur"
             " FROM historique_prix ORDER BY id")]
+        # Sur toute la table, meme quand les transactions sont filtrees
+        next_tx = cur.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM transactions").fetchone()[0]
+        next_auto = cur.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM autoclave").fetchone()[0]
     finally:
         conn.close()
+    if jours_transactions is not None:
+        limite = (datetime.date.today()
+                  - datetime.timedelta(days=jours_transactions)).isoformat()
+        transactions = [t for t in transactions if _date_recente(t["date"], limite)]
+        historique_prix = [h for h in historique_prix if _date_recente(h["date"], limite)]
     return {
         "produits": produits,
         "stock": stock,
         "transactions": transactions,
         "autoclave": autoclave,
         "historique_prix": historique_prix,
-        "nextTxId": max((t["id"] or 0 for t in transactions), default=0) + 1,
-        "nextAutoId": max((a["id"] or 0 for a in autoclave), default=0) + 1,
+        "nextTxId": next_tx,
+        "nextAutoId": next_auto,
     }
 
 
@@ -359,7 +481,7 @@ def charger_base():
 
 def _maj_produit(cur, p):
     p = _exiger_dict(p)
-    ref = _texte(p.get("reference")).strip()
+    ref = _champ_texte(p, "reference").strip()
     if not ref:
         raise ErreurDonnees("La reference du produit est obligatoire.")
 
@@ -373,10 +495,10 @@ def _maj_produit(cur, p):
           nom=excluded.nom, groupe=excluded.groupe, ref_scannette=excluded.ref_scannette,
           type_stockage=excluded.type_stockage, quantite_par_carton=excluded.quantite_par_carton,
           arrete=COALESCE(?, produits.arrete)
-    """, (ref, _texte(p.get("nom")), _texte(p.get("groupe")),
-          _texte(p.get("ref_scannette")),
-          _texte(p.get("type_stockage")) or "unite",
-          max(1, safe_int(p.get("quantite_par_carton"), 1)), arrete, arrete))
+    """, (ref, _champ_texte(p, "nom"), _champ_texte(p, "groupe"),
+          _champ_texte(p, "ref_scannette"),
+          _champ_texte(p, "type_stockage") or "unite",
+          _quantite_par_carton(p), arrete, arrete))
 
 
 def _verifier_version(cur, ref, espace, s, deja_verifiees):
@@ -404,15 +526,12 @@ def _verifier_version(cur, ref, espace, s, deja_verifiees):
 
 def _maj_stock(cur, s, deja_verifiees=None):
     s = _exiger_dict(s)
-    ref = _texte(s.get("reference")).strip()
-    espace = _texte(s.get("utilisateur")).strip()
+    ref = _champ_texte(s, "reference").strip()
+    espace = _champ_texte(s, "utilisateur").strip()
     if not ref or not espace:
         raise ErreurDonnees("Reference et espace obligatoires.")
-    delai = s.get("delai_peremption")
-    delai = 30 if delai is None or delai == "" else safe_int(delai, 30)
-    lots = s.get("lots_details", "[]")
-    if not isinstance(lots, str):
-        lots = json.dumps(lots, ensure_ascii=False)
+    delai = _entier_js(s, "delai_peremption", 30)
+    lots = _lots_details(s)
 
     _verifier_version(cur, ref, espace, s, set() if deja_verifiees is None else deja_verifiees)
     cur.execute("""
@@ -434,16 +553,16 @@ def _maj_stock(cur, s, deja_verifiees=None):
           lots_details=excluded.lots_details,
           version=COALESCE(stock.version, 0) + 1
     """, (ref, espace,
-          max(0, safe_int(s.get("quantite"))), safe_int(s.get("stock_minimum")),
+          max(0, _entier_js(s, "quantite")), _entier_js(s, "stock_minimum"),
           1 if safe_int(s.get("alerte_active")) else 0,
           1 if safe_int(s.get("alerte_peremption_active")) else 0,
           delai,
-          _texte(s.get("date_peremption")), _texte(s.get("date_import")),
-          _texte(s.get("fournisseur")),
+          _champ_texte(s, "date_peremption"), _champ_texte(s, "date_import"),
+          _champ_texte(s, "fournisseur"),
           1 if safe_int(s.get("en_commande")) else 0,
-          _texte(s.get("date_commande")), _texte(s.get("lot")),
+          _champ_texte(s, "date_commande"), _champ_texte(s, "lot"),
           safe_float(s.get("prix_unitaire_ht")), safe_float(s.get("prix_unitaire_ttc")),
-          lots or "[]"))
+          lots))
     version = cur.execute("SELECT version FROM stock WHERE reference = ? AND utilisateur = ?",
                           (ref, espace)).fetchone()["version"]
     return {"reference": ref, "utilisateur": espace, "version": version}
@@ -465,22 +584,22 @@ def _ajout_transaction(cur, t):
         INSERT INTO transactions (date, reference, utilisateur, type_transaction,
                                   quantite, lot, peremption_sortie)
         VALUES (?, ?, ?, ?, ?, ?, ?)
-    """, (_texte(t.get("date")), _texte(t.get("reference")),
-          _texte(t.get("utilisateur")), _texte(t.get("type_transaction")),
-          safe_int(t.get("quantite")), _texte(t.get("lot")),
-          _texte(t.get("peremption_sortie"))))
+    """, (_champ_texte(t, "date"), _champ_texte(t, "reference"),
+          _champ_texte(t, "utilisateur"), _champ_texte(t, "type_transaction"),
+          _entier_js(t, "quantite"), _champ_texte(t, "lot"),
+          _champ_texte(t, "peremption_sortie")))
     return cur.lastrowid
 
 
 def _ajout_autoclave(cur, a):
     a = _exiger_dict(a)
-    if not _texte(a.get("utilisateur")).strip() or not _texte(a.get("commentaire")).strip():
+    utilisateur, commentaire = _champ_texte(a, "utilisateur"), _champ_texte(a, "commentaire")
+    if not utilisateur.strip() or not commentaire.strip():
         raise ErreurDonnees("Utilisateur et commentaire obligatoires.")
     cur.execute("""
         INSERT INTO autoclave (date, machine, utilisateur, commentaire)
         VALUES (?, ?, ?, ?)
-    """, (_texte(a.get("date")), _texte(a.get("machine")),
-          _texte(a.get("utilisateur")), _texte(a.get("commentaire"))))
+    """, (_champ_texte(a, "date"), _champ_texte(a, "machine"), utilisateur, commentaire))
     return cur.lastrowid
 
 
@@ -489,9 +608,9 @@ def _ajout_historique_prix(cur, h):
     cur.execute("""
         INSERT INTO historique_prix (reference, date, prix_ht, prix_ttc, fournisseur)
         VALUES (?, ?, ?, ?, ?)
-    """, (_texte(h.get("reference")), _texte(h.get("date")),
+    """, (_champ_texte(h, "reference"), _champ_texte(h, "date"),
           safe_float(h.get("prix_ht"), None), safe_float(h.get("prix_ttc"), None),
-          _texte(h.get("fournisseur"))))
+          _champ_texte(h, "fournisseur")))
     return cur.lastrowid
 
 
@@ -536,14 +655,34 @@ def add_historique_prix(h):
 # Produits perimes : aucune entree en stock
 # ------------------------------------------------------------------
 
+# Formats de date de peremption ; doit rester aligne sur l'interface (JavaScript).
+_DATE_JMA = re.compile(r"([0-9]{1,2})/([0-9]{1,2})/([0-9]{4}|[0-9]{2})")   # JJ/MM/AAAA, JJ/MM/AA
+_DATE_AMJ = re.compile(r"([0-9]{4})-([0-9]{1,2})-([0-9]{1,2})")            # AAAA-MM-JJ
+_DATE_MA = re.compile(r"([0-9]{1,2})/([0-9]{4})")                         # MM/AAAA
+_DATE_AM = re.compile(r"([0-9]{4})-([0-9]{1,2})")                         # AAAA-MM
+
+
 def date_peremption(texte):
-    """Date d'un texte JJ/MM/AAAA ou AAAA-MM-JJ, sinon None."""
+    """Date d'un texte JJ/MM/AAAA, JJ/MM/AA (an 2000 + AA), AAAA-MM-JJ, ou
+    MM/AAAA, AAAA-MM (dernier jour du mois : un produit etiquete d'un mois
+    perime a la fin de ce mois). Jour et mois sur 1 ou 2 chiffres.
+    None si le texte est illisible ou la date impossible (31/02)."""
     texte = _texte(texte).strip()
-    for fmt in ("%d/%m/%Y", "%Y-%m-%d"):
-        try:
-            return datetime.datetime.strptime(texte, fmt).date()
-        except ValueError:
-            pass
+    try:
+        m = _DATE_JMA.fullmatch(texte)
+        if m:
+            annee = int(m.group(3)) + (2000 if len(m.group(3)) == 2 else 0)
+            return datetime.date(annee, int(m.group(2)), int(m.group(1)))
+        m = _DATE_AMJ.fullmatch(texte)
+        if m:
+            return datetime.date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+        m = _DATE_MA.fullmatch(texte) or _DATE_AM.fullmatch(texte)
+        if m:
+            mois, annee = (int(m.group(1)), int(m.group(2))) if "/" in texte \
+                else (int(m.group(2)), int(m.group(1)))
+            return datetime.date(annee, mois, calendar.monthrange(annee, mois)[1])
+    except (ValueError, calendar.IllegalMonthError):
+        pass
     return None
 
 
@@ -712,34 +851,89 @@ def _decoder_document(cle, valeur):
     return json.loads(json.dumps(DOCUMENTS_DEFAUT[cle]))
 
 
-def lire_document(cle):
+def lire_document_et_version(cle):
+    """{"valeur": ..., "version": int} lus ensemble (0 : jamais enregistre)."""
     _cle_valide(cle)
     conn = connexion()
     try:
-        ligne = conn.execute("SELECT valeur FROM documents WHERE cle = ?", (cle,)).fetchone()
+        ligne = conn.execute("SELECT valeur, version FROM documents WHERE cle = ?",
+                             (cle,)).fetchone()
     finally:
         conn.close()
-    return _decoder_document(cle, ligne["valeur"] if ligne else None)
+    return {"valeur": _decoder_document(cle, ligne["valeur"] if ligne else None),
+            "version": safe_int(ligne["version"]) if ligne else 0}
+
+
+def lire_document(cle):
+    return lire_document_et_version(cle)["valeur"]
+
+
+def lire_documents_et_versions():
+    """(documents, versions) de tous les documents, en une seule requete
+    (appele a chaque /api/etat, donc par chaque poste a chaque rechargement).
+    Lus ensemble : une version ne peut pas etre plus recente que sa valeur."""
+    conn = connexion()
+    try:
+        lignes = {r["cle"]: r for r in conn.execute("SELECT cle, valeur, version FROM documents")}
+    finally:
+        conn.close()
+    documents, versions = {}, {}
+    for cle in DOCUMENTS_DEFAUT:
+        ligne = lignes.get(cle)
+        documents[cle] = _decoder_document(cle, ligne["valeur"] if ligne else None)
+        versions[cle] = safe_int(ligne["version"]) if ligne else 0
+    return documents, versions
 
 
 def lire_documents():
-    """Tous les documents en une seule connexion et une seule requete
-    (appele a chaque /api/etat, donc par chaque poste a chaque rechargement)."""
-    conn = connexion()
+    return lire_documents_et_versions()[0]
+
+
+def _valider_document(cle, valeur):
+    """Controle simple du document avant ecriture ; renvoie le JSON serialise."""
+    invalide = ErreurDonnees("Format invalide pour le document « %s »." % cle)
+    if cle == "record_jeu":
+        if isinstance(valeur, bool) or not isinstance(valeur, (int, float)) or valeur < 0 \
+                or (isinstance(valeur, float) and not math.isfinite(valeur)) \
+                or valeur > ENTIER_JS_MAX:
+            raise invalide
+    elif not isinstance(valeur, dict) or any(
+            champ in valeur and not isinstance(valeur[champ], list)
+            for champ in LISTES_DOCUMENTS.get(cle, ())):
+        raise invalide
     try:
-        valeurs = {r["cle"]: r["valeur"] for r in conn.execute("SELECT cle, valeur FROM documents")}
-    finally:
-        conn.close()
-    return {cle: _decoder_document(cle, valeurs.get(cle)) for cle in DOCUMENTS_DEFAUT}
+        texte = json.dumps(valeur, ensure_ascii=False, allow_nan=False)
+    except ValueError:                         # NaN / infini
+        raise invalide
+    if len(texte.encode("utf-8")) > TAILLE_MAX_DOCUMENT:
+        raise ErreurDonnees("Document trop volumineux (2 Mo au maximum).")
+    return texte
 
 
-def ecrire_document(cle, valeur):
+def ecrire_document(cle, valeur, version_attendue=None):
+    """Enregistre le document et renvoie sa nouvelle version.
+
+    version_attendue : version que le poste a lue. Si le document a ete
+    modifie depuis, ErreurConflit (avec la version actuelle) et rien n'est
+    ecrit. None : ecriture sans controle (anciens postes, import).
+    """
     _cle_valide(cle)
-    texte = json.dumps(valeur, ensure_ascii=False)
-    _ecrire(lambda cur: cur.execute("""
-        INSERT INTO documents (cle, valeur, modifie_le) VALUES (?, ?, datetime('now', 'localtime'))
-        ON CONFLICT(cle) DO UPDATE SET valeur=excluded.valeur, modifie_le=excluded.modifie_le
-    """, (cle, texte)))
+    texte = _valider_document(cle, valeur)
+
+    def faire(cur):
+        ligne = cur.execute("SELECT version FROM documents WHERE cle = ?", (cle,)).fetchone()
+        actuelle = safe_int(ligne["version"]) if ligne else 0
+        if version_attendue is not None and version_attendue != actuelle:
+            raise ErreurConflit("Ce document vient d'être modifié depuis un autre poste.",
+                                version=actuelle)
+        cur.execute("""
+            INSERT INTO documents (cle, valeur, modifie_le, version)
+            VALUES (?, ?, datetime('now', 'localtime'), ?)
+            ON CONFLICT(cle) DO UPDATE SET valeur=excluded.valeur,
+              modifie_le=excluded.modifie_le, version=excluded.version
+        """, (cle, texte, actuelle + 1))
+        return actuelle + 1
+    return _ecrire(faire)
 
 
 def document_present(cle):
@@ -766,7 +960,7 @@ def lister_contacts():
 def enregistrer_contact(c):
     """Cree (sans id) ou met a jour (avec id) un contact ; renvoie le contact."""
     c = _exiger_dict(c)
-    valeurs = [_texte(c.get(champ)).strip() for champ in CHAMPS_CONTACT]
+    valeurs = [_champ_texte(c, champ).strip() for champ in CHAMPS_CONTACT]
     if not any(valeurs[:3]):
         raise ErreurDonnees("Un nom, un prenom ou une entreprise est obligatoire.")
     ident = safe_int(c.get("id"), 0)

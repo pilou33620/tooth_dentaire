@@ -27,23 +27,21 @@ export function initZoomIndicator() {
     zoomIndicator.textContent = 'Zoom: 100%';
     document.body.appendChild(zoomIndicator);
 
-    // Fonction pour détecter le zoom du navigateur
+    // Niveaux de zoom proposés par les navigateurs
+    const NIVEAUX = [25, 33, 50, 67, 75, 80, 90, 100, 110, 125, 150, 175, 200, 250, 300, 400, 500];
+
+    /**
+     * Zoom du navigateur. outerWidth est en pixels de l'écran, innerWidth en
+     * pixels CSS : leur rapport suit le zoom. (L'ancienne mesure comparait
+     * deux largeurs en pixels CSS : toujours 100 %.) Les bordures de fenêtre
+     * faussent un peu le rapport, d'où l'arrondi au niveau le plus proche.
+     */
     function getZoomLevel() {
-        // Créer un élément de référence pour calculer le zoom
-        const testEl = document.createElement('div');
-        testEl.style.cssText = 'width: 100vw; height: 1px; position: absolute; top: -9999px; left: -9999px; visibility: hidden;';
-        document.body.appendChild(testEl);
-
-        // Calculer le nombre de pixels CSS par pixel physique
-        const cssWidth = testEl.getBoundingClientRect().width;
-        document.body.removeChild(testEl);
-
-        if (cssWidth > 0) {
-            // window.innerWidth est en pixels physiques, cssWidth est en pixels CSS
-            // Le zoom = pixels physiques / pixels CSS * 100
-            return Math.round(window.innerWidth / cssWidth * 100);
-        }
-        return 100;
+        const brut = (window.outerWidth > 0 && window.innerWidth > 0)
+            ? window.outerWidth / window.innerWidth * 100
+            : ((window.visualViewport && window.visualViewport.scale) || 1) * 100;
+        const proche = NIVEAUX.reduce((a, b) => Math.abs(b - brut) < Math.abs(a - brut) ? b : a);
+        return Math.abs(proche - brut) <= 4 ? proche : Math.round(brut);
     }
 
     // Variables pour le timeout
@@ -75,10 +73,12 @@ export function initZoomIndicator() {
     window.addEventListener('resize', showZoomIndicator);
 
     // Écouter les événements de souris pour détecter les changements de zoom via Ctrl+molette
-    document.addEventListener('wheel', showZoomIndicator, { passive: true });
+    // (Ctrl + molette : le redimensionnement suit juste après)
+    document.addEventListener('wheel', e => {
+        if (e.ctrlKey) setTimeout(showZoomIndicator, 100);
+    }, { passive: true });
 
     // Afficher le zoom initial
     showZoomIndicator();
 
-    console.log("Zoom indicator initialized");
 }

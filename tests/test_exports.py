@@ -181,3 +181,22 @@ def test_export_indisponible_sans_openpyxl(monkeypatch):
     monkeypatch.setattr(exports, "openpyxl", None)
     with pytest.raises(exports.ExportIndisponible):
         exports.export_stock({})
+
+
+@pytest.mark.parametrize("debut, fin", [
+    (20260101, "2026-01-31"), ("2026-01-01", ["2026-01-31"]), ({"d": 1}, "2026-01-31"),
+    (True, "2026-01-31")])
+def test_extraction_chirurgie_dates_non_textuelles(debut, fin):
+    assert exports.extraction_chirurgie(db_exemple(), debut, fin) == \
+        {"status": "Erreur: Dates invalides."}
+
+
+@pytest.mark.parametrize("references", ["A", {"A": 1}, 12, [1, None, {"x": 1}], [["A"]]])
+def test_stats_references_mal_typees(references):
+    assert exports.stats_consommation(db_exemple(), references) == \
+        {"status": "Erreur: Aucune référence sélectionnée."}
+
+
+def test_stats_ignore_les_references_non_textuelles():
+    resultat = exports.stats_consommation(db_exemple(), [{"x": 1}, "TOUTES", 3])
+    assert resultat["status"] == "Succès"

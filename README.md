@@ -56,7 +56,9 @@ pare-feu : accepter pour les **réseaux privés**.
 
 > Le serveur n'a pas de mot de passe : il est prévu pour le réseau du cabinet
 > uniquement. Les requêtes venant d'un autre site web sont refusées, et le
-> changement de base ne peut se faire que depuis le poste qui fait tourner le serveur.
+> changement de base comme l'installation d'une mise à jour ne peuvent se faire
+> que depuis le poste qui fait tourner le serveur. « Sauvegarder maintenant » est
+> limité à une copie par minute.
 
 ## Données et confidentialité
 
@@ -97,6 +99,14 @@ si `requirements.txt` a changé, puis redémarre ; les pages se rechargent seule
 `donnees/` n'est jamais touché. Rien n'est proposé (raison dans Réglages >
 Mises à jour) si le dossier n'est pas un clone git, s'il est sur une autre
 branche ou si des fichiers de l'outil ont été modifiés sur le poste.
+
+Tous les postes voient le bandeau et peuvent demander une vérification (une
+par minute au plus), mais **l'installation se lance uniquement depuis le poste
+qui fait tourner le serveur**. Une mise à jour exécute sur ce poste le code
+publié sur la branche `main` de GitHub : quiconque peut pousser sur cette
+branche peut faire exécuter du code sur le poste serveur du cabinet. Protéger
+le compte GitHub (et ceux des collaborateurs du dépôt) par une double
+authentification (2FA).
 
 ## Interface
 
@@ -193,7 +203,7 @@ silencieusement la modification de l'autre poste.
 | POST | `/api/produit`, `/api/stock` | création / mise à jour |
 | DELETE | `/api/produit?reference=`, `/api/stock?reference=&utilisateur=` | suppression |
 | POST | `/api/transaction`, `/api/maintenance`, `/api/historique-prix` | ajout |
-| GET / PUT | `/api/documents/<cle>` | planning, couleurs, tâches, dosimètres, rappels, notes, checklist, minuteurs… |
+| GET / PUT | `/api/documents/<cle>` | planning, couleurs, tâches, dosimètres, rappels, notes, checklist, minuteurs… (en-tête `X-Version-Document` : 409 si modifié depuis un autre poste) |
 | GET / POST / DELETE | `/api/contacts` | carnet d'adresses |
 | POST | `/api/export/stock`, `liste-courses`, `consommation`, `chirurgie` | exports Excel (base64) |
 | GET / POST | `/api/sauvegardes` | dernière sauvegarde / sauvegarder maintenant |

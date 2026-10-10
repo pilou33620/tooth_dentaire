@@ -19,6 +19,7 @@ selon l'heure.
 import calendar
 import email.utils
 import json
+import math
 import re
 import ssl
 import threading
@@ -173,6 +174,13 @@ def libelle(symbole):
 # Lecture de la prévision
 # ------------------------------------------------------------------
 
+def _nombre(val):
+    """Nombre fini, sinon None (valeur absente, texte, NaN... dans la réponse du service)."""
+    if isinstance(val, bool) or not isinstance(val, (int, float)):
+        return None
+    return val if math.isfinite(val) else None
+
+
 def _heure_iso(texte):
     """'2026-10-03T14:00:00Z' -> secondes depuis l'époque."""
     try:
@@ -207,12 +215,12 @@ def resumer(donnees, maintenant=None):
     cat = categorie(symbole)
     if cat is None:
         # Pas de symbole exploitable : on se rabat sur la couverture nuageuse
-        nuages = details.get("cloud_area_fraction")
+        nuages = _nombre(details.get("cloud_area_fraction"))
         if nuages is None:
             return None
         cat = "clair" if nuages < 20 else "voile" if nuages < 45 else "nuageux" if nuages < 80 else "couvert"
 
-    temperature = details.get("air_temperature")
+    temperature = _nombre(details.get("air_temperature"))
     return {
         "categorie": cat,
         "intensite": intensite(symbole),
@@ -221,9 +229,9 @@ def resumer(donnees, maintenant=None):
         "libelle": libelle(symbole) or {
             "clair": "Ciel dégagé", "voile": "Plutôt beau", "nuageux": "Partiellement nuageux",
             "couvert": "Couvert"}.get(cat, ""),
-        "temperature": round(temperature) if isinstance(temperature, (int, float)) else None,
-        "nuages": details.get("cloud_area_fraction"),
-        "vent": details.get("wind_speed"),
+        "temperature": round(temperature) if temperature is not None else None,
+        "nuages": _nombre(details.get("cloud_area_fraction")),
+        "vent": _nombre(details.get("wind_speed")),
         "heure": courant.get("time"),
     }
 
@@ -365,10 +373,14 @@ def chercher_communes(texte, limite=6):
             "Recherche impossible : le serveur n'a pas accès à internet (%s)." % derniere_erreur)
 
     resultats = []
-    for f in donnees.get("features") or []:
+    for f in (donnees.get("features") if isinstance(donnees, dict) else None) or []:
+        if not isinstance(f, dict):
+            continue
         coords = ((f.get("geometry") or {}).get("coordinates")) or []
         props = f.get("properties") or {}
-        if len(coords) < 2:
+        # Coordonnées qui ne sont pas des nombres : commune ignorée
+        if not isinstance(coords, list) or len(coords) < 2 \
+                or _nombre(coords[0]) is None or _nombre(coords[1]) is None:
             continue
         nom = props.get("city") or props.get("name") or props.get("label") or ""
         detail = " · ".join(v for v in (props.get("postcode"), props.get("context")) if v)

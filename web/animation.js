@@ -4,7 +4,7 @@ const ENABLE_ANIMATION = true;
 document.addEventListener('DOMContentLoaded', () => {
     if (!ENABLE_ANIMATION) {
         // Masquer l'iframe du cabinet dentaire si l'animation est désactivée
-        const iframe = document.querySelector('iframe[src*="cabinet-dentaire.html"]');
+        const iframe = document.querySelector('iframe[src*="cabinet-dentaire.html"], iframe[data-src*="cabinet-dentaire.html"]');
         if (iframe) iframe.style.display = 'none';
         return;
     }
@@ -15,6 +15,9 @@ document.addEventListener('DOMContentLoaded', () => {
     triggerWord.addEventListener('click', () => {
         showEasterEgg();
     });
+
+    const fermer = document.getElementById('easter-egg-fermer');
+    if (fermer) fermer.addEventListener('click', () => window.hideEasterEgg());
 });
 
 function showEasterEgg() {
@@ -24,7 +27,7 @@ function showEasterEgg() {
     initGame();
 }
 
-// Attach hide to the global window so the inline onclick can find it
+// Fermeture du jeu (bouton « Fermer », voir plus haut)
 window.hideEasterEgg = function () {
     const modal = document.getElementById('easter-egg-modal');
     modal.classList.add('hidden');

@@ -8,7 +8,8 @@
    Les échéances sont en base (document "rappels_fauteuils").
    ============================================================ */
 
-import { getDocument, setDocument, pret } from '../core/api.js';
+import { getDocument, modifierDocument, pret } from '../core/api.js';
+import { tempsRappel } from '../core/utils.js';
 
 export const FAUTEUILS = [
     { machine: "Fauteuil Sinius", cabinet: "Cabinet 1", label: "Cabinet 1 (Sinius)", shortLabel: "Cab 1 - Sinius", defaultDays: 180 },
@@ -57,13 +58,16 @@ export function parseDateInput(str) {
 }
 
 // État de mise en veille (snooze) pour la session active
-let fauteuilGlobalSnooze = false;
-let fauteuilDismissed = false;
+// Machines dont la popup a été écartée (« Ignorer pour l'instant ») : elle ne
+// se rouvre pas pour elles, mais une NOUVELLE échéance la rouvre (poste qui
+// reste allumé des semaines).
+const fauteuilEcartees = new Set();
 let currentFauteuilMachine = "Fauteuil Sinius";
 
 export function setFauteuilSnoozed(value) {
-    fauteuilGlobalSnooze = value;
-    if (value) fauteuilDismissed = true;
+    if (value) {
+        for (const m of machinesEnRetardFauteuil()) fauteuilEcartees.add(m);
+    }
 }
 
 // Toutes les échéances enregistrées en base
@@ -75,8 +79,8 @@ export function getAllFauteuilData() {
 // Récupération des données pour un fauteuil donné
 export function getFauteuilDataForMachine(machineName) {
     const all = getAllFauteuilData();
-    if (all[machineName]) {
-        return all[machineName];
+    if (all[machineName] && typeof all[machineName] === "object") {
+        return { ...all[machineName], nextTime: tempsRappel(all[machineName].nextTime) };
     }
     return {
         nextTime: null,
@@ -88,16 +92,31 @@ export function getFauteuilDataForMachine(machineName) {
 
 // Sauvegarde des données pour un fauteuil donné
 export function saveFauteuilDataForMachine(machineName, nextTime, intervalDays = null, note = null) {
-    const all = getAllFauteuilData();
-    const existing = all[machineName] || {};
-    all[machineName] = {
-        ...existing,
-        nextTime: nextTime,
-        lastDone: Date.now(),
-        intervalDays: intervalDays || existing.intervalDays || 180,
-        note: note !== null ? note : (existing.note || "")
-    };
-    setDocument("rappels_fauteuils", all);
+    const lastDone = Date.now();
+    // Seul ce fauteuil est modifié (rejoué sur la version d'un autre poste)
+    modifierDocument("rappels_fauteuils", valeur => {
+        const all = (valeur && typeof valeur === "object" && !Array.isArray(valeur)) ? valeur : {};
+        const existing = (all[machineName] && typeof all[machineName] === "object") ? all[machineName] : {};
+        all[machineName] = {
+            ...existing,
+            nextTime,
+            lastDone,
+            intervalDays: intervalDays || existing.intervalDays || 180,
+            note: note !== null ? note : (existing.note || "")
+        };
+        return all;
+    });
+}
+
+function machinesEnRetardFauteuil() {
+    return FAUTEUILS.map(f => f.machine).filter(m => getFauteuilStatus(m).isDue);
+}
+
+/** Date choisie déjà passée (avant aujourd'hui) : l'échéance resterait due. */
+export function dateRappelPassee(temps, maintenant = Date.now()) {
+    const debutDuJour = new Date(maintenant);
+    debutDuJour.setHours(0, 0, 0, 0);
+    return Boolean(temps) && temps < debutDuJour.getTime();
 }
 
 // Calcul du statut d'échéance de maintenance pour un fauteuil
@@ -217,7 +236,9 @@ function refreshFauteuilDialogUI() {
     const customDateInput = document.getElementById('fauteuil-custom-date');
     const rappelSelect = document.getElementById('fauteuil-rappel-select');
     if (customDateInput) {
-        if (status.nextTime) {
+        // Échéance à venir : on la propose ; échéance passée : on propose
+        // la prochaine (aujourd'hui + délai), sinon « Valider » la garderait.
+        if (status.nextTime && status.nextTime > Date.now()) {
             customDateInput.value = formatDateInput(status.nextTime);
         } else {
             const days = parseInt(rappelSelect?.value, 10) || cfg.defaultDays || 180;
@@ -310,9 +331,12 @@ export function checkFauteuilAlert(force = false, targetMachine = null) {
     // 2. Mise à jour des fiches machines et du plan
     updateFauteuilIconStatus();
 
-    // 3. Popup automatique si échéance échue et non mise en veille
-    if (overdueList.length > 0 && !fauteuilDismissed && (force || !fauteuilGlobalSnooze)) {
-        openFauteuilDialog(overdueList[0].machine);
+    // 3. Popup automatique pour une échéance qui n'a pas déjà été écartée
+    const enRetard = new Set(overdueList.map(o => o.machine));
+    for (const m of [...fauteuilEcartees]) if (!enRetard.has(m)) fauteuilEcartees.delete(m);
+    const nouvelles = overdueList.filter(o => !fauteuilEcartees.has(o.machine));
+    if (nouvelles.length > 0) {
+        openFauteuilDialog(nouvelles[0].machine);
     }
 }
 
@@ -320,6 +344,8 @@ export function checkFauteuilAlert(force = false, targetMachine = null) {
 export function navigateToFauteuilCabinet(cabinetName) {
     const overlay = document.getElementById('fauteuil-overlay');
     if (overlay) overlay.classList.add('hidden');
+    // On va voir le fauteuil : la popup ne doit pas revenir par-dessus
+    setFauteuilSnoozed(true);
 
     const btnMaint = document.getElementById('btn-maintenance-cabinet');
     if (btnMaint) btnMaint.click();
@@ -376,6 +402,10 @@ if (typeof document !== "undefined") {
                 const customTime = parseDateInput(customDateInput ? customDateInput.value : "");
                 const noteInput = document.getElementById('fauteuil-maint-note');
                 const note = noteInput ? noteInput.value.trim() : "";
+                if (dateRappelPassee(customTime)) {
+                    alert("La date de la prochaine maintenance est déjà passée : choisissez une date à venir.");
+                    return;
+                }
 
                 let nextTime;
                 let days = 180;
@@ -407,6 +437,10 @@ if (typeof document !== "undefined") {
                 const customTime = parseDateInput(customDateInput ? customDateInput.value : "");
                 const noteInput = document.getElementById('fauteuil-maint-note');
                 const note = noteInput ? noteInput.value.trim() : "";
+                if (dateRappelPassee(customTime)) {
+                    alert("La date de la prochaine maintenance est déjà passée : choisissez une date à venir.");
+                    return;
+                }
 
                 let nextTime;
                 let days = 180;

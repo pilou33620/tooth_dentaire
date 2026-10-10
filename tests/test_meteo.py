@@ -289,3 +289,39 @@ def test_route_recherche(srv, monkeypatch):  # noqa: F811
     monkeypatch.setattr(meteo, "ouvrir", FauxReseau(meteo.MeteoIndisponible("x")))
     statut, data, _ = requete(srv, "GET", "/api/meteo/communes?q=Bordeaux")
     assert statut == 503 and "internet" in data["message"]
+
+
+# ------------------------------------------------------------------
+# Réponses de service mal formées
+# ------------------------------------------------------------------
+
+@pytest.mark.parametrize("nuages", ["60", None, [60], {"v": 60}, True])
+def test_resumer_couverture_nuageuse_non_numerique(nuages):
+    donnees = prevision()
+    for pas in donnees["properties"]["timeseries"]:
+        del pas["data"]["next_1_hours"]
+        pas["data"]["instant"]["details"]["cloud_area_fraction"] = nuages
+    assert meteo.resumer(donnees, maintenant=T) is None
+
+
+@pytest.mark.parametrize("temperature", ["14", None, [14], {"t": 1}, float("nan"), float("inf")])
+def test_resumer_temperature_non_numerique(temperature):
+    donnees = prevision()
+    for pas in donnees["properties"]["timeseries"]:
+        pas["data"]["instant"]["details"]["air_temperature"] = temperature
+        pas["data"]["instant"]["details"]["wind_speed"] = float("nan")
+    m = meteo.resumer(donnees, maintenant=T)
+    assert m["categorie"] == "nuageux" and m["temperature"] is None and m["vent"] is None
+
+
+def test_recherche_ignore_les_coordonnees_non_numeriques(monkeypatch):
+    reponse = {"features": [
+        {"geometry": {"coordinates": ["-0.44", "45.12"]}, "properties": {"city": "Texte"}},
+        {"geometry": {"coordinates": [None, 45.1]}, "properties": {"city": "Nulle"}},
+        {"geometry": {"coordinates": [{"x": 1}, [2]]}, "properties": {"city": "Objets"}},
+        {"geometry": {"coordinates": "-0.44,45.12"}, "properties": {"city": "Chaîne"}},
+        "pas un objet",
+        BAN["features"][0],
+    ]}
+    monkeypatch.setattr(meteo, "ouvrir", FauxReseau(ok(reponse)))
+    assert [c["nom"] for c in meteo.chercher_communes("Saint-André")] == ["Saint-André-de-Cubzac"]

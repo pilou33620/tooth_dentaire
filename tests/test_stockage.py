@@ -20,6 +20,7 @@ WEB = os.path.join(RACINE, "web")
 # fichier -> ce qu'il y garde (préférence du poste, pas une donnée du cabinet)
 AUTORISES = {
     "js/ui/customization.js": "positions des widgets (taille d'écran du poste)",
+    "js/ui/version-disposition.js": "remise à zéro unique des positions des widgets du poste",
     "js/ui/bonjourr.js": "apparence de l'accueil et image de fond du poste",
     "js/features/checklist.js": "prénom proposé par défaut sur ce poste",
     "js/features/minuteurs.js": "minuteurs lancés depuis ce poste (pour sonner ici)",

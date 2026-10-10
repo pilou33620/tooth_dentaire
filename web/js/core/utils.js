@@ -21,26 +21,64 @@ function dateStricte(annee, mois, jour) {
     return d;
 }
 
+/** Dernier jour d'un mois (un produit marqué « 05/2027 » périme fin mai). */
+function finDeMois(annee, mois) {
+    if (mois < 1 || mois > 12) return null;
+    return new Date(annee, mois, 0);
+}
+
+/**
+ * Date d'une péremption écrite seule, ou null. Formats acceptés (les mêmes
+ * que le serveur, python/base.py date_peremption) : JJ/MM/AAAA, JJ/MM/AA,
+ * AAAA-MM-JJ, MM/AAAA et AAAA-MM (fin du mois).
+ */
+export function dateDePeremption(texte) {
+    const p = String(texte ?? "").trim();
+    let m;
+    if ((m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(p))) return dateStricte(+m[3], +m[2], +m[1]);
+    if ((m = /^(\d{1,2})\/(\d{1,2})\/(\d{2})$/.exec(p))) return dateStricte(2000 + +m[3], +m[2], +m[1]);
+    if ((m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(p))) return dateStricte(+m[1], +m[2], +m[3]);
+    if ((m = /^(\d{1,2})\/(\d{4})$/.exec(p))) return finDeMois(+m[2], +m[1]);
+    if ((m = /^(\d{4})-(\d{1,2})$/.exec(p))) return finDeMois(+m[1], +m[2]);
+    return null;
+}
+
+function partiesPeremption(dateStr) {
+    return String(dateStr ?? "").split(/[,;\s]+/).map(p => p.trim()).filter(p => p !== "");
+}
+
+/** Plus proche date de péremption d'un texte (plusieurs dates possibles). */
 export function parsePeremption(dateStr) {
     if (!dateStr) return null;
     let closestDate = null;
-    const parts = String(dateStr).split(/[,;\s]+/).filter(p => p.trim() !== "");
-    for (const p of parts) {
-        let d = null;
-        let m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(p.trim());
-        if (m) {
-            d = dateStricte(+m[3], +m[2], +m[1]);
-        } else {
-            m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(p.trim());
-            if (m) d = dateStricte(+m[1], +m[2], +m[3]);
-        }
-        if (d) {
-            if (!closestDate || d.getTime() < closestDate.getTime()) {
-                closestDate = d;
-            }
-        }
+    for (const p of partiesPeremption(dateStr)) {
+        const d = dateDePeremption(p);
+        if (d && (!closestDate || d.getTime() < closestDate.getTime())) closestDate = d;
     }
     return closestDate;
+}
+
+/**
+ * Parties illisibles d'une saisie de péremption (vide = tout est lisible).
+ * Une date illisible n'aurait jamais déclenché d'alerte de péremption.
+ */
+export function datesIllisibles(dateStr) {
+    return partiesPeremption(dateStr).filter(p => !dateDePeremption(p));
+}
+
+export const MESSAGE_FORMATS_DATE =
+    "Formats acceptés : JJ/MM/AAAA (15/03/2027), MM/AAAA (03/2027), AAAA-MM-JJ.";
+
+/**
+ * Échéance d'un rappel en millisecondes, ou null : accepte un nombre, un
+ * nombre écrit en texte ou une date ISO (« 2027-01-15 »). Une valeur
+ * illisible est traitée comme « non définie » (et non comme jamais due).
+ */
+export function tempsRappel(valeur) {
+    if (valeur === null || valeur === undefined || valeur === "" || typeof valeur === "boolean") return null;
+    let t = Number(valeur);
+    if (!Number.isFinite(t) && typeof valeur === "string") t = Date.parse(valeur);
+    return Number.isFinite(t) && t > 0 ? t : null;
 }
 
 export function daysUntil(date) {
@@ -58,7 +96,12 @@ export function todayFR() {
     return `${pad(n.getDate())}/${pad(n.getMonth() + 1)}/${n.getFullYear()}`;
 }
 
+// Fermeture du message affiché (null s'il n'y en a pas)
+let fermerMessageCourant = null;
+
 export function showMessage(title, text) {
+    // Un message encore ouvert est fermé proprement (sa promesse est résolue)
+    if (fermerMessageCourant) fermerMessageCourant();
     return new Promise(resolve => {
         const overlay = document.getElementById("msg-overlay");
         document.getElementById("msg-title").textContent = title;
@@ -69,11 +112,25 @@ export function showMessage(title, text) {
         const done = () => {
             overlay.classList.add("hidden");
             btn.removeEventListener("click", done);
+            if (fermerMessageCourant === done) fermerMessageCourant = null;
             resolve();
         };
+        fermerMessageCourant = done;
         btn.addEventListener("click", done);
         btn.focus();
     });
+}
+
+/**
+ * Ferme le message affiché comme un clic sur OK : le code qui attend
+ * showMessage() continue (masquer seulement la fenêtre le laissait bloqué).
+ */
+export function fermerMessage() {
+    if (fermerMessageCourant) {
+        fermerMessageCourant();
+    } else {
+        document.getElementById("msg-overlay")?.classList.add("hidden");
+    }
 }
 
 export function fillUserSelect(select, selected) {

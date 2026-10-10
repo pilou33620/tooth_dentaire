@@ -5,22 +5,25 @@
    ============================================================ */
 
 import { escapeHtml } from '../core/utils.js';
-import { getDocument, setDocument } from '../core/api.js';
+import { getDocument, versionDocument, enregistrerEdition } from '../core/api.js';
 import { couleurTache, attributsCouleur } from './couleurs.js';
 
 /* Les tâches sont en base (document "taches") : aucun nom dans le code. */
 
 let brouillon = null; // copie en cours d'édition (fenêtre ouverte)
+let versionLue = null; // version du document à l'ouverture de la fenêtre
 
-function normaliserTaches(doc) {
+export function normaliserTaches(doc) {
     const d = (doc && typeof doc === "object") ? doc : {};
+    const texte = v => (v === null || v === undefined) ? "" : String(v);
     return {
-        header1: d.header1 || "",
-        header2: d.header2 || "",
-        note: d.note || "",
-        rows: Array.isArray(d.rows) ? d.rows.map(r => ({
-            task: r.task || "", nature: r.nature || "", col1: r.col1 || "", col2: r.col2 || ""
-        })) : []
+        header1: texte(d.header1),
+        header2: texte(d.header2),
+        note: texte(d.note),
+        // Une ligne invalide (null...) est ignorée au lieu de bloquer l'affichage
+        rows: (Array.isArray(d.rows) ? d.rows : [])
+            .filter(r => r && typeof r === "object" && !Array.isArray(r))
+            .map(r => ({ task: texte(r.task), nature: texte(r.nature), col1: texte(r.col1), col2: texte(r.col2) }))
     };
 }
 
@@ -28,9 +31,12 @@ export function getTasksData() {
     return brouillon || normaliserTaches(getDocument("taches"));
 }
 
-export function saveTasksData() {
-    if (brouillon) setDocument("taches", brouillon);
+/** Enregistre le tableau saisi. Résolue avec true si c'est enregistré. */
+export async function saveTasksData() {
+    if (!brouillon) return true;
+    if (!await enregistrerEdition("taches", brouillon, versionLue, "Le tableau des tâches")) return false;
     brouillon = null;
+    return true;
 }
 
 export function updateTasksPreview() {
@@ -76,32 +82,57 @@ export function renderTasksTable(containerId) {
     html += '<thead><tr>';
     html += `<th class="day-header" style="width: 20%;">TACHES</th>`;
     html += `<th class="day-header" style="width: 40%;">NATURE DE LA TACHE</th>`;
-    html += `<th class="day-header" style="width: 20%;"><input type="text" class="assistant-input" style="width: 100%; text-align: center; font-weight: bold; background: transparent; border: none; color: black; font-family: inherit;" value="${escapeHtml(data.header1 || '')}" onchange="updateTasksHeader('header1', this.value)"></th>`;
-    html += `<th class="day-header" style="width: 10%;"><input type="text" class="assistant-input" style="width: 100%; text-align: center; font-weight: bold; background: transparent; border: none; color: black; font-family: inherit;" value="${escapeHtml(data.header2 || '')}" onchange="updateTasksHeader('header2', this.value)"></th>`;
-    html += `<th class="day-header" style="width: 10%;"><button class="btn-add-col" onclick="addTasksRow()">+ Ligne</button></th>`;
+    html += `<th class="day-header" style="width: 20%;"><input type="text" class="assistant-input" style="width: 100%; text-align: center; font-weight: bold; background: transparent; border: none; color: black; font-family: inherit;" value="${escapeHtml(data.header1 || '')}" data-entete="header1"></th>`;
+    html += `<th class="day-header" style="width: 10%;"><input type="text" class="assistant-input" style="width: 100%; text-align: center; font-weight: bold; background: transparent; border: none; color: black; font-family: inherit;" value="${escapeHtml(data.header2 || '')}" data-entete="header2"></th>`;
+    html += `<th class="day-header" style="width: 10%;"><button class="btn-add-col" data-ajouter-tache>+ Ligne</button></th>`;
     html += '</tr></thead><tbody>';
 
     data.rows.forEach((row, idx) => {
 
         html += '<tr>';
         html += `<th class="assistant-header" style="vertical-align: middle; padding: 5px;">
-                    <textarea class="cell-input" style="width: 100%; height: 60px; font-weight: bold; resize: vertical; background: transparent; font-family: inherit;" onchange="updateTasksCell(${idx}, 'task', this.value)">${escapeHtml(row.task || '')}</textarea>
+                    <textarea class="cell-input" style="width: 100%; height: 60px; font-weight: bold; resize: vertical; background: transparent; font-family: inherit;" data-ligne="${idx}" data-champ="task">${escapeHtml(row.task || '')}</textarea>
                  </th>`;
         html += `<td style="vertical-align: middle; padding: 5px;">
-                    <textarea class="cell-input" style="width: 100%; height: 60px; resize: vertical; background: transparent; font-family: inherit;" onchange="updateTasksCell(${idx}, 'nature', this.value)">${escapeHtml(row.nature || '')}</textarea>
+                    <textarea class="cell-input" style="width: 100%; height: 60px; resize: vertical; background: transparent; font-family: inherit;" data-ligne="${idx}" data-champ="nature">${escapeHtml(row.nature || '')}</textarea>
                  </td>`;
         html += `<td ${attributsCouleur(couleurTache(row.col1), "vertical-align: middle; padding: 5px;")}>
-                    <textarea class="cell-input" style="width: 100%; height: 60px; resize: vertical; background: transparent; color: inherit; font-family: inherit;" onchange="updateTasksCell(${idx}, 'col1', this.value)">${escapeHtml(row.col1 || '')}</textarea>
+                    <textarea class="cell-input" style="width: 100%; height: 60px; resize: vertical; background: transparent; color: inherit; font-family: inherit;" data-ligne="${idx}" data-champ="col1">${escapeHtml(row.col1 || '')}</textarea>
                  </td>`;
         html += `<td ${attributsCouleur(couleurTache(row.col2), "vertical-align: middle; padding: 5px; position: relative;")}>
-                    <textarea class="cell-input" style="width: 100%; height: 60px; resize: vertical; background: transparent; color: inherit; font-family: inherit;" onchange="updateTasksCell(${idx}, 'col2', this.value)">${escapeHtml(row.col2 || '')}</textarea>
-                    <button class="btn-remove-col" onclick="removeTasksRow(${idx})" title="Supprimer la ligne">✕</button>
+                    <textarea class="cell-input" style="width: 100%; height: 60px; resize: vertical; background: transparent; color: inherit; font-family: inherit;" data-ligne="${idx}" data-champ="col2">${escapeHtml(row.col2 || '')}</textarea>
+                    <button class="btn-remove-col" data-supprimer-tache="${idx}" title="Supprimer la ligne">✕</button>
                  </td>`;
         html += '</tr>';
     });
 
     html += '</tbody></table></div>';
-    document.getElementById(containerId).innerHTML = html;
+    const conteneur = document.getElementById(containerId);
+    conteneur.innerHTML = html;
+    ecouterTableau(conteneur);
+}
+
+/** Écouteurs délégués (aucun gestionnaire en ligne dans le HTML généré). */
+function ecouterTableau(conteneur) {
+    if (conteneur.dataset.ecoute) return;
+    conteneur.dataset.ecoute = "1";
+    conteneur.addEventListener("click", e => {
+        if (e.target.closest("[data-ajouter-tache]")) {
+            window.addTasksRow();
+            return;
+        }
+        const suppr = e.target.closest("[data-supprimer-tache]");
+        if (suppr) window.removeTasksRow(Number(suppr.dataset.supprimerTache));
+    });
+    conteneur.addEventListener("change", e => {
+        const entete = e.target.closest("[data-entete]");
+        if (entete) {
+            window.updateTasksHeader(entete.dataset.entete, entete.value);
+            return;
+        }
+        const cellule = e.target.closest("[data-ligne][data-champ]");
+        if (cellule) window.updateTasksCell(Number(cellule.dataset.ligne), cellule.dataset.champ, cellule.value);
+    });
 }
 
 window.addTasksRow = function () {
@@ -127,6 +158,7 @@ window.updateTasksHeader = function (field, value) {
 /** Ouvre la fenêtre d'édition sur une copie du tableau enregistré. */
 export function ouvrirTaches() {
     brouillon = normaliserTaches(getDocument("taches"));
+    versionLue = versionDocument("taches");
     const note = document.getElementById("tasks-note");
     if (note) note.value = brouillon.note;
     const overlay = document.getElementById("tasks-overlay");
@@ -157,8 +189,16 @@ export function initTasksPlanning() {
 
         const btnSaveTasks = document.getElementById("btn-save-tasks");
         if (btnSaveTasks) {
-            btnSaveTasks.addEventListener("click", () => {
-                saveTasksData();
+            btnSaveTasks.addEventListener("click", async () => {
+                btnSaveTasks.disabled = true;
+                let ok;
+                try {
+                    ok = await saveTasksData();
+                } finally {
+                    btnSaveTasks.disabled = false;
+                }
+                // Échec ou conflit : la fenêtre reste ouverte avec la saisie
+                if (!ok) return;
                 alert("Tâches sauvegardées avec succès !");
                 document.getElementById("tasks-overlay").classList.add("hidden");
                 updateTasksPreview();

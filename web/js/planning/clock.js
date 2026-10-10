@@ -12,6 +12,26 @@ export function getWeekNumber(d) {
     return weekNo;
 }
 
+// Lundi de la semaine 1 (ISO) de 2026, semaine « impaire ».
+const LUNDI_REFERENCE = Date.UTC(2025, 11, 29);
+const SEMAINE_MS = 7 * 86400000;
+
+/**
+ * Parité de la semaine pour la rotation des binômes ("even" / "odd").
+ * - "continue" (défaut) : l'alternance ne s'interrompt jamais. Avec le
+ *   numéro ISO, une année de 53 semaines donne deux semaines impaires de
+ *   suite (semaine 53 puis semaine 1) : le 04/01/2027 serait « impaire »
+ *   comme la semaine précédente. Identique au numéro ISO en 2026.
+ * - "iso" : parité du numéro de semaine officiel.
+ */
+export function pariteSemaine(date, alternance = "continue") {
+    if (alternance === "iso") return getWeekNumber(date) % 2 === 0 ? "even" : "odd";
+    const jour = Date.UTC(date.getFullYear(), date.getMonth(), date.getDate());
+    const lundi = jour - ((new Date(jour).getUTCDay() + 6) % 7) * 86400000;
+    const semaines = Math.round((lundi - LUNDI_REFERENCE) / SEMAINE_MS);
+    return ((semaines % 2) + 2) % 2 === 0 ? "odd" : "even";
+}
+
 export function updateClock() {
     const now = new Date();
     const pad = n => String(n).padStart(2, "0");

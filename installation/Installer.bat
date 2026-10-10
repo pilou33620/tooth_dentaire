@@ -183,13 +183,16 @@ if (Test-Path -LiteralPath $GitPortable) {
     if (-not $archive) { Echec "MinGit introuvable dans la derniere version de Git for Windows." }
     $zip = Join-Path $env:TEMP $archive.name
     Telecharger $archive.browser_download_url $zip
-    if ($archive.digest -like "sha256:*") {
-        $attendu = $archive.digest.Substring(7)
-        $obtenu = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash
-        if ($obtenu -ne $attendu) {
-            Remove-Item -LiteralPath $zip -Force
-            Echec "MinGit telecharge est corrompu (empreinte SHA-256 differente)."
-        }
+    # Empreinte obligatoire : sans elle, rien ne garantit que l'archive est intacte.
+    if (-not ($archive.digest -like "sha256:*")) {
+        Remove-Item -LiteralPath $zip -Force
+        Echec "Empreinte SHA-256 de MinGit absente : installation annulee."
+    }
+    $attendu = $archive.digest.Substring(7)
+    $obtenu = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash
+    if ($obtenu -ne $attendu) {
+        Remove-Item -LiteralPath $zip -Force
+        Echec "MinGit telecharge est corrompu (empreinte SHA-256 differente)."
     }
     $dossierGit = Split-Path (Split-Path $GitPortable)
     New-Item -ItemType Directory -Force -Path $dossierGit | Out-Null

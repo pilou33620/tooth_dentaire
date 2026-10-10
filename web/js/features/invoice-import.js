@@ -6,12 +6,38 @@
 
 import { CONDITIONNEMENTS, estConditionnementGroupe } from '../core/constants.js';
 import { getAllGroups, getStockInfo } from '../core/database.js';
-import { fillUserSelect, todayFR, showMessage, parseBarcodes, formatBarcodes } from '../core/utils.js';
+import { fillUserSelect, todayFR, showMessage, parseBarcodes, formatBarcodes, datesIllisibles, MESSAGE_FORMATS_DATE } from '../core/utils.js';
+import { getDocument, modifierDocument } from '../core/api.js';
 import { ajouterStock } from './stock.js';
 import { estPerime, messageLotsPerimes } from './lots.js';
 import { checkAlerts } from './alerts.js';
 
 export let importItems = [];
+// Validation en cours : un double clic sur « Valider » importait deux fois
+let importEnCours = false;
+
+/* Factures déjà importées (document "factures_importees", partagé par les
+   postes) : réimporter le même PDF un autre jour doublerait le stock. */
+const CLE_FACTURES = "factures_importees";
+const MAX_FACTURES_RETENUES = 300;
+
+function facturesImportees() {
+    const doc = getDocument(CLE_FACTURES) || {};
+    return (Array.isArray(doc.empreintes) ? doc.empreintes : [])
+        .filter(f => f && typeof f === "object" && typeof f.empreinte === "string");
+}
+
+function retenirFactures(fichiers) {
+    if (fichiers.length === 0) return;
+    const date = todayFR();
+    modifierDocument(CLE_FACTURES, valeur => {
+        const doc = (valeur && typeof valeur === "object" && !Array.isArray(valeur)) ? valeur : {};
+        const liste = (Array.isArray(doc.empreintes) ? doc.empreintes : [])
+            .filter(f => f && typeof f === "object" && !fichiers.some(n => n.empreinte === f.empreinte));
+        for (const f of fichiers) liste.push({ empreinte: f.empreinte, fichier: f.fichier, date });
+        return { ...doc, empreintes: liste.slice(-MAX_FACTURES_RETENUES) };
+    });
+}
 
 /* Empreinte du contenu du fichier : deux téléchargements d'une même facture
    donnent la même empreinte, deux factures différentes non — même si elles
@@ -47,6 +73,8 @@ export async function onPdfSelected(files) {
     const erreurs = [];
     const doublons = [];
     const empreintesVues = new Map(); // empreinte -> nom du premier fichier
+    const dejaImportees = new Map(facturesImportees().map(f => [f.empreinte, f]));
+    const fichiers = [];
 
     for (const file of files) {
         const empreinte = await empreinteFichier(file);
@@ -55,13 +83,36 @@ export async function onPdfSelected(files) {
             continue;
         }
         empreintesVues.set(empreinte, file.name);
+        fichiers.push({ file, empreinte });
+    }
 
+    // Factures déjà importées un autre jour (ou sur un autre poste)
+    const anciennes = fichiers.filter(f => dejaImportees.has(f.empreinte));
+    if (anciennes.length > 0) {
+        const liste = anciennes.map(f => {
+            const avant = dejaImportees.get(f.empreinte);
+            return `• ${f.file.name} (importée le ${avant.date || "?"}${avant.fichier ? ` sous le nom ${avant.fichier}` : ""})`;
+        }).join("\n");
+        const reimporter = window.confirm(
+            `Ces factures ont déjà été importées :\n\n${liste}\n\n`
+            + "OK : les importer quand même (le stock sera ajouté une seconde fois).\n"
+            + "Annuler : les ignorer.");
+        if (!reimporter) {
+            for (const f of anciennes) fichiers.splice(fichiers.indexOf(f), 1);
+        }
+    }
+
+    for (const { file, empreinte } of fichiers) {
         const { items, erreur } = await extractStockFromPdf(file);
         if (erreur) {
             erreurs.push(`• ${erreur}`);
         } else if (items.length === 0) {
             erreurs.push(`• ${file.name} : aucune référence reconnue (fournisseur non géré ?).`);
         } else {
+            for (const item of items) {
+                item.empreinte = empreinte;
+                item.fichier = file.name;
+            }
             allItems = allItems.concat(items);
         }
     }
@@ -239,8 +290,11 @@ export function populateImportTable() {
             if (estConditionnementGroupe(selTypeCond.value)) {
                 inQteCond.style.display = "";
                 if (e && e.type === "change") {
-                    inQteCond.value = item.quantite || 1;
-                    inQteBase.value = 1;
+                    // La facture compte des cartons : on garde leur nombre et
+                    // on laisse saisir le nombre d'unités par carton. (Avant :
+                    // « 1 carton de N », et le prix unitaire divisé par N.)
+                    inQteCond.value = 1;
+                    inQteBase.value = item.quantite || 1;
                 }
             } else {
                 inQteCond.style.display = "none";
@@ -387,10 +441,27 @@ function controlerPeremptionsImport(rows) {
 }
 
 export async function validateImport() {
+    if (importEnCours) return;
+    importEnCours = true;
+    const bouton = document.getElementById("import-validate");
+    if (bouton) bouton.disabled = true;
+    try {
+        await validerImport();
+    } finally {
+        importEnCours = false;
+        if (bouton) bouton.disabled = false;
+    }
+}
+
+/**
+ * Deux passes : toutes les lignes sont contrôlées (quantités, lots, dates,
+ * codes-barres) AVANT le premier ajout. Une erreur sur une ligne n'importe
+ * donc rien : corriger puis revalider ne crée pas de doublons.
+ */
+async function validerImport() {
     const { loadDB, findProduit } = await import('../core/database.js');
-    
+
     const rows = document.querySelectorAll("#import-tbody tr");
-    const lignes = [];
     const db = loadDB();
 
     // Contrôle avant tout ajout : la facture n'est pas importée à moitié
@@ -400,6 +471,7 @@ export async function validateImport() {
         return;
     }
 
+    const preparees = [];
     for (let idx = 0; idx < rows.length; idx++) {
         const tr = rows[idx];
         const item = importItems[idx];
@@ -409,12 +481,12 @@ export async function validateImport() {
         const groupe = tr.querySelector(".import-groupe").value.trim();
         const stockMin = parseInt(tr.querySelector(".import-min").value, 10) || 0;
         const alerte = tr.querySelector(".import-alerte").checked ? 1 : 0;
-        
+
         const lotsArray = lireLotsImport(tr);
         const lotsDetailsJson = JSON.stringify(lotsArray);
         const datePeremption = lotsArray.map(a => a.date).filter(Boolean).join(", ");
         const lot = lotsArray.map(a => a.lot).filter(Boolean).join(", ");
-        
+
         const designation = item.designation || "";
         const typeStockage = tr.querySelector(".import-type-stock").value;
         const qteParCarton = parseInt(tr.querySelector(".import-qte-cond").value, 10) || 1;
@@ -429,7 +501,7 @@ export async function validateImport() {
         if (qteBase < 0) {
             await showMessage(
                 "Quantité invalide",
-                `Article ${item.reference} : la quantité ne peut pas être négative (${qteBase}).\n\nL'importation est interrompue.`
+                `Article ${item.reference} : la quantité ne peut pas être négative (${qteBase}).\n\nAucun article n'a été importé.`
             );
             return;
         }
@@ -437,11 +509,11 @@ export async function validateImport() {
             // Ligne volontairement écartée par l'utilisateur
             continue;
         }
-        
+
         let qteAjouter = qteBase;
         let pUHT = item.prix_unitaire_ht;
         let pUTTC = item.prix_unitaire_ttc;
-        
+
         if (estConditionnementGroupe(typeStockage)) {
             qteAjouter = qteBase * qteParCarton;
             pUHT = item.prix_unitaire_ht / qteParCarton;
@@ -452,7 +524,16 @@ export async function validateImport() {
         if (sommeLotsImport > qteAjouter) {
             await showMessage(
                 "Quantités incohérentes",
-                `Article ${item.reference} : la somme des quantités par lot (${sommeLotsImport}) dépasse la quantité importée (${qteAjouter}).\n\nL'importation est interrompue.`
+                `Article ${item.reference} : la somme des quantités par lot (${sommeLotsImport}) dépasse la quantité importée (${qteAjouter}).\n\nAucun article n'a été importé.`
+            );
+            return;
+        }
+
+        const illisibles = datesIllisibles(datePeremption);
+        if (illisibles.length > 0) {
+            await showMessage(
+                "Date de péremption illisible",
+                `Article ${item.reference} : « ${illisibles.join(" », « ")} » n'est pas une date reconnue.\n\n${MESSAGE_FORMATS_DATE}\n\nAucun article n'a été importé.`
             );
             return;
         }
@@ -476,47 +557,59 @@ export async function validateImport() {
             const promptVal = window.prompt(`L'article ${item.reference} (${shortDesignation}) n'a pas de code-barres. Veuillez scanner ou saisir un code-barres :`);
             if (promptVal && promptVal.trim() !== "") {
                 ref_scannette = formatBarcodes(promptVal);
-                // Update in memory so we don't ask again next time
-                const p = findProduit(db, item.reference);
-                if (p) p.ref_scannette = ref_scannette;
             } else {
                 const bypass = window.confirm(`Aucun code-barres saisi pour l'article ${item.reference}. Voulez-vous vraiment l'importer sans code-barres ?`);
                 if (!bypass) {
-                    await showMessage("Attention", "L'importation est interrompue.");
+                    await showMessage("Attention", "L'importation est interrompue : aucun article n'a été importé.");
                     return;
                 }
                 ref_scannette = "";
             }
         }
 
-        ajouterStock(item.reference, qteAjouter, {
-            nom: designation,
-            groupe: groupe,
-            ref_scannette: ref_scannette,
-            type_stockage: typeStockage,
-            quantite_par_carton: qteParCarton,
-            stock_minimum: stockMin,
-            alerte_active: alerte,
-            type_transaction: "ENTREE_FACTURE",
-            utilisateur: userDest,
-            date_peremption: datePeremption,
-            date_import: todayFR(),
-            fournisseur: item.fournisseur || "",
-            prix_unitaire_ht: (typeof pUHT === "number") ? pUHT : null,
-            prix_unitaire_ttc: (typeof pUTTC === "number") ? pUTTC : null,
-            lot: lot,
-            lots_details: lotsDetailsJson
+        preparees.push({
+            item, qteAjouter, ref_scannette,
+            options: {
+                nom: designation,
+                groupe: groupe,
+                ref_scannette: ref_scannette,
+                type_stockage: typeStockage,
+                quantite_par_carton: qteParCarton,
+                stock_minimum: stockMin,
+                alerte_active: alerte,
+                type_transaction: "ENTREE_FACTURE",
+                utilisateur: userDest,
+                date_peremption: datePeremption,
+                date_import: todayFR(),
+                fournisseur: item.fournisseur || "",
+                prix_unitaire_ht: (typeof pUHT === "number") ? pUHT : null,
+                prix_unitaire_ttc: (typeof pUTTC === "number") ? pUTTC : null,
+                lot: lot,
+                lots_details: lotsDetailsJson
+            },
+            ligne: `- ${qteAjouter}x ${item.reference} (${designation}) -> ${userDest}`
         });
-        lignes.push(`- ${qteAjouter}x ${item.reference} (${designation}) -> ${userDest}`);
     }
 
-    if (lignes.length === 0) {
+    if (preparees.length === 0) {
         await showMessage("Aucun article importé", "Toutes les lignes étaient à une quantité de 0 : rien n'a été ajouté au stock.");
         return;
     }
 
+    // Seconde passe : tout est valide, les ajouts partent ensemble (un seul lot)
+    const fichiers = new Map();
+    for (const p of preparees) {
+        if (p.ref_scannette) {
+            const produit = findProduit(db, p.item.reference);
+            if (produit && !produit.ref_scannette) produit.ref_scannette = p.ref_scannette;
+        }
+        ajouterStock(p.item.reference, p.qteAjouter, p.options);
+        if (p.item.empreinte) fichiers.set(p.item.empreinte, { empreinte: p.item.empreinte, fichier: p.item.fichier || "" });
+    }
+    retenirFactures([...fichiers.values()]);
+
     document.getElementById("import-overlay").classList.add("hidden");
-    await showMessage("Import réussi", "Les articles suivants ont été importés :\n" + lignes.join("\n"));
+    await showMessage("Import réussi", "Les articles suivants ont été importés :\n" + preparees.map(p => p.ligne).join("\n"));
     checkAlerts();
 }
 

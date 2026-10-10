@@ -205,10 +205,16 @@ export function retirerDesLots(lots, demandes) {
         const qte = toInt(d.qte);
         if (qte <= 0) continue;
 
+        // L'index (ligne affichée à l'ouverture de la fenêtre) n'est utilisé
+        // que s'il désigne toujours le même lot : les lots ont pu changer
+        // depuis (sortie faite sur un autre poste), on retombe alors sur la
+        // recherche par numéro de lot et date.
         let cible = null;
-        if (Number.isInteger(d.index) && restants[d.index]) {
-            cible = restants[d.index];
-        } else {
+        const parIndex = Number.isInteger(d.index) ? restants[d.index] : null;
+        const lotPrecise = d.lot !== undefined || d.date !== undefined;
+        if (parIndex && (!lotPrecise || memeLot(parIndex, d))) {
+            cible = parIndex;
+        } else if (lotPrecise) {
             cible = restants.find(l => memeLot(l, d));
         }
 

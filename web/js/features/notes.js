@@ -8,7 +8,7 @@
    Document "notes" en base : { items: [ { id, texte, cree_le, epingle } ] }
    ============================================================ */
 
-import { getDocument, setDocument } from '../core/api.js';
+import { getDocument, modifierDocument } from '../core/api.js';
 import { escapeHtml } from '../core/utils.js';
 
 export const CLE_NOTES = "notes";
@@ -76,31 +76,42 @@ function lire() {
     return normaliserNotes(getDocument(CLE_NOTES));
 }
 
-function enregistrer(doc) {
-    return setDocument(CLE_NOTES, doc);
+/**
+ * Chaque modification est décrite par une fonction appliquée au document :
+ * si un autre poste a écrit entre-temps, elle est rejouée sur sa version
+ * (deux notes ajoutées en même temps sont toutes les deux gardées).
+ */
+function modifier(fonction) {
+    return modifierDocument(CLE_NOTES, valeur => {
+        const doc = normaliserNotes(valeur);
+        fonction(doc);
+        return doc;
+    });
 }
 
 export function ajouterNote(texte, maintenant = Date.now()) {
     const propre = String(texte || "").trim().slice(0, MAX_TEXTE);
     if (!propre) return null;
-    const doc = lire();
     const note = { id: nouvelId(maintenant), texte: propre, cree_le: maintenant, epingle: false };
-    doc.items.unshift(note);
-    // Au-delà de la limite, on retire les plus anciennes non épinglées
-    while (doc.items.length > MAX_NOTES) {
-        const i = doc.items.map(n => n.epingle).lastIndexOf(false);
-        doc.items.splice(i === -1 ? doc.items.length - 1 : i, 1);
-    }
-    enregistrer(doc);
+    modifier(doc => {
+        doc.items.unshift({ ...note });
+        // Au-delà de la limite, on retire les plus anciennes non épinglées
+        while (doc.items.length > MAX_NOTES) {
+            const i = doc.items.map(n => n.epingle).lastIndexOf(false);
+            doc.items.splice(i === -1 ? doc.items.length - 1 : i, 1);
+        }
+    });
     return note;
 }
 
 export function supprimerNote(id) {
-    const doc = lire();
-    const index = doc.items.findIndex(n => n.id === id);
+    const index = lire().items.findIndex(n => n.id === id);
     if (index === -1) return null;
-    const [note] = doc.items.splice(index, 1);
-    enregistrer(doc);
+    const note = lire().items[index];
+    modifier(doc => {
+        const i = doc.items.findIndex(n => n.id === id);
+        if (i !== -1) doc.items.splice(i, 1);
+    });
     derniereSupprimee = { note, index };
     return note;
 }
@@ -108,22 +119,27 @@ export function supprimerNote(id) {
 /** Remet la dernière note effacée (bouton « Annuler »). */
 export function annulerSuppression() {
     if (!derniereSupprimee) return false;
-    const doc = lire();
-    if (!doc.items.some(n => n.id === derniereSupprimee.note.id)) {
-        doc.items.splice(Math.min(derniereSupprimee.index, doc.items.length), 0, derniereSupprimee.note);
-        enregistrer(doc);
+    const { note, index } = derniereSupprimee;
+    if (!lire().items.some(n => n.id === note.id)) {
+        modifier(doc => {
+            if (!doc.items.some(n => n.id === note.id)) {
+                doc.items.splice(Math.min(index, doc.items.length), 0, { ...note });
+            }
+        });
     }
     derniereSupprimee = null;
     return true;
 }
 
 export function basculerEpingle(id) {
-    const doc = lire();
-    const note = doc.items.find(n => n.id === id);
+    const note = lire().items.find(n => n.id === id);
     if (!note) return null;
-    note.epingle = !note.epingle;
-    enregistrer(doc);
-    return note.epingle;
+    const epingle = !note.epingle;
+    modifier(doc => {
+        const n = doc.items.find(x => x.id === id);
+        if (n) n.epingle = epingle;
+    });
+    return epingle;
 }
 
 /* ---------------- Affichage ---------------- */

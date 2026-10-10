@@ -106,3 +106,26 @@ def test_sauvegarde_due_une_fois_par_jour(base_temp):
 def test_base_absente_refusee(tmp_path):
     with pytest.raises(base.ErreurDonnees):
         sauvegarde.sauvegarder(chemin_base=str(tmp_path / "absente.db"))
+
+
+def test_nom_au_bon_format_mais_date_impossible_ignore(base_temp):
+    dossier = sauvegarde.dossier_sauvegardes()
+    os.makedirs(dossier)
+    for nom in ("stock-99999999-999999.db", "stock-20261332-080000.db"):
+        with open(os.path.join(dossier, nom), "w") as f:
+            f.write("x")
+    assert sauvegarde.lister() == []
+    sauvegarde.sauvegarder(maintenant=datetime.datetime(2026, 1, 1, 8))
+    assert [c["nom"] for c in sauvegarde.lister()] == ["stock-20260101-080000.db"]
+    assert sauvegarde.sauvegarde_due(maintenant=datetime.datetime(2026, 1, 3))
+
+
+def test_copie_recente(base_temp):
+    instant = datetime.datetime(2026, 1, 1, 8, 0, 0)
+    assert sauvegarde.copie_recente(60, maintenant=instant) is None
+    sauvegarde.sauvegarder(maintenant=instant)
+    plus_tard = instant + datetime.timedelta(seconds=59)
+    assert sauvegarde.copie_recente(60, maintenant=plus_tard)["nom"] == "stock-20260101-080000.db"
+    assert sauvegarde.copie_recente(60, maintenant=instant + datetime.timedelta(seconds=60)) is None
+    # Copie « dans le futur » (horloge reculee) : pas consideree comme recente
+    assert sauvegarde.copie_recente(60, maintenant=instant - datetime.timedelta(seconds=5)) is None

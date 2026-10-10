@@ -307,16 +307,20 @@ describe('mode personnalisation', () => {
         expect(document.querySelector('.countertop').style.minHeight).toBe('');
     });
 
-    /* DÉFAUT CONNU : loadElementPositions() (customization.js) fait un
-       JSON.parse non protégé, contrairement aux deux autres lectures du même
-       fichier. Une clé « ui-positions » corrompue interrompt donc
-       initCustomizationMode(), et main-init.js s'arrête avec elle : l'accueil
-       reste figé. Test marqué en échec attendu ; il passera au vert dès que la
-       lecture sera entourée d'un try/catch retombant sur {}. */
-    test.failing('un stockage corrompu ne fait pas planter l\'initialisation', () => {
+    // Une clé « ui-positions » corrompue est remise à zéro au lieu
+    // d'interrompre initCustomizationMode() (et toute l'initialisation).
+    test('un stockage corrompu ne fait pas planter l\'initialisation', () => {
         localStorage.setItem('ui-positions', '{cassé');
         localStorage.setItem('postit-pos', '{cassé aussi');
         expect(() => custom.initCustomizationMode()).not.toThrow();
+        expect(localStorage.getItem('ui-positions')).toBe('{}');
+    });
+
+    test('« null » ou une entrée non objet ne bloquent pas non plus', () => {
+        localStorage.setItem('ui-positions', 'null');
+        expect(() => custom.initCustomizationMode()).not.toThrow();
+        localStorage.setItem('ui-positions', JSON.stringify({ x: 'texte', y: null }));
+        expect(custom.lirePositions()).toEqual({});
     });
 
     test('la réinitialisation demande confirmation avant d\'effacer', () => {

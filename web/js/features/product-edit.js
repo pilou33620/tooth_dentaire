@@ -8,7 +8,7 @@ import { USERS, CONDITIONNEMENTS, estConditionnementGroupe } from '../core/const
 import { loadDB, saveDB, addTransaction, persister, setProduitArrete, findStockEntry } from '../core/database.js';
 import { setStockAbsolu } from './stock.js';
 import { normalizeLots, lotsFromStrings, lotsPerimesEntrants, messageLotsPerimes } from './lots.js';
-import { fillGroupsDatalist, showMessage, parsePeremption, daysUntil, parseBarcodes, formatBarcodes } from '../core/utils.js';
+import { fillGroupsDatalist, showMessage, parsePeremption, daysUntil, parseBarcodes, formatBarcodes, datesIllisibles, MESSAGE_FORMATS_DATE } from '../core/utils.js';
 import { checkAlerts } from './alerts.js';
 import { refreshPlacardTable, placardUser } from './placard.js';
 
@@ -47,6 +47,28 @@ function reventilerQuantite(ancienType, nouveauType) {
         nbInput.value = 0;
         qteInput.value = total;
     }
+}
+
+/**
+ * Changement de « quantité par carton » : le total en unités est conservé
+ * et redistribué (12 cartons de 10 + 3 = 123 unités restent 123 unités, soit
+ * 10 cartons de 12 + 3), au lieu d'être recalculé avec la nouvelle valeur.
+ */
+export function reventilerParContenant() {
+    const sel = document.getElementById("edit-type-stockage");
+    const qteInput = document.getElementById("edit-qte");
+    const nbInput = document.getElementById("edit-nb-contenants");
+    const parContenantInput = document.getElementById("edit-qte-par-contenant");
+    if (!sel || !qteInput || !nbInput || !parContenantInput) return;
+    const nouveau = parseInt(parContenantInput.value, 10);
+    const precedent = parseInt(parContenantInput.dataset.precedent, 10) || 1;
+    if (!Number.isFinite(nouveau) || nouveau < 1) return;          // saisie en cours
+    if (estConditionnementGroupe(sel.value) && nouveau !== precedent) {
+        const total = (parseInt(nbInput.value, 10) || 0) * precedent + (parseInt(qteInput.value, 10) || 0);
+        nbInput.value = Math.floor(total / nouveau);
+        qteInput.value = total % nouveau;
+    }
+    parContenantInput.dataset.precedent = String(nouveau);
 }
 
 window.toggleCondFields = function() {
@@ -230,6 +252,9 @@ window.renderEditLots = function(lotsArray) {
 };
 
 document.addEventListener("DOMContentLoaded", () => {
+    // Écouteur posé ici (et non onchange dans la page : CSP sans script en ligne)
+    document.getElementById("edit-type-stockage")?.addEventListener("change", () => window.toggleCondFields());
+
     const btnAddScan = document.getElementById("btn-add-scannette");
     if (btnAddScan) {
         btnAddScan.addEventListener("click", () => {
@@ -295,7 +320,13 @@ export function openEditDialog(row = null) {
     // Aligner previousType sur la valeur affichée : toggleCondFields() ne doit
     // pas reventiler la quantité au simple chargement du dialogue.
     typeStockageSelect.dataset.previousType = typeStockageSelect.value;
-    document.getElementById("edit-qte-par-contenant").value = isEdit && row.quantite_par_carton ? row.quantite_par_carton : 1;
+    const qpcInput = document.getElementById("edit-qte-par-contenant");
+    qpcInput.value = isEdit && row.quantite_par_carton ? row.quantite_par_carton : 1;
+    qpcInput.dataset.precedent = String(qpcInput.value);
+    if (!qpcInput.dataset.ecoute) {
+        qpcInput.dataset.ecoute = "1";
+        qpcInput.addEventListener("input", reventilerParContenant);
+    }
 
     if (isEdit && estConditionnementGroupe(row.type_stockage) && row.quantite_par_carton > 0) {
         document.getElementById("edit-nb-contenants").value = Math.floor(row.quantite / row.quantite_par_carton);
@@ -435,6 +466,13 @@ export async function saveEditDialog() {
         })
         .filter(a => a.lot || a.date || (a.qte !== null && a.qte > 0));
 
+    const illisibles = lotsSaisis.flatMap(a => datesIllisibles(a.date));
+    if (illisibles.length > 0) {
+        await showMessage("Date de péremption illisible",
+            `« ${illisibles.join(" », « ")} » n'est pas une date reconnue : aucune alerte de péremption ne pourrait être donnée.\n\n${MESSAGE_FORMATS_DATE}`);
+        return;
+    }
+
     const datePeremptionVal = lotsSaisis.map(a => a.date).filter(Boolean).join(", ");
     const lotVal = lotsSaisis.map(a => a.lot).filter(Boolean).join(", ");
     const lotsDetailsVal = JSON.stringify(lotsSaisis);
@@ -475,9 +513,41 @@ export async function saveEditDialog() {
         }
     }
 
+    // Changement de référence ou d'espace vers une ligne qui existe déjà :
+    // son stock serait remplacé (et perdu) au lieu d'être additionné.
+    const deplacement = Boolean(oldRef && oldUser && (oldRef !== ref || oldUser !== newUser));
+    const dbAvant = loadDB();
+    if (deplacement) {
+        const cible = findStockEntry(dbAvant, ref, newUser);
+        if (cible) {
+            await showMessage("Ligne déjà existante",
+                `« ${ref} » existe déjà dans l'espace « ${newUser} » (${cible.quantite} unité(s)).\n\n`
+                + "Pour regrouper les deux, utilisez « Transférer » depuis l'espace d'origine.");
+            return;
+        }
+    }
+
+    // Référence renommée : les autres espaces qui ont l'ancienne référence
+    const autresLignes = (deplacement && oldRef !== ref)
+        ? dbAvant.stock.filter(s => s.reference === oldRef && s.utilisateur !== oldUser)
+        : [];
+    let renommerAutres = false;
+    if (autresLignes.length > 0) {
+        const bloquees = autresLignes.filter(s => findStockEntry(dbAvant, ref, s.utilisateur));
+        if (bloquees.length > 0) {
+            await showMessage("Ligne déjà existante",
+                `« ${ref} » existe déjà dans : ${bloquees.map(s => s.utilisateur).join(", ")}.\n\n`
+                + "Renommage annulé : regroupez d'abord ces lignes avec « Transférer ».");
+            return;
+        }
+        renommerAutres = window.confirm(
+            `La référence « ${oldRef} » est aussi en stock dans : ${autresLignes.map(s => s.utilisateur).join(", ")}.\n\n`
+            + `OK : renommer aussi ces lignes en « ${ref} ».\nAnnuler : ne renommer que cet espace.`);
+    }
+
     // Changement de référence ou d'espace : l'ancienne ligne n'est retirée
     // qu'une fois la saisie validée (avant, une erreur de saisie la perdait).
-    if (oldRef && oldUser && (oldRef !== ref || oldUser !== newUser)) {
+    if (deplacement) {
         const db = loadDB();
         const idx = db.stock.findIndex(s => s.reference === oldRef && s.utilisateur === oldUser);
         if (idx !== -1) {
@@ -511,6 +581,30 @@ export async function saveEditDialog() {
     });
     const arreteInput = document.getElementById("edit-arrete");
     if (arreteInput) setProduitArrete(ref, arreteInput.checked);
+
+    if (deplacement && oldRef !== ref) {
+        const db = loadDB();
+        if (renommerAutres) {
+            for (const ancienne of autresLignes) {
+                const ligne = findStockEntry(db, oldRef, ancienne.utilisateur);
+                if (!ligne) continue;
+                const nouvelle = { ...ligne, reference: ref, version: null };
+                db.stock.splice(db.stock.indexOf(ligne), 1);
+                db.stock.push(nouvelle);
+                addTransaction(db, oldRef, ligne.utilisateur, "SORTIE (Modification Réf/Espace)", ligne.quantite);
+                addTransaction(db, ref, ligne.utilisateur, "ENTREE (Modification Réf/Espace)", ligne.quantite);
+                persister("deleteStockItem", oldRef, ligne.utilisateur);
+                persister("updateStockItem", JSON.stringify(nouvelle));
+            }
+        }
+        // Plus aucune ligne avec l'ancienne référence : sa fiche produit disparaît
+        if (!db.stock.some(s => s.reference === oldRef)) {
+            const i = db.produits.findIndex(p => p.reference === oldRef);
+            if (i !== -1) db.produits.splice(i, 1);
+            persister("deleteProduit", oldRef);
+        }
+        saveDB(db);
+    }
 
     document.getElementById("edit-overlay").classList.add("hidden");
     refreshPlacardTable();

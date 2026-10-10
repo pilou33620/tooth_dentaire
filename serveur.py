@@ -33,6 +33,7 @@ cabinet. --local coupe l'acces depuis les autres postes.
 
 import argparse
 import base64
+import gzip
 import http.server
 import ipaddress
 import json
@@ -42,7 +43,9 @@ import posixpath
 import re
 import socket
 import socketserver
+import sqlite3
 import sys
+import tempfile
 import threading
 import time
 import traceback
@@ -51,7 +54,14 @@ import webbrowser
 
 VERSION = "3.0.0"
 DEFAULT_PORT = 8150
-TAILLE_MAX_CORPS = 20 * 1024 * 1024        # 20 Mo : un planning ou un carnet complet
+# 5 Mo : les documents sont limites a 2 Mo (base.TAILLE_MAX_DOCUMENT), un lot
+# d'operations reste bien en dessous.
+TAILLE_MAX_CORPS = 5 * 1024 * 1024
+TAILLE_MIN_GZIP = 2048                     # octets : en dessous, pas de compression
+JOURS_ETAT = 400                           # transactions envoyees par /api/etat
+DELAI_ENTRE_VERIFICATIONS = 60             # s : bouton « Verifier » des mises a jour
+DELAI_ENTRE_SAUVEGARDES = 60               # s : bouton « Sauvegarder maintenant »
+ENTETE_SQLITE = b"SQLite format 3\x00"
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 DOSSIER_WEB = os.path.join(ROOT, "web")
@@ -92,15 +102,40 @@ def charger_config():
 
 
 def enregistrer_config(config):
-    os.makedirs(os.path.dirname(FICHIER_CONFIG), exist_ok=True)
-    with open(FICHIER_CONFIG, "w", encoding="utf-8") as f:
-        json.dump(config, f, indent=2, ensure_ascii=False)
+    """Ecriture atomique : un fichier temporaire du meme dossier remplace
+    l'ancien (une coupure en cours d'ecriture ne laisse pas un config.json tronque)."""
+    dossier = os.path.dirname(os.path.abspath(FICHIER_CONFIG))
+    os.makedirs(dossier, exist_ok=True)
+    fd, temporaire = tempfile.mkstemp(prefix=".config-", suffix=".tmp", dir=dossier)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(config, f, indent=2, ensure_ascii=False)
+        os.replace(temporaire, FICHIER_CONFIG)
+    except BaseException:
+        try:
+            os.remove(temporaire)
+        except OSError:
+            pass
+        raise
+
+
+# Base choisie dans les Reglages mais introuvable au demarrage (lecteur reseau
+# absent...) : le serveur est parti sur la base par defaut. Affiche par /api/base.
+BASE_CONFIGUREE_ABSENTE = None
 
 
 def chemin_base_configure():
+    global BASE_CONFIGUREE_ABSENTE
     chemin = charger_config().get("base", "")
+    if not isinstance(chemin, str):
+        chemin = ""
     if chemin and os.path.isfile(chemin):
+        BASE_CONFIGUREE_ABSENTE = None
         return chemin
+    BASE_CONFIGUREE_ABSENTE = chemin or None
+    if chemin:
+        print("[!] La base choisie dans les Reglages est introuvable : %s. "
+              "Base par defaut utilisee : %s" % (chemin, BASE_DEFAUT))
     return BASE_DEFAUT
 
 
@@ -139,6 +174,60 @@ def est_boucle_locale(adresse):
         return False
 
 
+def _est_ip(texte):
+    try:
+        ipaddress.ip_address(texte.split("%")[0])
+        return True
+    except ValueError:
+        return False
+
+
+_NOMS_HOTE = None
+
+
+def noms_hote_acceptes():
+    """Noms de ce poste acceptes dans l'en-tete Host (calcules une fois :
+    getfqdn peut interroger le DNS)."""
+    global _NOMS_HOTE
+    if _NOMS_HOTE is None:
+        noms = {"localhost"}
+        try:
+            nom = socket.gethostname().lower()
+            if nom:
+                noms.update((nom, nom + ".local"))
+        except OSError:
+            pass
+        try:
+            noms.add(socket.getfqdn().lower())
+        except OSError:
+            pass
+        noms.discard("")
+        _NOMS_HOTE = frozenset(noms)
+    return _NOMS_HOTE
+
+
+_HOST = re.compile(r"(?:\[(?P<ip6>[^\]]+)\]|(?P<nom>[^:\[\]]+))(?::(?P<port>[0-9]{1,5}))?")
+
+
+def hote_autorise(entete):
+    """
+    Protection DNS rebinding. Le rebinding passe toujours par un nom de
+    domaine : toute adresse IP litterale est acceptee (IPv4, IPv6 avec ou sans
+    crochets, avec ou sans port) ; un nom ne l'est que s'il designe ce poste.
+    Host vide (HTTP/1.0) : accepte.
+    """
+    hote = (entete or "").strip().lower()
+    if not hote or _est_ip(hote):                 # vide, ou IPv6 sans crochets ni port
+        return True
+    m = _HOST.fullmatch(hote)
+    if not m:
+        return False
+    if m.group("ip6") is not None:
+        return _est_ip(m.group("ip6"))
+    nom = m.group("nom")
+    return _est_ip(nom) or nom in noms_hote_acceptes()
+
+
 # ------------------------------------------------------------------
 # Gestionnaire HTTP
 # ------------------------------------------------------------------
@@ -154,11 +243,34 @@ def _nombre_fini(texte):
     return nombre
 
 
+def _objet(data):
+    """Corps JSON attendu sous forme d'objet (absent : objet vide)."""
+    return base._exiger_dict({} if data is None else data)
+
+
+def _echapper_controles(texte):
+    """Caracteres de controle -> \\xNN : une requete ne peut pas injecter de
+    fausses lignes (ou des sequences d'echappement) dans la console."""
+    return re.sub(r"[\x00-\x1f\x7f]", lambda m: "\\x%02x" % ord(m.group()), texte)
+
+
+def _heure_ms():
+    """Heure du serveur (ms depuis l'epoque) : les postes s'y recalent."""
+    return int(time.time() * 1000)
+
+
+class AccesRefuse(Exception):
+    """Action reservee au poste serveur (repondue en 403)."""
+
+
 class CustomHandler(http.server.SimpleHTTPRequestHandler):
     """Sert web/ sans cache, et l'API JSON /api/*."""
 
     server_version = "StockCabinet/" + VERSION
     ECOUTE_LOCALE = False                     # fixe par start_server
+    # Delai (s) sur chaque lecture du socket : un client qui annonce un corps
+    # sans jamais l'envoyer ne bloque pas un fil indefiniment.
+    timeout = 30
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=DOSSIER_WEB, **kwargs)
@@ -169,20 +281,9 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
         if not super().parse_request():
             return False
         # Protection DNS rebinding : seul un Host connu est accepte.
-        hote = (self.headers.get("Host") or "").rsplit(":", 1)[0].strip("[]").lower()
-        if hote:
-            permis = {"localhost", "127.0.0.1", "::1", get_local_ip()}
-            try:
-                permis.add(str(self.server.server_address[0]).split("%")[0])
-            except (AttributeError, IndexError):
-                pass
-            try:
-                permis.add(socket.gethostname().lower())
-            except OSError:
-                pass
-            if hote not in permis:
-                self.send_error(403, "Host non autorise")
-                return False
+        if not hote_autorise(self.headers.get("Host")):
+            self.send_error(403, "Host non autorise")
+            return False
         return True
 
     def _origine_valide(self):
@@ -227,7 +328,7 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
     def log_message(self, format, *args):
         # Journal lisible : on n'affiche ni les fichiers statiques ni la
         # surveillance de revision qui tourne toutes les quelques secondes.
-        texte = format % args
+        texte = _echapper_controles(format % args)
         if "/api/revision" in texte or ("/api/" not in texte and '" 200 ' in texte) \
                 or '" 304 ' in texte:
             return
@@ -244,8 +345,16 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
 
     def _json(self, charge, code=200):
         corps = json.dumps(charge, ensure_ascii=False).encode("utf-8")
+        entetes = getattr(self, "headers", None)
+        accepte = (entetes.get("Accept-Encoding") or "") if entetes is not None else ""
+        compresse = len(corps) > TAILLE_MIN_GZIP and "gzip" in accepte.lower()
+        if compresse:                              # /api/etat : plusieurs Mo -> quelques centaines de Ko
+            corps = gzip.compress(corps, compresslevel=6)
         self.send_response(code)
         self.send_header("Content-Type", "application/json; charset=utf-8")
+        if compresse:
+            self.send_header("Content-Encoding", "gzip")
+        self.send_header("Vary", "Accept-Encoding")
         self.send_header("Content-Length", str(len(corps)))
         self.end_headers()
         if self.command != "HEAD":
@@ -258,7 +367,11 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
             taille = 0
         if taille > TAILLE_MAX_CORPS:
             raise base.ErreurDonnees("Requete trop volumineuse.")
-        brut = self.rfile.read(taille) if taille > 0 else b""
+        try:
+            brut = self.rfile.read(taille) if taille > 0 else b""
+        except (socket.timeout, OSError):
+            self.close_connection = True
+            raise base.ErreurDonnees("Requete incomplete (delai depasse).")
         if not brut:
             return None
         try:
@@ -279,16 +392,24 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
             resultat.setdefault("revision", base.revision())
             self._json(resultat)
         except base.ErreurConflit as exc:
-            self._json({"status": "error", "conflit": True, "message": str(exc)}, 409)
+            reponse = {"status": "error", "conflit": True, "message": str(exc)}
+            if exc.version is not None:               # document : version actuelle
+                reponse["version"] = exc.version
+            self._json(reponse, 409)
+        except AccesRefuse as exc:
+            self._json({"status": "error", "message": str(exc)}, 403)
         except base.ErreurDonnees as exc:
             self._json({"status": "error", "message": str(exc)}, 400)
         except (exports.ExportIndisponible, meteo.MeteoIndisponible) as exc:
             self._json({"status": "error", "message": str(exc)}, 503)
         except mise_a_jour.MiseAJourImpossible as exc:
             self._json({"status": "error", "message": str(exc)}, 409)
-        except Exception as exc:                          # noqa: BLE001
+        except Exception:                                 # noqa: BLE001
+            # Le detail (chemins, requetes SQL...) reste dans la console du serveur.
             traceback.print_exc()
-            self._json({"status": "error", "message": "Erreur serveur : %s" % exc}, 500)
+            self._json({"status": "error", "message":
+                        "Erreur interne du serveur (détail dans la console du poste serveur)."},
+                       500)
 
     # -- routes -------------------------------------------------------
 
@@ -298,29 +419,27 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
             return super().do_GET()
         q = self._query()
         if route == "/api/revision":
-            return self._json({"revision": base.revision()})
+            return self._json({"revision": base.revision(), "heure": _heure_ms()})
         if route == "/api/etat":
-            return self._executer(lambda: {
-                "base": base.charger_base(),
-                "documents": base.lire_documents(),
-            })
+            return self._executer(self._etat)
         if route == "/api/info":
             return self._executer(self._info)
         if route == "/api/contacts":
             return self._executer(lambda: {"contacts": base.lister_contacts()})
         if route.startswith("/api/documents/"):
             cle = route[len("/api/documents/"):]
-            return self._executer(lambda: {"valeur": base.lire_document(cle)})
+            return self._executer(lambda: base.lire_document_et_version(cle))
         if route == "/api/meteo":
             return self._executer(lambda: meteo.meteo_actuelle(base.lire_document("meteo_lieu")))
         if route == "/api/mise-a-jour":
-            return self._executer(mise_a_jour.etat)
+            return self._executer(self._etat_mise_a_jour)
         if route == "/api/meteo/communes":
             return self._executer(lambda: {"communes": meteo.chercher_communes(q.get("q", ""))})
         if route == "/api/base":
             return self._executer(lambda: {
                 "chemin": base.CHEMIN_BASE,
                 "modifiable": self._client_local(),
+                "base_configuree_absente": BASE_CONFIGUREE_ABSENTE,
             })
         if route == "/api/sauvegardes":
             return self._executer(self._sauvegardes)
@@ -338,22 +457,22 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
         routes = {
             "/api/produit": lambda d: base.update_produit(d),
             "/api/stock": lambda d: base.update_stock_item(d),
-            "/api/lot": lambda d: {"resultats": base.executer_lot((d or {}).get("operations"))},
+            "/api/lot": lambda d: {"resultats": base.executer_lot(_objet(d).get("operations"))},
             "/api/transaction": lambda d: {"id": base.add_transaction(d)},
             "/api/maintenance": lambda d: {"id": base.add_autoclave(d)},
             "/api/historique-prix": lambda d: {"id": base.add_historique_prix(d)},
             "/api/contacts": lambda d: {"contact": base.enregistrer_contact(d)},
             "/api/base": self._changer_base,
-            "/api/sauvegardes": lambda d: {"sauvegarde": self._sans_chemin(sauvegarde.sauvegarder())},
-            "/api/mise-a-jour/verifier": lambda d: mise_a_jour.verifier(),
+            "/api/sauvegardes": self._sauvegarder,
+            "/api/mise-a-jour/verifier": self._verifier_mise_a_jour,
             "/api/mise-a-jour/installer": self._installer_mise_a_jour,
             "/api/export/stock": lambda d: self._export(exports.export_stock(base.charger_base())),
             "/api/export/liste-courses": lambda d: self._export(
                 exports.liste_courses(base.charger_base())),
             "/api/export/consommation": lambda d: self._export(exports.stats_consommation(
-                base.charger_base(), (d or {}).get("references") or [])),
+                base.charger_base(), _objet(d).get("references") or [])),
             "/api/export/chirurgie": lambda d: self._export(exports.extraction_chirurgie(
-                base.charger_base(), (d or {}).get("date_debut"), (d or {}).get("date_fin"))),
+                base.charger_base(), _objet(d).get("date_debut"), _objet(d).get("date_fin"))),
         }
         action = routes.get(route)
         if action is None:
@@ -366,7 +485,7 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
             return
         if route.startswith("/api/documents/"):
             cle = route[len("/api/documents/"):]
-            return self._executer(lambda: base.ecrire_document(cle, self._lire_json()))
+            return self._executer(lambda: self._ecrire_document(cle))
         self._json({"status": "error", "message": "Route inconnue."}, 404)
 
     def do_DELETE(self):
@@ -385,6 +504,28 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
 
     # -- actions ------------------------------------------------------
 
+    def _etat(self):
+        # Transactions et historique des prix limites aux JOURS_ETAT derniers
+        # jours ; les exports relisent toute la base.
+        documents, versions = base.lire_documents_et_versions()
+        return {
+            "base": base.charger_base(jours_transactions=JOURS_ETAT),
+            "documents": documents,
+            "versions_documents": versions,
+            "heure": _heure_ms(),
+        }
+
+    def _ecrire_document(self, cle):
+        valeur = self._lire_json()
+        # En-tete absent : ancien poste, ecriture sans controle de version
+        brut = self.headers.get("X-Version-Document")
+        attendue = None
+        if brut is not None:
+            if not re.fullmatch(r"\s*-?[0-9]{1,18}\s*", brut):
+                raise base.ErreurDonnees("En-tete X-Version-Document invalide.")
+            attendue = int(brut)
+        return {"version": base.ecrire_document(cle, valeur, attendue)}
+
     def _info(self):
         port = self.server.server_address[1]
         adresses = [] if CustomHandler.ECOUTE_LOCALE else \
@@ -402,7 +543,31 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
                 "derniere": self._sans_chemin(copies[0] if copies else None),
                 "nombre": len(copies)}
 
+    def _sauvegarder(self, data):
+        # Une copie par minute au plus : des clics repetes ne font pas tourner
+        # les copies du jour (et ne chargent pas le disque).
+        recente = sauvegarde.copie_recente(DELAI_ENTRE_SAUVEGARDES)
+        if recente is not None:
+            return {"sauvegarde": self._sans_chemin(recente), "deja_faite": True}
+        return {"sauvegarde": self._sans_chemin(sauvegarde.sauvegarder()), "deja_faite": False}
+
+    def _etat_mise_a_jour(self):
+        return dict(mise_a_jour.etat(), installable_ici=self._client_local())
+
+    def _verifier_mise_a_jour(self, data):
+        # Permis depuis tous les postes, mais pas plus d'un « git fetch » par minute
+        etat = mise_a_jour.etat()
+        dernier = etat.get("verifie_le")
+        if dernier is None or not 0 <= time.time() - dernier < DELAI_ENTRE_VERIFICATIONS:
+            etat = mise_a_jour.verifier()
+        return dict(etat, installable_ici=self._client_local())
+
     def _installer_mise_a_jour(self, data):
+        # Installer = executer le code publie sur GitHub et redemarrer le
+        # serveur : seulement depuis le poste qui le fait tourner.
+        if not self._client_local():
+            raise AccesRefuse(
+                "La mise à jour se lance depuis le poste qui fait tourner le serveur.")
         resultat = mise_a_jour.installer()
         # Laisser partir la réponse, puis arrêter le serveur : lancer() relance
         # le programme mis à jour (voir mise_a_jour.REDEMARRER).
@@ -418,19 +583,35 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
         return resultat
 
     def _changer_base(self, data):
+        global BASE_CONFIGUREE_ABSENTE
         if not self._client_local():
             raise base.ErreurDonnees(
                 "Le changement de base ne se fait que depuis le poste qui fait tourner le serveur.")
-        chemin = str((data or {}).get("chemin") or "").strip().strip('"')
+        chemin = str(_objet(data).get("chemin") or "").strip().strip('"')
         if not chemin:
             raise base.ErreurDonnees("Chemin vide.")
         chemin = os.path.abspath(os.path.expanduser(chemin))
         if not os.path.isfile(chemin):
             raise base.ErreurDonnees("Fichier introuvable : %s" % chemin)
-        base.definir_chemin(chemin)
+        # Un fichier vide devient une base neuve ; sinon il doit etre une base
+        # SQLite (un autre fichier rendrait toutes les requetes en erreur).
+        try:
+            with open(chemin, "rb") as f:
+                entete = f.read(len(ENTETE_SQLITE))
+        except OSError as exc:
+            raise base.ErreurDonnees("Fichier illisible : %s (%s)" % (chemin, exc))
+        if entete and entete != ENTETE_SQLITE:
+            raise base.ErreurDonnees("Ce fichier n'est pas une base SQLite : %s" % chemin)
+        try:
+            base.definir_chemin(chemin)            # base precedente gardee en cas d'echec
+        except sqlite3.DatabaseError as exc:
+            raise base.ErreurDonnees(
+                "Ce fichier n'est pas une base SQLite utilisable : %s (%s)" % (chemin, exc))
+        # Reglages enregistres seulement une fois la base ouverte
         config = charger_config()
         config["base"] = chemin
         enregistrer_config(config)
+        BASE_CONFIGUREE_ABSENTE = None
         return {"chemin": chemin}
 
 
@@ -493,6 +674,7 @@ def start_server(host, port, navigateur=True):
     print("Ctrl+C pour arreter le serveur.")
     print("")
 
+    noms_hote_acceptes()                    # getfqdn (DNS) avant la premiere requete
     if navigateur:
         ouvrir_navigateur(url)
     mise_a_jour.demarrer_verifications()

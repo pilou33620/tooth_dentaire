@@ -595,3 +595,76 @@ describe('stock déjà en place qui a périmé', () => {
         expect(getStock('Cabinet 2')).toHaveLength(0);
     });
 });
+
+describe('corrections : conditionnement, déplacement, renommage, dates', () => {
+    function ligne(utilisateur, quantite, extra = {}) {
+        return Object.assign({ reference: 'REF1', utilisateur, quantite,
+            stock_minimum: 0, alerte_active: 0, alerte_peremption_active: 0,
+            delai_peremption: 30, date_peremption: '', date_import: '',
+            fournisseur: '', lot: '', lots_details: '[]',
+            prix_unitaire_ht: 0, prix_unitaire_ttc: 0 }, extra);
+    }
+    const PRODUIT = { reference: 'REF1', nom: 'Gant', groupe: 'G', ref_scannette: '3401',
+                      type_stockage: 'unite', quantite_par_carton: 1 };
+
+    test('changer la quantité par carton garde le total en unités', async () => {
+        preparer([{ ...PRODUIT, type_stockage: 'carton', quantite_par_carton: 10 }],
+                 [ligne('Cabinet 1', 123)]);
+        openEditDialog(getStock('Cabinet 1')[0]);
+        expect(document.getElementById('edit-nb-contenants').value).toBe('12');
+        const qpc = document.getElementById('edit-qte-par-contenant');
+        qpc.value = '12';
+        qpc.dispatchEvent(new Event('input'));
+        expect(document.getElementById('edit-nb-contenants').value).toBe('10');
+        expect(document.getElementById('edit-qte').value).toBe('3');
+        await enregistrer();
+        expect(getStock('Cabinet 1')[0].quantite).toBe(123);
+    });
+
+    test('déplacer vers un espace où la référence existe déjà est refusé', async () => {
+        preparer([PRODUIT], [ligne('Cabinet 1', 10), ligne('Cabinet 2', 5)]);
+        openEditDialog(getStock('Cabinet 1')[0]);
+        document.getElementById('edit-user').value = 'Cabinet 2';
+        await enregistrer();
+        const db = loadDB();
+        expect(db.stock.find(s => s.utilisateur === 'Cabinet 1').quantite).toBe(10);
+        expect(db.stock.find(s => s.utilisateur === 'Cabinet 2').quantite).toBe(5);
+        expect(document.getElementById('msg-title').textContent).toBe('Ligne déjà existante');
+    });
+
+    test('renommer la référence peut renommer aussi les autres espaces', async () => {
+        preparer([PRODUIT], [ligne('Cabinet 1', 10), ligne('Cabinet 2', 5)]);
+        const confirmer = jest.spyOn(window, 'confirm').mockReturnValue(true);
+        openEditDialog(getStock('Cabinet 1')[0]);
+        saisir('edit-ref', 'REF2');
+        await enregistrer();
+        confirmer.mockRestore();
+        const db = loadDB();
+        expect(db.stock.map(s => s.reference).sort()).toEqual(['REF2', 'REF2']);
+        expect(db.stock.find(s => s.utilisateur === 'Cabinet 2').quantite).toBe(5);
+        expect(db.produits.some(p => p.reference === 'REF1')).toBe(false);
+    });
+
+    test('renommer un seul espace garde l\'ancienne fiche pour les autres', async () => {
+        preparer([PRODUIT], [ligne('Cabinet 1', 10), ligne('Cabinet 2', 5)]);
+        const confirmer = jest.spyOn(window, 'confirm').mockReturnValue(false);
+        openEditDialog(getStock('Cabinet 1')[0]);
+        saisir('edit-ref', 'REF2');
+        await enregistrer();
+        confirmer.mockRestore();
+        const db = loadDB();
+        expect(db.stock.find(s => s.utilisateur === 'Cabinet 2').reference).toBe('REF1');
+        expect(db.produits.some(p => p.reference === 'REF1')).toBe(true);
+    });
+
+    test('une date de péremption illisible est refusée', async () => {
+        preparer([PRODUIT], [ligne('Cabinet 1', 10)]);
+        openEditDialog(getStock('Cabinet 1')[0]);
+        document.getElementById('btn-add-lot')?.click();
+        const rangee = window.createLotRow({ lot: 'L1', date: 'fin mai', qte: '' });
+        document.getElementById('edit-lots-container').appendChild(rangee);
+        await enregistrer();
+        expect(document.getElementById('msg-title').textContent).toBe('Date de péremption illisible');
+        expect(getStock('Cabinet 1')[0].lot).toBe('');
+    });
+});

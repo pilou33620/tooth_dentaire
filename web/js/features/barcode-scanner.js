@@ -6,20 +6,34 @@
 
 import { USERS } from '../core/constants.js';
 import { loadDB, findStockEntry } from '../core/database.js';
-import { matchesBarcode } from '../core/utils.js';
+import { matchesBarcode, fermerMessage } from '../core/utils.js';
 
 let barcodeBuffer = "";
 let lastKeyTime = 0;
+// Délai maximal entre deux caractères d'une scannette (au-delà : frappe humaine)
+const DELAI_SCAN = 100;
+
+/** Champ de saisie : la douchette y tape directement, on ne l'intercepte pas. */
+function estChampDeSaisie(cible) {
+    if (!cible) return false;
+    const balise = cible.tagName;
+    // Un <select> changeait d'option ET lançait la recherche du code scanné
+    return balise === "INPUT" || balise === "TEXTAREA" || balise === "SELECT" || Boolean(cible.isContentEditable);
+}
 
 document.addEventListener("keydown", (e) => {
-    // Si l'utilisateur tape manuellement dans un champ, on laisse faire (la douchette tapera directement dedans)
-    if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") {
+    if (estChampDeSaisie(e.target)) {
         return;
     }
 
     const currentTime = Date.now();
 
-    if (e.key === "Enter") {
+    // Certaines douchettes terminent le code par Tab au lieu d'Entrée : on
+    // ne le prend comme fin de scan que juste après une saisie rapide.
+    const finParTab = e.key === "Tab" && barcodeBuffer.length >= 4
+        && currentTime - lastKeyTime <= DELAI_SCAN;
+
+    if (e.key === "Enter" || finParTab) {
         // L'Enter de fin de scan est traité AVANT tout test de délai : certaines
         // douchettes l'envoient plus de 100 ms après le dernier caractère, et le
         // buffer était alors vidé juste avant, faisant perdre le scan en silence.
@@ -31,7 +45,7 @@ document.addEventListener("keydown", (e) => {
     } else if (e.key.length === 1) { // Caractère normal (pas Shift, Ctrl...)
         // Une scannette tape très vite (généralement < 50 ms par caractère) :
         // au-delà de 100 ms entre deux caractères, c'était une frappe humaine.
-        if (currentTime - lastKeyTime > 100) {
+        if (currentTime - lastKeyTime > DELAI_SCAN) {
             barcodeBuffer = "";
         }
         barcodeBuffer += e.key;
@@ -91,7 +105,7 @@ function traiterCodeBarre(code) {
 
         // Fermer les autres modales si besoin
         document.getElementById("user-overlay").classList.add("hidden");
-        document.getElementById("msg-overlay").classList.add("hidden");
+        fermerMessage();
         document.getElementById("alerts-overlay").classList.add("hidden");
         document.getElementById("import-overlay").classList.add("hidden");
 

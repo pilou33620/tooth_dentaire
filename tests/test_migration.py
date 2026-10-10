@@ -275,3 +275,14 @@ def test_base_choisie_dans_les_reglages_de_l_ancienne_appli(ancienne, tmp_path, 
 
     migration.importer(str(ancienne), str(tmp_path / "n.db"))
     assert [p["reference"] for p in base.charger_base()["produits"]] == ["DEPUIS_CONFIG"]
+
+
+def test_document_au_format_inattendu_ignore_sans_arreter_l_import(ancienne, tmp_path):
+    leveldb = ancienne / "webstorage" / "Local Storage" / "leveldb"
+    ecrire_journal(leveldb / "000005.log", [
+        (cle_ls("dosimetres_data"), valeur_ls(json.dumps({"dosimetres": "pas une liste"}))),
+    ], sequence=50)
+    rapport = migration.importer(str(ancienne), str(tmp_path / "nouvelle" / "stock.db"))
+    assert "Import termine" in rapport and "ignore (Format invalide" in rapport
+    assert base.lire_document("dosimetres") == base.DOCUMENTS_DEFAUT["dosimetres"]
+    assert base.lire_document("planning") == PLANNING

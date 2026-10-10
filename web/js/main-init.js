@@ -6,7 +6,7 @@
 
 import { USERS } from './core/constants.js';
 import { initDB, loadDB } from './core/database.js';
-import { demarrer } from './core/api.js';
+import { demarrer, definirPauseSurveillance } from './core/api.js';
 import { openPlacard, filterPlacardTable, placardSort, refreshPlacardTable } from './features/placard.js';
 import { openEditDialog, saveEditDialog } from './features/product-edit.js';
 import { openTransferDialog, saveTransferDialog } from './features/transfer.js';
@@ -53,26 +53,46 @@ function estOuvert(id) {
     return Boolean(el && !el.classList.contains("hidden"));
 }
 
-function rafraichirApresModificationDistante() {
-    checkAlerts();
-    // On ne redessine pas un tableau pendant qu'une saisie est en cours dessus
-    const saisieEnCours = ["edit-overlay", "lot-move-overlay", "transfer-overlay", "import-overlay"].some(estOuvert);
-    if (estOuvert("placard-overlay") && !saisieEnCours) refreshPlacardTable();
-    if (!estOuvert("calendar-overlay")) updateTeamPlanning();
-    if (!estOuvert("tasks-overlay")) updateTasksPreview();
-    if (estOuvert("maintenance-overlay")) {
-        refreshMaintenanceTable(document.getElementById("maint-machine").value);
+/**
+ * Exécute une étape d'initialisation ou de rafraîchissement : si elle
+ * échoue (donnée inattendue...), seule cette partie de l'écran manque, les
+ * suivantes s'affichent quand même.
+ */
+function essayer(nom, fonction) {
+    try {
+        const r = fonction();
+        if (r && typeof r.catch === "function") r.catch(e => console.error(`[${nom}]`, e));
+    } catch (e) {
+        console.error(`[${nom}] erreur :`, e);
     }
-    updateDosimetresBadge();
-    if (typeof window.updateMireIconStatus === "function") window.updateMireIconStatus();
-    if (typeof window.checkMireAlert === "function") window.checkMireAlert();
-    if (typeof window.updateFauteuilIconStatus === "function") window.updateFauteuilIconStatus();
-    if (typeof window.checkFauteuilAlert === "function") window.checkFauteuilAlert();
-    if (typeof window.checkDosiAlert === "function") window.checkDosiAlert();
+}
+
+// Fenêtres de saisie du stock : tant que l'une est ouverte, les données ne
+// sont pas rechargées sous elle. L'enregistrement part avec la version lue
+// à l'ouverture : si un autre poste a modifié la même ligne entre-temps, le
+// serveur refuse (conflit) au lieu d'écraser sa modification sans le dire.
+const FENETRES_DE_SAISIE = ["edit-overlay", "lot-move-overlay", "transfer-overlay", "import-overlay"];
+definirPauseSurveillance(() => FENETRES_DE_SAISIE.some(estOuvert));
+
+function rafraichirApresModificationDistante() {
+    essayer("alertes", checkAlerts);
+    // On ne redessine pas un tableau pendant qu'une saisie est en cours dessus
+    const saisieEnCours = FENETRES_DE_SAISIE.some(estOuvert);
+    if (estOuvert("placard-overlay") && !saisieEnCours) essayer("placard", refreshPlacardTable);
+    if (!estOuvert("calendar-overlay")) essayer("planning", () => updateTeamPlanning());
+    if (!estOuvert("tasks-overlay")) essayer("tâches", updateTasksPreview);
+    if (estOuvert("maintenance-overlay")) {
+        essayer("maintenance", () => refreshMaintenanceTable(document.getElementById("maint-machine").value));
+    }
+    essayer("dosimètres", updateDosimetresBadge);
+    for (const nom of ["updateMireIconStatus", "checkMireAlert", "updateFauteuilIconStatus",
+        "checkFauteuilAlert", "checkDosiAlert"]) {
+        if (typeof window[nom] === "function") essayer(nom, () => window[nom]());
+    }
     // Widgets de l'accueil partagés entre postes (sauf saisie en cours dans l'éditeur)
-    afficherNotes();
-    if (!estOuvert("checklist-overlay")) rafraichirChecklist();
-    rafraichirMinuteurs();
+    essayer("notes", () => afficherNotes());
+    if (!estOuvert("checklist-overlay")) essayer("checklist", () => rafraichirChecklist());
+    essayer("minuteurs", () => rafraichirMinuteurs());
 }
 
 window.addEventListener("donnees-modifiees", rafraichirApresModificationDistante);
@@ -377,37 +397,34 @@ Rechargez la page (F5) une fois le serveur relancé.`);
     });
 
     // --- Horloge ---
-    updateClock();
-    setInterval(updateClock, 1000);
+    essayer("horloge", updateClock);
+    setInterval(() => essayer("horloge", updateClock), 1000);
 
     // --- Initialisation des modules UI ---
-    initCustomizationMode();
-    initZoomIndicator();
-    initScreensaver();
-    initPostitHover();
-    updatePostitListHeight();
+    // Chaque module est isolé : une erreur dans l'un n'empêche pas les autres.
+    essayer("personnalisation", initCustomizationMode);
+    essayer("zoom", initZoomIndicator);
+    essayer("écran de veille", initScreensaver);
+    essayer("post-it", initPostitHover);
+    essayer("post-it", updatePostitListHeight);
 
     // --- Alertes au démarrage ---
-    checkAlerts();
-    checkFauteuilAlert();
+    essayer("alertes", checkAlerts);
+    essayer("fauteuils", checkFauteuilAlert);
 
-    // --- Planning binômes ---
-    initTeamPlanning();
-
-    // --- Taches assistantes ---
-    initTasksPlanning();
-
-    // --- Gestion des dosimètres ---
-    initDosimetres();
+    // --- Planning binômes, tâches, dosimètres ---
+    essayer("planning", initTeamPlanning);
+    essayer("tâches", initTasksPlanning);
+    essayer("dosimètres", initDosimetres);
 
     // --- Météo du fond (commune enregistrée en base) ---
-    initMeteo();
+    essayer("météo", initMeteo);
 
     // --- Mises à jour de l'outil (GitHub, vérifiées par le serveur) ---
-    initMiseAJour();
+    essayer("mises à jour", initMiseAJour);
 
     // --- Accueil : notes, checklist du jour, minuteurs ---
-    initNotes();
-    initChecklist();
-    initMinuteurs();
+    essayer("notes", initNotes);
+    essayer("checklist", initChecklist);
+    essayer("minuteurs", initMinuteurs);
 });

@@ -92,3 +92,11 @@ test('installer annulé : rien n\'est envoyé', async () => {
     await maj.installerMiseAJour();
     expect(appels).not.toContain('POST /api/mise-a-jour/installer');
 });
+
+test('autre poste que le serveur : la mise à jour est annoncée sans bouton « installer »', () => {
+    maj.traiterEtat({ ...DISPONIBLE, installable_ici: false });
+    expect(visible('maj-bandeau')).toBe(true);
+    expect(document.getElementById('maj-texte').textContent).toContain('poste qui fait tourner le serveur');
+    expect(visible('maj-installer')).toBe(false);
+    expect(visible('maj-reglages-installer')).toBe(false);
+});

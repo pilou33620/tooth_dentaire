@@ -5,7 +5,8 @@
    Module de gestion du suivi des dosimètres du cabinet dentaire.
    ============================================================ */
 
-import { getDocument, setDocument } from '../core/api.js';
+import { getDocument, setDocument, modifierDocument } from '../core/api.js';
+import { tempsRappel } from '../core/utils.js';
 import { escapeHtml } from '../core/utils.js';
 import { nomsDuPlanning } from '../planning/team-planning.js';
 
@@ -17,19 +18,35 @@ let currentSearchTerm = "";
  * Données des dosimètres (copie du document enregistré).
  */
 export function getDosimetresData() {
-    const d = getDocument("dosimetres") || {};
+    return normaliserDosimetres(getDocument("dosimetres"));
+}
+
+export function normaliserDosimetres(valeur) {
+    const d = (valeur && typeof valeur === "object" && !Array.isArray(valeur)) ? valeur : {};
     return {
-        manager: d.manager || "",
-        generalNote: d.generalNote || "",
-        dosimetres: Array.isArray(d.dosimetres) ? d.dosimetres : []
+        manager: typeof d.manager === "string" ? d.manager : "",
+        generalNote: typeof d.generalNote === "string" ? d.generalNote : "",
+        // Une entrée invalide (null...) ne doit pas empêcher d'afficher les autres
+        dosimetres: (Array.isArray(d.dosimetres) ? d.dosimetres : [])
+            .filter(x => x && typeof x === "object" && !Array.isArray(x))
     };
 }
 
 /**
  * Enregistre les données en base et met à jour l'interface.
+ * `data` : le document complet, ou une fonction qui modifie le document
+ * (rejouée sur la version d'un autre poste s'il a écrit entre-temps).
  */
 export function saveDosimetresData(data) {
-    setDocument("dosimetres", data);
+    if (typeof data === "function") {
+        modifierDocument("dosimetres", valeur => {
+            const doc = normaliserDosimetres(valeur);
+            data(doc);
+            return doc;
+        });
+    } else {
+        setDocument("dosimetres", data);
+    }
     updateDosimetresBadge();
 }
 
@@ -53,7 +70,7 @@ export function updateDosimetresBadge() {
  * Met à jour l'indicateur du statut de renouvellement / alerte.
  */
 function updateAlertStatusBadge() {
-    const nextTime = (getDocument("rappel_dosimetres") || {}).nextTime;
+    const nextTime = tempsRappel((getDocument("rappel_dosimetres") || {}).nextTime);
     const badge = document.getElementById('dosi-next-alert-badge');
     if (!badge) return;
 
@@ -212,8 +229,7 @@ function deleteDosimetre(id) {
     const label = item ? `${item.number} (${item.user})` : "ce dosimètre";
 
     if (confirm(`Confirmez-vous la suppression de ${label} ?`)) {
-        data.dosimetres = (data.dosimetres || []).filter(d => d.id !== id);
-        saveDosimetresData(data);
+        saveDosimetresData(doc => { doc.dosimetres = doc.dosimetres.filter(d => d.id !== id); });
         renderDosimetresTable();
         resetDosimetreForm();
     }
@@ -233,33 +249,26 @@ function handleDosimetreSubmit() {
         return;
     }
 
-    const data = getDosimetresData();
-    if (!data.dosimetres) data.dosimetres = [];
-
     if (editIdStr) {
         // Mode Modification
         const editId = parseInt(editIdStr, 10);
-        const index = data.dosimetres.findIndex(d => d.id === editId);
-        if (index !== -1) {
-            data.dosimetres[index] = {
-                id: editId,
-                number: number || "Sans n°",
-                user: user || "Non attribué",
-                note: note
-            };
-        }
+        const modifie = { id: editId, number: number || "Sans n°", user: user || "Non attribué", note };
+        saveDosimetresData(doc => {
+            const index = doc.dosimetres.findIndex(d => d.id === editId);
+            if (index !== -1) doc.dosimetres[index] = { ...modifie };
+        });
     } else {
         // Mode Ajout
         const newId = Date.now();
-        data.dosimetres.push({
-            id: newId,
-            number: number || `Dosi #${data.dosimetres.length + 1}`,
-            user: user || "Non attribué",
-            note: note
+        saveDosimetresData(doc => {
+            doc.dosimetres.push({
+                id: newId,
+                number: number || `Dosi #${doc.dosimetres.length + 1}`,
+                user: user || "Non attribué",
+                note
+            });
         });
     }
-
-    saveDosimetresData(data);
     renderDosimetresTable();
     resetDosimetreForm();
 }
@@ -268,14 +277,16 @@ function handleDosimetreSubmit() {
  * Enregistre le responsable et la note générale.
  */
 function handleSaveGeneralInfo() {
-    const data = getDosimetresData();
     const managerInput = document.getElementById("dosi-manager-input");
     const generalNoteInput = document.getElementById("dosi-general-note");
+    const manager = managerInput ? managerInput.value.trim() : null;
+    const generalNote = generalNoteInput ? generalNoteInput.value.trim() : null;
 
-    if (managerInput) data.manager = managerInput.value.trim();
-    if (generalNoteInput) data.generalNote = generalNoteInput.value.trim();
-
-    saveDosimetresData(data);
+    // Seuls ces deux champs : la liste des dosimètres n'est pas réécrite
+    saveDosimetresData(doc => {
+        if (manager !== null) doc.manager = manager;
+        if (generalNote !== null) doc.generalNote = generalNote;
+    });
     
     // Feedback visuel sur le bouton
     const saveBtn = document.getElementById("dosi-save-global-btn");

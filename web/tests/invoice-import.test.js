@@ -138,14 +138,18 @@ describe('remplissage du tableau d\'import', () => {
         expect(tr.querySelector('.import-qte-cond').style.display).toBe('');
     });
 
-    test('passer en conditionnement groupé bascule la quantité facturée sur le contenant', () => {
+    // La quantité facturée reste le nombre de cartons et l'utilisateur saisit
+    // les unités par carton : tant qu'il ne l'a pas fait, quantité × prix
+    // reste le montant de la facture. (Avant : « 1 carton de 24 » avec un
+    // prix unitaire divisé par 24, faux dans les deux cas.)
+    test('passer en conditionnement groupé garde la quantité facturée en nombre de cartons', () => {
         preparerImport([article({ quantite: 24 })]);
         const tr = lignes()[0];
         const sel = tr.querySelector('.import-type-stock');
         sel.value = 'carton';
         sel.dispatchEvent(new Event('change'));
-        expect(tr.querySelector('.import-qte-cond').value).toBe('24');
-        expect(tr.querySelector('.import-qte-base').value).toBe('1');
+        expect(tr.querySelector('.import-qte-cond').value).toBe('1');
+        expect(tr.querySelector('.import-qte-base').value).toBe('24');
     });
 
     test('un nouvel appel remplace le contenu du tableau', () => {
@@ -437,5 +441,81 @@ describe('produits périmés sur la facture', () => {
         poserLot(lignes()[0], 'L-NEW', dateDansNJours(90));
         await validerAvecMessages();
         expect(loadDB().stock).toHaveLength(2);
+    });
+});
+
+describe('validation en deux passes', () => {
+    test('une ligne invalide n\'importe rien, même les lignes précédentes', async () => {
+        preparerImport([article({ reference: 'A' }), article({ reference: 'B' })]);
+        poserCodeBarres(lignes()[0], '1');
+        poserCodeBarres(lignes()[1], '2');
+        lignes()[1].querySelector('.import-qte-base').value = '-3';
+        await validerAvecMessages();
+        expect(loadDB().stock).toHaveLength(0);
+        // Corrigée puis revalidée : chaque ligne n'est importée qu'une fois
+        lignes()[1].querySelector('.import-qte-base').value = '3';
+        await validerAvecMessages();
+        expect(loadDB().stock.find(s => s.reference === 'A').quantite).toBe(10);
+        expect(loadDB().stock.find(s => s.reference === 'B').quantite).toBe(3);
+    });
+
+    test('une date de péremption illisible n\'importe rien', async () => {
+        preparerImport([article()]);
+        const tr = lignes()[0];
+        poserCodeBarres(tr, '1');
+        tr.querySelector('.import-lot-container > div > div .date-val').value = 'mai 2027';
+        tr.querySelector('.import-lot-container > div > div .lot-val').value = 'L1';
+        await validerAvecMessages();
+        expect(loadDB().stock).toHaveLength(0);
+        expect(document.getElementById('msg-title').textContent).toContain('illisible');
+    });
+
+    test('un double clic sur « Valider » n\'importe qu\'une fois', async () => {
+        preparerImport([article()]);
+        poserCodeBarres(lignes()[0], '1');
+        await Promise.all([validerAvecMessages(), validerAvecMessages()]);
+        expect(loadDB().stock[0].quantite).toBe(10);
+    });
+});
+
+describe('facture déjà importée un autre jour', () => {
+    function fichier(nom, contenu) {
+        const octets = new Uint8Array([...contenu].map(c => c.charCodeAt(0)));
+        return { name: nom, arrayBuffer: async () => octets.buffer };
+    }
+
+    beforeEach(() => {
+        global.pdfjsLib = {
+            GlobalWorkerOptions: {},
+            getDocument: () => ({
+                promise: Promise.resolve({
+                    numPages: 1,
+                    getPage: async () => ({
+                        getTextContent: async () => ({ items: [{
+                            str: 'HENRY SCHEIN 123-4567 GANT 2.0 2.0 10.00 12.00 12.00 24.00 20.0'
+                        }] })
+                    })
+                })
+            })
+        };
+    });
+    afterEach(() => { delete global.pdfjsLib; });
+
+    test('la même facture proposée à nouveau est signalée et peut être ignorée', async () => {
+        document.body.innerHTML = MARKUP;
+        setDbCache(baseVide());
+        importItems.length = 0;
+        await fermerLesMessages(onPdfSelected([fichier('f.pdf', 'FACTURE UNIQUE 42')]));
+        expect(importItems).toHaveLength(1);
+        poserCodeBarres(lignes()[0], '1');
+        await validerAvecMessages();
+
+        const confirmer = jest.spyOn(window, 'confirm').mockReturnValue(false);
+        importItems.length = 0;
+        await fermerLesMessages(onPdfSelected([fichier('copie.pdf', 'FACTURE UNIQUE 42')]));
+        expect(confirmer).toHaveBeenCalled();
+        expect(confirmer.mock.calls[0][0]).toContain('déjà été importées');
+        expect(importItems).toHaveLength(0);
+        confirmer.mockRestore();
     });
 });

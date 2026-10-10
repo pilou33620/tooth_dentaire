@@ -13,7 +13,7 @@
    d'un autre jour n'est jamais affichée.
    ============================================================ */
 
-import { getDocument, setDocument } from '../core/api.js';
+import { getDocument, modifierDocument, maintenantServeur } from '../core/api.js';
 import { escapeHtml } from '../core/utils.js';
 
 export const CLE_CHECKLIST = "checklist";
@@ -26,16 +26,20 @@ let ongletChoisi = null;     // { moment, pour: <moment par défaut au moment du
 
 const pad = n => String(n).padStart(2, "0");
 
-export function dateDuJour(maintenant = new Date()) {
+// Heure du serveur : tous les postes changent de jour ensemble, même si
+// l'horloge de l'un d'eux avance ou retarde de quelques minutes.
+const maintenantCabinet = () => new Date(maintenantServeur());
+
+export function dateDuJour(maintenant = maintenantCabinet()) {
     return `${maintenant.getFullYear()}-${pad(maintenant.getMonth() + 1)}-${pad(maintenant.getDate())}`;
 }
 
-export function heureCourte(maintenant = new Date()) {
+export function heureCourte(maintenant = maintenantCabinet()) {
     return `${pad(maintenant.getHours())}:${pad(maintenant.getMinutes())}`;
 }
 
 /** Le matin on montre l'ouverture, l'après-midi la fermeture. */
-export function momentParDefaut(maintenant = new Date()) {
+export function momentParDefaut(maintenant = maintenantCabinet()) {
     return maintenant.getHours() < 13 ? "ouverture" : "fermeture";
 }
 
@@ -53,11 +57,11 @@ export function normaliserChecklist(doc) {
 }
 
 /** Coches valables aujourd'hui (celles d'un autre jour sont ignorées). */
-export function cochesDuJour(doc, maintenant = new Date()) {
+export function cochesDuJour(doc, maintenant = maintenantCabinet()) {
     return doc.jour === dateDuJour(maintenant) ? doc.fait : {};
 }
 
-export function progression(doc, moment, maintenant = new Date()) {
+export function progression(doc, moment, maintenant = maintenantCabinet()) {
     const taches = doc.modele.filter(t => t.moment === moment);
     const coches = cochesDuJour(doc, maintenant);
     return { faits: taches.filter(t => coches[t.id]).length, total: taches.length };
@@ -68,34 +72,37 @@ function lire() {
 }
 
 /** Coche ou décoche une tâche pour aujourd'hui. Renvoie le nouvel état (true = cochée). */
-export function basculerTache(id, qui = "", maintenant = new Date()) {
-    const doc = lire();
-    if (!doc.modele.some(t => t.id === id)) return null;
+export function basculerTache(id, qui = "", maintenant = maintenantCabinet()) {
+    const actuel = lire();
+    if (!actuel.modele.some(t => t.id === id)) return null;
     const jour = dateDuJour(maintenant);
-    if (doc.jour !== jour) {
-        doc.jour = jour;
-        doc.fait = {};
-    }
-    let coche;
-    if (doc.fait[id]) {
-        delete doc.fait[id];
-        coche = false;
-    } else {
-        doc.fait[id] = { qui: String(qui || "").trim().slice(0, 40), heure: heureCourte(maintenant) };
-        coche = true;
-    }
-    setDocument(CLE_CHECKLIST, doc);
+    // État voulu, décidé sur ce qu'affiche l'écran : rejouée sur la version
+    // d'un autre poste, la modification ne touche que cette tâche.
+    const coche = !cochesDuJour(actuel, maintenant)[id];
+    const coche_ = { qui: String(qui || "").trim().slice(0, 40), heure: heureCourte(maintenant) };
+    modifierDocument(CLE_CHECKLIST, valeur => {
+        const doc = normaliserChecklist(valeur);
+        if (doc.jour !== jour) {
+            doc.jour = jour;
+            doc.fait = {};
+        }
+        if (coche) doc.fait[id] = coche_;
+        else delete doc.fait[id];
+        return doc;
+    });
     return coche;
 }
 
 /** Remplace la liste des tâches (les coches des tâches supprimées disparaissent). */
 export function enregistrerModele(modele) {
-    const doc = lire();
     const propre = normaliserChecklist({ modele }).modele;
     const ids = new Set(propre.map(t => t.id));
-    const fait = {};
-    for (const [id, v] of Object.entries(doc.fait)) if (ids.has(id)) fait[id] = v;
-    setDocument(CLE_CHECKLIST, { modele: propre, jour: doc.jour, fait });
+    modifierDocument(CLE_CHECKLIST, valeur => {
+        const doc = normaliserChecklist(valeur);
+        const fait = {};
+        for (const [id, v] of Object.entries(doc.fait)) if (ids.has(id)) fait[id] = v;
+        return { modele: propre, jour: doc.jour, fait };
+    });
     return propre;
 }
 
@@ -122,7 +129,7 @@ function ecrireLocal(cle, valeur) {
 
 /* ---------------- Affichage du widget ---------------- */
 
-export function ongletActif(maintenant = new Date()) {
+export function ongletActif(maintenant = maintenantCabinet()) {
     const defaut = momentParDefaut(maintenant);
     if (ongletChoisi && ongletChoisi.pour === defaut && ongletChoisi.jour === dateDuJour(maintenant)) {
         return ongletChoisi.moment;
@@ -130,12 +137,12 @@ export function ongletActif(maintenant = new Date()) {
     return defaut;
 }
 
-export function choisirOnglet(moment, maintenant = new Date()) {
+export function choisirOnglet(moment, maintenant = maintenantCabinet()) {
     if (!MOMENTS.includes(moment)) return;
     ongletChoisi = { moment, pour: momentParDefaut(maintenant), jour: dateDuJour(maintenant) };
 }
 
-export function afficherChecklist(doc = document, maintenant = new Date()) {
+export function afficherChecklist(doc = document, maintenant = maintenantCabinet()) {
     const liste = doc.getElementById("checklist-liste");
     if (!liste) return;
     const donnees = lire();

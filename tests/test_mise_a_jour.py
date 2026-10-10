@@ -150,3 +150,36 @@ def test_route_etat(srv):  # noqa: F811
     assert "disponible" in data and "raison" in data
 
 
+
+
+@pytest.mark.parametrize("argv, attendu", [
+    ([], ["--sans-navigateur"]),
+    (["--port", "9000", "--local"], ["--port", "9000", "--local", "--sans-navigateur"]),
+    (["--importer", "C:\\ancienne", "--forcer", "--port", "9000"],
+     ["--port", "9000", "--sans-navigateur"]),
+    (["--importer=C:\\ancienne", "--sans-navigateur", "--base", "D:\\stock.db"],
+     ["--base", "D:\\stock.db", "--sans-navigateur"]),
+    (["--import", "X", "--forc", "--sans-pause"], ["--sans-pause", "--sans-navigateur"]),
+])
+def test_arguments_de_relance_sans_import(argv, attendu):
+    assert mise_a_jour.arguments_relance(argv) == attendu
+
+
+@pytest.mark.skipif(os.name == "nt", reason="relance par os.execve hors Windows")
+def test_relance_ne_rejoue_pas_l_import(monkeypatch):
+    appels = []
+    monkeypatch.setattr(mise_a_jour.os, "execve", lambda exe, args, env: appels.append((args, env)))
+    mise_a_jour.relancer(["--importer", "/ancienne-appli", "--forcer", "--port", "9000"])
+    (args, env), = appels
+    assert args[2:] == ["--port", "9000", "--sans-navigateur"]
+    assert args[1].endswith("serveur.py") and env[mise_a_jour.VARIABLE_REDEMARRAGE] == "1"
+
+
+def test_relance_sous_windows_ne_rejoue_pas_l_import(monkeypatch):
+    appels = []
+    monkeypatch.setattr(mise_a_jour.os, "name", "nt")
+    monkeypatch.setattr(mise_a_jour.subprocess, "CREATE_NEW_CONSOLE", 16, raising=False)
+    monkeypatch.setattr(mise_a_jour.subprocess, "Popen",
+                        lambda args, **options: appels.append(args))
+    mise_a_jour.relancer(["--importer=C:\\ancienne", "--forcer"])
+    assert appels[0][2:] == ["--sans-navigateur"]

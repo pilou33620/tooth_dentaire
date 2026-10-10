@@ -45,9 +45,18 @@ function norm(s) {
 /** Document des couleurs, complété si besoin. */
 export function normaliserCouleurs(doc) {
     const d = (doc && typeof doc === "object") ? doc : {};
+    // Une entrée invalide (null, texte...) est ignorée : elle ferait échouer
+    // l'affichage de tout le planning.
+    const objets = liste => (Array.isArray(liste) ? liste : [])
+        .filter(x => x && typeof x === "object" && !Array.isArray(x));
+    const texte = v => (v === null || v === undefined) ? "" : String(v);
+    const legende = objets(d.legende).map(l => ({ ...l, libelle: texte(l.libelle), couleur: texte(l.couleur) }));
     return {
-        legende: Array.isArray(d.legende) && d.legende.length > 0 ? d.legende : LEGENDE_DEFAUT.map(l => ({ ...l })),
-        regles: Array.isArray(d.regles) ? d.regles : []
+        legende: legende.length > 0 ? legende : LEGENDE_DEFAUT.map(l => ({ ...l })),
+        regles: objets(d.regles).map(r => ({
+            ...r, cible: texte(r.cible), nom: texte(r.nom), jour: texte(r.jour),
+            creneau: texte(r.creneau), couleur: texte(r.couleur)
+        }))
     };
 }
 
@@ -57,6 +66,11 @@ export function getCouleurs() {
 
 export function commencerEditionCouleurs() {
     brouillon = normaliserCouleurs(getDocument("planning_couleurs"));
+    return brouillon;
+}
+
+/** Couleurs en cours d'édition (null si la fenêtre n'est pas ouverte). */
+export function couleursEnEdition() {
     return brouillon;
 }
 

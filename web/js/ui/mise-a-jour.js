@@ -52,13 +52,19 @@ function afficherReglages(etat) {
                     `Dernière vérification : ${formaterDate(etat.verifie_le)}`];
     if (etat.disponible) {
         lignes.push(`Nouvelle version disponible (${etat.nombre} changement${etat.nombre > 1 ? "s" : ""}).`);
+        if (!installableIci(etat)) lignes.push("Elle s'installe depuis le poste qui fait tourner le serveur.");
     } else if (etat.raison) {
         lignes.push(etat.raison);
     } else if (etat.verifie_le) {
         lignes.push("L'outil est à jour.");
     }
     zone.textContent = lignes.join("\n");
-    $("maj-reglages-installer")?.classList.toggle("hidden", !etat.disponible);
+    $("maj-reglages-installer")?.classList.toggle("hidden", !(etat.disponible && installableIci(etat)));
+}
+
+/** La mise à jour ne s'installe que depuis le poste serveur (ancien serveur : partout). */
+function installableIci(etat) {
+    return etat.installable_ici !== false;
 }
 
 /** Décide quoi montrer à partir de l'état renvoyé par le serveur. */
@@ -78,9 +84,13 @@ export function traiterEtat(etat, maintenant = Date.now()) {
     }
     const ignoree = ignoreeJusqua.version === etat.version_distante && maintenant < ignoreeJusqua.quand;
     if (ignoree) return;
-    const n = etat.nombre || etat.nouveautes.length;
-    afficherBandeau(`Mise à jour disponible (${n} changement${n > 1 ? "s" : ""}).`,
-                    { installer: true, plusTard: true });
+    const n = etat.nombre || (Array.isArray(etat.nouveautes) ? etat.nouveautes.length : 0);
+    const texte = `Mise à jour disponible (${n} changement${n > 1 ? "s" : ""}).`;
+    if (installableIci(etat)) {
+        afficherBandeau(texte, { installer: true, plusTard: true });
+    } else {
+        afficherBandeau(`${texte} Elle s'installe depuis le poste qui fait tourner le serveur.`, { plusTard: true });
+    }
 }
 
 export async function rafraichirEtat() {

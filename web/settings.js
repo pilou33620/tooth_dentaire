@@ -25,7 +25,12 @@ function afficherMessage(titre, texte) {
 }
 
 /** Lance un export, en indiquant l'attente sur le bouton. */
+// Exports en cours : un double clic lançait deux générations et deux téléchargements
+const exportsEnCours = new Set();
+
 async function lancerExport(bouton, type, parametres, messageSucces) {
+    if (exportsEnCours.has(type)) return null;
+    exportsEnCours.add(type);
     const texteInitial = bouton ? bouton.textContent : "";
     if (bouton) {
         bouton.textContent = "Génération...";
@@ -43,6 +48,7 @@ async function lancerExport(bouton, type, parametres, messageSucces) {
         await afficherMessage("Erreur", e.message);
         return null;
     } finally {
+        exportsEnCours.delete(type);
         if (bouton) {
             bouton.textContent = texteInitial;
             bouton.disabled = false;
@@ -91,12 +97,21 @@ document.addEventListener("DOMContentLoaded", () => {
                 dbPathInput.readOnly = !base.modifiable;
                 btnSelectDb.disabled = !base.modifiable;
                 if (dbInfo) {
-                    dbInfo.textContent = base.modifiable
+                    const consigne = base.modifiable
                         ? "Saisir le chemin complet d'un fichier .db existant."
                         : "Le changement de base se fait sur le poste qui fait tourner le serveur.";
+                    // La base choisie (lecteur réseau...) était introuvable au démarrage
+                    dbInfo.textContent = base.base_configuree_absente
+                        ? `⚠️ La base choisie (${base.base_configuree_absente}) était introuvable au démarrage : `
+                          + "l'outil utilise la base par défaut ci-dessus. Vérifiez le lecteur, puis relancez le serveur. "
+                          + consigne
+                        : consigne;
                 }
             } catch (e) {
-                dbPathInput.value = e.message;
+                // Le message va dans la zone d'information, pas dans le champ :
+                // un clic sur « Utiliser » l'aurait envoyé comme chemin.
+                dbPathInput.value = "";
+                if (dbInfo) dbInfo.textContent = e.message;
             }
 
             afficherSauvegardes();
@@ -121,9 +136,11 @@ document.addEventListener("DOMContentLoaded", () => {
         btnSauvegarder.addEventListener("click", async () => {
             btnSauvegarder.disabled = true;
             try {
-                await window.api("POST", "/api/sauvegardes", {});
+                const res = await window.api("POST", "/api/sauvegardes", {});
                 await afficherSauvegardes();
-                await afficherMessage("Sauvegarde", "La base a été sauvegardée.");
+                await afficherMessage("Sauvegarde", res && res.deja_faite
+                    ? "Une sauvegarde a été faite il y a moins d'une minute : elle est conservée."
+                    : "La base a été sauvegardée.");
             } catch (e) {
                 await afficherMessage("Sauvegarde", e.message);
             } finally {

@@ -28,10 +28,40 @@ const RESIZABLE_BG_SELECTORS = [
     ".backsplash"
 ];
 
+/** Garde seulement les entrées { ... } d'un objet de positions. */
+function positionsValides(valeur) {
+    if (!valeur || typeof valeur !== "object" || Array.isArray(valeur)) return {};
+    const propres = {};
+    for (const [cle, pos] of Object.entries(valeur)) {
+        if (pos && typeof pos === "object" && !Array.isArray(pos)) propres[cle] = pos;
+    }
+    return propres;
+}
+
+/**
+ * Positions enregistrées sur ce poste. Une valeur illisible (stockage
+ * abîmé, ancienne version) est remplacée par une disposition vide au lieu
+ * d'empêcher toute l'interface de s'initialiser.
+ */
+export function lirePositions() {
+    let brut;
+    try {
+        brut = localStorage.getItem("ui-positions");
+    } catch (e) {
+        return {};
+    }
+    try {
+        const valeur = JSON.parse(brut || "{}");
+        if (valeur && typeof valeur === "object" && !Array.isArray(valeur)) return positionsValides(valeur);
+    } catch (e) { /* illisible : remis à zéro ci-dessous */ }
+    try { localStorage.setItem("ui-positions", "{}"); } catch (e) { /* stockage indisponible */ }
+    return {};
+}
+
 export function initCustomizationMode() {
     if (localStorage.getItem("ui-positions") === null) {
-        const importees = getDocument("positions_interface");
-        if (importees && typeof importees === "object" && Object.keys(importees).length > 0) {
+        const importees = positionsValides(getDocument("positions_interface"));
+        if (Object.keys(importees).length > 0) {
             localStorage.setItem("ui-positions", JSON.stringify(importees));
         }
     }
@@ -40,7 +70,7 @@ export function initCustomizationMode() {
     const oldPostItPos = localStorage.getItem("postit-pos");
     if (oldPostItPos) {
         try {
-            let positions = JSON.parse(localStorage.getItem("ui-positions") || "{}");
+            let positions = lirePositions();
             if (!positions["postit-wrapper"]) {
                 positions["postit-wrapper"] = JSON.parse(oldPostItPos);
                 localStorage.setItem("ui-positions", JSON.stringify(positions));
@@ -52,7 +82,7 @@ export function initCustomizationMode() {
     // La zone du bas n'est plus redimensionnable : on oublie sa hauteur enregistree,
     // c'est elle qui pouvait rendre la page plus haute que la fenetre.
     try {
-        const stored = JSON.parse(localStorage.getItem("ui-positions") || "{}");
+        const stored = lirePositions();
         if (stored.countertop) {
             delete stored.countertop;
             localStorage.setItem("ui-positions", JSON.stringify(stored));
@@ -267,7 +297,7 @@ export function initCustomizationMode() {
 }
 
 function saveElementPosition(el) {
-    let positions = JSON.parse(localStorage.getItem("ui-positions") || "{}");
+    let positions = lirePositions();
     const key = el.id || el.className.replace('draggable-item', '').replace('resizable-bg-item', '').trim().split(/\s+/).join('.');
 
     if (el.classList.contains('resizable-bg-item')) {
@@ -288,7 +318,7 @@ function saveElementPosition(el) {
 }
 
 function loadElementPositions() {
-    let positions = JSON.parse(localStorage.getItem("ui-positions") || "{}");
+    let positions = lirePositions();
 
     for (const selector of DRAGGABLE_ELEMENT_SELECTORS) {
         const els = document.querySelectorAll(selector);

@@ -247,6 +247,9 @@ def _mois(date_str):
 
 def stats_consommation(db, references):
     _exiger_openpyxl()
+    # Liste de textes attendue ; le reste est ignoré
+    references = [r for r in references if isinstance(r, str)] \
+        if isinstance(references, list) else []
     if not references:
         return {"status": "Erreur: Aucune référence sélectionnée."}
     choix = set(references)
@@ -312,7 +315,8 @@ def stats_consommation(db, references):
 
 def extraction_chirurgie(db, date_debut_str, date_fin_str):
     _exiger_openpyxl()
-    if not date_debut_str or not date_fin_str:
+    if not date_debut_str or not date_fin_str or not isinstance(date_debut_str, str) \
+            or not isinstance(date_fin_str, str):
         return {"status": "Erreur: Dates invalides."}
     try:
         debut = datetime.datetime.strptime(date_debut_str, "%Y-%m-%d").date()

@@ -14,7 +14,7 @@
    }
    ============================================================ */
 
-import { getDocument, setDocument } from '../core/api.js';
+import { getDocument, modifierDocument, maintenantServeur } from '../core/api.js';
 import { escapeHtml } from '../core/utils.js';
 
 export const CLE_MINUTEURS = "minuteurs";
@@ -25,14 +25,22 @@ export const MAX_PRESELECTIONS = 8;
 export const GARDE_APRES_FIN = 15 * 60 * 1000;
 const CLE_LOCAUX = "bj-minuteurs-locaux";   // ids lancés depuis ce poste
 const DUREE_SONNERIE = 60 * 1000;
+/** Onglet en arrière-plan : le navigateur ralentit les minuteries ; un
+ *  minuteur fini pendant que la page était ouverte sonne quand même. */
+const RETARD_MAX_SONNERIE = 10 * 60 * 1000;
 
 const etat = {
     sonnes: new Set(),       // ids déjà annoncés sur ce poste
     sonnerie: null,          // { id, fin, intervalle }
     audio: null,
     edition: false,
-    titreOrigine: null
+    titreOrigine: null,
+    ouverture: 0             // heure d'ouverture de la page
 };
+
+// Heure du serveur : la fin d'un minuteur est calculée par le poste qui le
+// lance ; tous les postes le voient se terminer au même moment.
+const maintenant_ = () => maintenantServeur();
 
 /* ---------------- Données ---------------- */
 
@@ -100,8 +108,17 @@ function lire() {
     return normaliserMinuteurs(getDocument(CLE_MINUTEURS));
 }
 
-function enregistrer(doc) {
-    return setDocument(CLE_MINUTEURS, doc);
+/**
+ * Modification décrite par une fonction : rejouée sur la version d'un autre
+ * poste si elle a changé entre-temps (deux minuteurs lancés en même temps
+ * sur deux postes sont tous les deux gardés).
+ */
+function modifier(fonction) {
+    return modifierDocument(CLE_MINUTEURS, valeur => {
+        const doc = normaliserMinuteurs(valeur);
+        fonction(doc);
+        return doc;
+    });
 }
 
 function lireLocaux() {
@@ -116,11 +133,10 @@ export function estLanceIci(id) {
     return lireLocaux().has(id);
 }
 
-export function lancerMinuteur(libelle, minutes, maintenant = Date.now()) {
+export function lancerMinuteur(libelle, minutes, maintenant = maintenant_()) {
     const duree = Number(minutes);
     if (!Number.isFinite(duree) || duree <= 0) return null;
     const min = borne(duree, 1 / 60, MAX_MINUTES);
-    const doc = lire();
     const m = {
         id: maintenant.toString(36) + Math.random().toString(36).slice(2, 6),
         libelle: String(libelle || "").trim().slice(0, 40) || "Minuteur",
@@ -128,9 +144,10 @@ export function lancerMinuteur(libelle, minutes, maintenant = Date.now()) {
         fin: maintenant + Math.round(min * 60000),
         minutes: min
     };
-    doc.actifs.push(m);
-    doc.actifs = doc.actifs.slice(-MAX_ACTIFS);
-    enregistrer(doc);
+    modifier(doc => {
+        doc.actifs.push({ ...m });
+        doc.actifs = doc.actifs.slice(-MAX_ACTIFS);
+    });
     const locaux = lireLocaux();
     locaux.add(m.id);
     ecrireLocaux(locaux);
@@ -138,43 +155,42 @@ export function lancerMinuteur(libelle, minutes, maintenant = Date.now()) {
 }
 
 export function arreterMinuteur(id) {
-    const doc = lire();
-    const avant = doc.actifs.length;
-    doc.actifs = doc.actifs.filter(m => m.id !== id);
-    if (doc.actifs.length === avant) return false;
-    enregistrer(doc);
+    if (!lire().actifs.some(m => m.id === id)) return false;
+    modifier(doc => { doc.actifs = doc.actifs.filter(m => m.id !== id); });
     if (etat.sonnerie && etat.sonnerie.id === id) couperSonnerie();
     return true;
 }
 
 /** Retire les minuteurs terminés depuis longtemps. Renvoie le nombre retiré. */
-export function nettoyer(maintenant = Date.now()) {
-    const doc = lire();
-    const gardes = doc.actifs.filter(m => maintenant - m.fin < GARDE_APRES_FIN);
-    const retires = doc.actifs.length - gardes.length;
-    if (retires > 0) {
-        doc.actifs = gardes;
-        enregistrer(doc);
-    }
+export function nettoyer(maintenant = maintenant_()) {
+    const garder = m => maintenant - m.fin < GARDE_APRES_FIN;
+    const actifs = lire().actifs;
+    const retires = actifs.length - actifs.filter(garder).length;
+    // Le filtre est rejoué sur la version à jour : un minuteur qui vient
+    // d'être lancé sur un autre poste n'est jamais effacé.
+    if (retires > 0) modifier(doc => { doc.actifs = doc.actifs.filter(garder); });
     return retires;
 }
 
 export function ajouterPreselection(libelle, minutes) {
-    const doc = lire();
     const p = normaliserMinuteurs({ preselections: [{ libelle, minutes }] }).preselections[0];
     if (!p) return false;
-    doc.preselections = doc.preselections.filter(x => x.libelle.toLowerCase() !== p.libelle.toLowerCase());
-    doc.preselections.push(p);
-    doc.preselections = doc.preselections.slice(-MAX_PRESELECTIONS);
-    enregistrer(doc);
+    modifier(doc => {
+        doc.preselections = doc.preselections.filter(x => x.libelle.toLowerCase() !== p.libelle.toLowerCase());
+        doc.preselections.push({ ...p });
+        doc.preselections = doc.preselections.slice(-MAX_PRESELECTIONS);
+    });
     return true;
 }
 
 export function supprimerPreselection(index) {
-    const doc = lire();
-    if (index < 0 || index >= doc.preselections.length) return false;
-    doc.preselections.splice(index, 1);
-    enregistrer(doc);
+    const visibles = lire().preselections;
+    if (index < 0 || index >= visibles.length) return false;
+    // Par libellé et non par position : la liste a pu changer sur un autre poste
+    const cible = visibles[index].libelle.toLowerCase();
+    modifier(doc => {
+        doc.preselections = doc.preselections.filter(x => x.libelle.toLowerCase() !== cible);
+    });
     return true;
 }
 
@@ -237,7 +253,7 @@ export function couperSonnerie() {
 
 /* ---------------- Affichage ---------------- */
 
-export function afficherMinuteurs(doc = document, maintenant = Date.now()) {
+export function afficherMinuteurs(doc = document, maintenant = maintenant_()) {
     const zone = doc.getElementById("minuteurs-actifs");
     if (!zone) return;
     const donnees = lire();
@@ -288,8 +304,13 @@ export function afficherMinuteurs(doc = document, maintenant = Date.now()) {
     for (const m of termines) {
         if (etat.sonnes.has(m.id)) continue;
         etat.sonnes.add(m.id);
-        // Pas de sonnerie pour un minuteur déjà fini depuis longtemps (page rechargée)
-        if (locaux.has(m.id) && maintenant - m.fin < DUREE_SONNERIE) sonner(m.id);
+        // Pas de sonnerie pour un minuteur déjà fini depuis longtemps (page
+        // rechargée) ; mais un minuteur fini pendant que la page était ouverte
+        // sonne même si l'onglet en arrière-plan l'a remarqué en retard.
+        const recent = maintenant - m.fin < DUREE_SONNERIE;
+        const finiPageOuverte = etat.ouverture && m.fin >= etat.ouverture
+            && maintenant - m.fin < RETARD_MAX_SONNERIE;
+        if (locaux.has(m.id) && (recent || finiPageOuverte)) sonner(m.id);
     }
 
     // Le titre de l'onglet signale un minuteur terminé
@@ -320,6 +341,7 @@ export function rafraichirMinuteurs(doc = document) {
 export function initMinuteurs(doc = document) {
     const racine = doc.getElementById("minuteurs");
     if (!racine) return;
+    etat.ouverture = maintenant_();
 
     const ouvrir = doc.getElementById("minuteurs-bouton");
     const panneau = doc.getElementById("minuteurs-panneau");
@@ -392,5 +414,7 @@ export function initMinuteurs(doc = document) {
 
     rafraichirMinuteurs(doc);
     setInterval(() => afficherMinuteurs(doc), 1000);
+    // Retour sur l'onglet : afficher (et sonner) tout de suite
+    doc.addEventListener?.("visibilitychange", () => { if (!doc.hidden) afficherMinuteurs(doc); });
     setInterval(() => { if (nettoyer() > 0) afficherMinuteurs(doc); }, 60000);
 }

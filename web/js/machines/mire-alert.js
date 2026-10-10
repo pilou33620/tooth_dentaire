@@ -5,7 +5,8 @@
    Les échéances sont en base (document "rappels_mire").
    ============================================================ */
 
-import { getDocument, setDocument, pret } from '../core/api.js';
+import { getDocument, modifierDocument, pret } from '../core/api.js';
+import { tempsRappel } from '../core/utils.js';
 
 export const MIRE_RADIOS = [
     { machine: "Radio Cabinet 1", cabinet: "Cabinet 1", label: "Cabinet 1", defaultDays: 30 },
@@ -53,13 +54,16 @@ export function parseDateInput(str) {
 }
 
 // "Ignorer pour l'instant" met en veille la popup automatique pendant la session
-let mireGlobalSnooze = false;
-let mireDismissed = false;
+// Machines dont la popup a été écartée (« Ignorer pour l'instant ») : elle ne
+// se rouvre pas pour elles, mais une NOUVELLE échéance la rouvre (poste qui
+// reste allumé des semaines).
+const mireEcartees = new Set();
 let currentMireMachine = "Radio Cabinet 1";
 
 export function setMireSnoozed(value) {
-    mireGlobalSnooze = value;
-    if (value) mireDismissed = true;
+    if (value) {
+        for (const m of machinesEnRetardMire()) mireEcartees.add(m);
+    }
 }
 
 // --- Stockage en base (document "rappels_mire") ---
@@ -70,8 +74,8 @@ export function getAllMireData() {
 
 export function getMireDataForMachine(machineName) {
     const all = getAllMireData();
-    if (all[machineName]) {
-        return all[machineName];
+    if (all[machineName] && typeof all[machineName] === "object") {
+        return { ...all[machineName], nextTime: tempsRappel(all[machineName].nextTime) };
     }
     return {
         nextTime: null,
@@ -81,14 +85,31 @@ export function getMireDataForMachine(machineName) {
 }
 
 export function saveMireDataForMachine(machineName, nextTime, intervalDays = null) {
-    const all = getAllMireData();
-    all[machineName] = {
-        ...(all[machineName] || {}),
-        nextTime: nextTime,
-        lastDone: Date.now(),
-        intervalDays: intervalDays || all[machineName]?.intervalDays || 30
-    };
-    setDocument("rappels_mire", all);
+    const lastDone = Date.now();
+    // Seule cette radio est modifiée : rejouée sur la version d'un autre
+    // poste, la validation ne fait pas disparaître la sienne.
+    modifierDocument("rappels_mire", valeur => {
+        const all = (valeur && typeof valeur === "object" && !Array.isArray(valeur)) ? valeur : {};
+        const existant = (all[machineName] && typeof all[machineName] === "object") ? all[machineName] : {};
+        all[machineName] = {
+            ...existant,
+            nextTime,
+            lastDone,
+            intervalDays: intervalDays || existant.intervalDays || 30
+        };
+        return all;
+    });
+}
+
+function machinesEnRetardMire() {
+    return MIRE_RADIOS.map(r => r.machine).filter(m => getMireStatus(m).isDue);
+}
+
+/** Date choisie déjà passée (avant aujourd'hui) : l'échéance resterait due. */
+export function dateRappelPassee(temps, maintenant = Date.now()) {
+    const debutDuJour = new Date(maintenant);
+    debutDuJour.setHours(0, 0, 0, 0);
+    return Boolean(temps) && temps < debutDuJour.getTime();
 }
 
 export function getMireStatus(machineName) {
@@ -289,9 +310,12 @@ export function checkMireAlert(force = false, targetMachine = null) {
     // 2. Mise à jour des fiches machines
     updateMireIconStatus();
 
-    // 3. Popup automatique si échéance échue et pas de mise en veille
-    if (overdueList.length > 0 && !mireDismissed && (force || !mireGlobalSnooze)) {
-        openMireDialog(overdueList[0].machine);
+    // 3. Popup automatique pour une échéance qui n'a pas déjà été écartée
+    const enRetard = new Set(overdueList.map(o => o.machine));
+    for (const m of [...mireEcartees]) if (!enRetard.has(m)) mireEcartees.delete(m);
+    const nouvelles = overdueList.filter(o => !mireEcartees.has(o.machine));
+    if (nouvelles.length > 0) {
+        openMireDialog(nouvelles[0].machine);
     }
 }
 
@@ -299,6 +323,8 @@ export function checkMireAlert(force = false, targetMachine = null) {
 export function navigateToCabinet(cabinetName) {
     const overlay = document.getElementById('mire-overlay');
     if (overlay) overlay.classList.add('hidden');
+    // On va voir la radio : la popup ne doit pas revenir par-dessus
+    setMireSnoozed(true);
 
     const btnMaint = document.getElementById('btn-maintenance-cabinet');
     if (btnMaint) btnMaint.click();
@@ -353,6 +379,10 @@ if (typeof document !== "undefined") {
             btnMireValidate.addEventListener('click', () => {
                 const customDateInput = document.getElementById('mire-custom-date');
                 const customTime = parseDateInput(customDateInput ? customDateInput.value : "");
+                if (dateRappelPassee(customTime)) {
+                    alert("La date du prochain contrôle est déjà passée : choisissez une date à venir.");
+                    return;
+                }
 
                 let nextTime;
                 let days = 30;
