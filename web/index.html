@@ -1967,6 +1967,22 @@
                 <section class="bj-section" id="signalement">
                     <h3 class="bj-section-titre">Signaler un bug ou proposer une idée</h3>
                     <button type="button" id="signalement-ouvrir" class="btn btn-blue">🐞 Signaler un bug / 💡 Proposer une idée</button>
+                    <div id="signalement-cle" class="hidden">
+                        <h4 class="bj-sous-titre">Clé GitHub <small>sur ce poste serveur uniquement</small></h4>
+                        <ol id="signalement-cle-guide" class="bj-aide signalement-guide">
+                            <li>Première fois : pour que les signalements arrivent sur GitHub, il faut une clé (à faire une seule fois).</li>
+                            <li><a id="signalement-cle-lien" class="btn btn-small" target="_blank" rel="noopener"
+                                   href="https://github.com/settings/personal-access-tokens/new?name=Outil%20cabinet%20-%20signalements&amp;description=Signalements%20de%20bug%20envoy%C3%A9s%20depuis%20l%27outil%20du%20cabinet&amp;target_name=pilou33620&amp;expires_in=365&amp;issues=write">Créer la clé sur GitHub ↗</a>
+                                et se connecter au compte GitHub de l'outil.</li>
+                            <li>« Repository access » : choisir <b>Only select repositories</b> puis <b>tooth_dentaire</b>.</li>
+                            <li>« Permissions » : <b>Issues</b> en <b>Read and write</b> (rien d'autre), puis <b>Generate token</b>.</li>
+                            <li>Copier la clé (elle commence par <code>github_pat_</code>) et la coller ci-dessous.</li>
+                        </ol>
+                        <div class="bj-ligne">
+                            <input type="password" id="signalement-cle-saisie" class="input" placeholder="github_pat_…" autocomplete="off" aria-label="Clé GitHub">
+                            <button type="button" id="signalement-cle-enregistrer" class="btn btn-small">Enregistrer</button>
+                        </div>
+                    </div>
                     <form id="signalement-form" class="hidden">
                         <div class="bj-champ">
                             <label for="signalement-type">C'est…</label>
@@ -1988,13 +2004,6 @@
                         </div>
                     </form>
                     <p id="signalement-etat" class="bj-aide"></p>
-                    <div id="signalement-cle" class="hidden">
-                        <h4 class="bj-sous-titre">Clé GitHub <small>sur ce poste serveur uniquement</small></h4>
-                        <div class="bj-ligne">
-                            <input type="password" id="signalement-cle-saisie" class="input" placeholder="github_pat_…" autocomplete="off" aria-label="Clé GitHub">
-                            <button type="button" id="signalement-cle-enregistrer" class="btn btn-small">Enregistrer</button>
-                        </div>
-                    </div>
                 </section>
 
                 <section class="bj-section">

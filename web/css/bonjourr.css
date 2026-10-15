@@ -2549,6 +2549,13 @@ body.customization-active .draggable-item {
     font: inherit;
 }
 
+.signalement-guide {
+    display: grid;
+    gap: 6px;
+    margin: 0 0 10px;
+    padding-left: 18px;
+}
+
 .signalement-avertissement {
     color: #b45309;
 }

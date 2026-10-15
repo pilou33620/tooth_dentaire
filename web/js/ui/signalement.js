@@ -12,6 +12,10 @@ import { api } from '../core/api.js';
 
 const $ = (id) => document.getElementById(id);
 
+// La clé se saisit sur le poste serveur ; tant qu'il n'y en a pas, le guide
+// de création est affiché (au premier signalement notamment).
+let etatCle = { cle_configuree: true, cle_modifiable: false };
+
 function afficherEtat(texte) {
     const zone = $("signalement-etat");
     if (zone) zone.textContent = texte;
@@ -26,12 +30,17 @@ function decrireEtat(etat) {
 
 async function rafraichir() {
     try {
-        const etat = await api("GET", "/api/signalements");
-        $("signalement-cle")?.classList.toggle("hidden", !etat.cle_modifiable);
-        afficherEtat(decrireEtat(etat));
+        etatCle = await api("GET", "/api/signalements");
+        afficherCle();
+        afficherEtat(decrireEtat(etatCle));
     } catch (e) {
         afficherEtat(e.message);
     }
+}
+
+function afficherCle() {
+    $("signalement-cle")?.classList.toggle("hidden", !etatCle.cle_modifiable);
+    $("signalement-cle-guide")?.classList.toggle("hidden", etatCle.cle_configuree);
 }
 
 function basculerFormulaire(ouvert) {
@@ -67,6 +76,8 @@ async function enregistrerCle() {
     try {
         const etat = await api("POST", "/api/signalements/cle", { cle: champ.value });
         champ.value = "";
+        etatCle = etat;
+        afficherCle();
         afficherEtat(etat.cle_configuree
             ? "✅ Clé GitHub enregistrée. " + decrireEtat(etat)
             : decrireEtat(etat));

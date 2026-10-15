@@ -16,6 +16,7 @@ const MARKUP = `
     </form>
     <p id="signalement-etat"></p>
     <div id="signalement-cle" class="hidden">
+        <ol id="signalement-cle-guide"></ol>
         <input id="signalement-cle-saisie">
         <button id="signalement-cle-enregistrer"></button>
     </div>
@@ -92,6 +93,7 @@ test('erreur du serveur : le formulaire reste ouvert avec le message', async () 
 test('poste serveur sans clé : la saisie de la clé est proposée et enregistrée', async () => {
     await charger({ status: 'ok', cle_configuree: false, en_attente: 2, cle_modifiable: true });
     expect(visible('signalement-cle')).toBe(true);
+    expect(visible('signalement-cle-guide')).toBe(true);
     expect($('signalement-etat').textContent).toContain('Clé GitHub non saisie');
     $('signalement-cle-saisie').value = 'github_pat_x';
     $('signalement-cle-enregistrer').click();
@@ -99,4 +101,7 @@ test('poste serveur sans clé : la saisie de la clé est proposée et enregistr�
     expect(requetes.at(-1).corps).toEqual({ cle: 'github_pat_x' });
     expect($('signalement-cle-saisie').value).toBe('');
     expect($('signalement-etat').textContent).toContain('Clé GitHub enregistrée');
+    // Clé en place : plus de guide, le champ reste pour la remplacer
+    expect(visible('signalement-cle-guide')).toBe(false);
+    expect(visible('signalement-cle')).toBe(true);
 });
