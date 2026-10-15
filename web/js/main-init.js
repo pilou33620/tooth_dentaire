@@ -7,7 +7,7 @@
 import { USERS } from './core/constants.js';
 import { initDB, loadDB } from './core/database.js';
 import { demarrer } from './core/api.js';
-import { openPlacard, filterPlacardTable, placardSort, refreshPlacardTable } from './features/placard.js';
+import { openPlacard, filterPlacardTable, placardSort, refreshPlacardTable, rechercherPartout } from './features/placard.js';
 import { openEditDialog, saveEditDialog } from './features/product-edit.js';
 import { openTransferDialog, saveTransferDialog } from './features/transfer.js';
 import { showAlertsDialog } from './ui/alerts-dialog.js';
@@ -258,9 +258,7 @@ Rechargez la page (F5) une fois le serveur relancé.`);
     function triggerSearch() {
         const val = mainSearchInput.value.trim();
         if (val) {
-            openPlacard("TOUS");
-            document.getElementById("filter-scannette").value = val;
-            filterPlacardTable();
+            rechercherPartout(val);
             mainSearchInput.value = "";
         }
     }

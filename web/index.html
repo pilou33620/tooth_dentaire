@@ -1523,28 +1523,15 @@
                     </div>
                 </div>
 
-                <!-- Choix du délai de rappel -->
-                <div style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px;">
-                    <label style="font-size: 0.85em; font-weight: bold; color: #475569;">Prochain rappel dans :</label>
-                    <select id="mire-rappel-select" class="combo" style="width: 100%; padding: 6px 10px;">
-                        <option value="1">1 jour</option>
-                        <option value="7">1 semaine</option>
-                        <option value="30" selected>1 mois</option>
-                        <option value="90">3 mois</option>
-                        <option value="180">6 mois</option>
-                        <option value="365">1 an</option>
-                    </select>
-                </div>
-
-                <!-- Ou date personnalisée -->
+                <!-- Date du prochain rappel (calendrier) -->
                 <div style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 14px;">
-                    <label style="font-size: 0.85em; font-weight: bold; color: #475569;">Ou choisir une date précise :</label>
-                    <input type="date" id="mire-custom-date" class="input" style="width: 100%; padding: 6px 10px;">
+                    <label for="mire-custom-date" style="font-size: 0.85em; font-weight: bold; color: #1e293b;">📅 Choisir le jour du prochain rappel :</label>
+                    <input type="date" id="mire-custom-date" class="input" style="width: 100%; padding: 7px 10px; font-size: 1em; font-weight: 600; border: 2px solid #3498db; border-radius: 6px;">
                 </div>
 
                 <div class="dialog-buttons centered" style="margin-top: 10px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;">
                     <button id="mire-validate-btn" class="btn btn-green" style="font-size: 0.9em; padding: 8px 14px;">✅ Valider & Reporter</button>
-                    <button id="mire-validate-all-btn" class="btn btn-blue" style="font-size: 0.9em; padding: 8px 14px;" title="Valider tous les cabinets en alerte avec ce délai">Tout valider</button>
+                    <button id="mire-validate-all-btn" class="btn btn-blue" style="font-size: 0.9em; padding: 8px 14px;" title="Reporter tous les cabinets en alerte à cette date">Tout valider</button>
                     <button id="mire-goto-cabinet-btn" class="btn" style="font-size: 0.9em; padding: 8px 14px; background: #64748b; color: white;" title="Ouvrir le cabinet dans la maintenance">🏢 Ouvrir Cabinet</button>
                     <button class="btn" data-close="mire-overlay" style="font-size: 0.9em; padding: 8px 14px;">Ignorer pour l'instant</button>
                 </div>
@@ -1593,22 +1580,10 @@
                     </div>
                 </div>
 
-                <!-- Choix libre de la date (Calendrier) -->
-                <div style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px;">
-                    <label style="font-size: 0.85em; font-weight: bold; color: #1e293b;">📅 Choisir la date du prochain rappel (échéance) :</label>
+                <!-- Date du prochain rappel (calendrier) -->
+                <div style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 14px;">
+                    <label for="fauteuil-custom-date" style="font-size: 0.85em; font-weight: bold; color: #1e293b;">📅 Choisir le jour du prochain rappel :</label>
                     <input type="date" id="fauteuil-custom-date" class="input" style="width: 100%; padding: 7px 10px; font-size: 1em; font-weight: 600; border: 2px solid #3498db; border-radius: 6px;">
-                </div>
-
-                <!-- Raccourcis / Délais rapides -->
-                <div style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px;">
-                    <label style="font-size: 0.85em; font-weight: bold; color: #475569;">Ou choisir un délai rapide :</label>
-                    <select id="fauteuil-rappel-select" class="combo" style="width: 100%; padding: 6px 10px;">
-                        <option value="30">Dans 1 mois</option>
-                        <option value="90">Dans 3 mois</option>
-                        <option value="180" selected>Dans 6 mois</option>
-                        <option value="365">Dans 1 an</option>
-                        <option value="730">Dans 2 ans</option>
-                    </select>
                 </div>
 
                 <!-- Note / Commentaire optionnel -->
@@ -1619,7 +1594,7 @@
 
                 <div class="dialog-buttons centered" style="margin-top: 10px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;">
                     <button id="fauteuil-validate-btn" class="btn btn-green" style="font-size: 0.9em; padding: 8px 14px;">✅ Valider & Enregistrer</button>
-                    <button id="fauteuil-validate-all-btn" class="btn btn-blue" style="font-size: 0.9em; padding: 8px 14px;" title="Appliquer cette même date/délai à tous les fauteuils">🔄 Tout appliquer</button>
+                    <button id="fauteuil-validate-all-btn" class="btn btn-blue" style="font-size: 0.9em; padding: 8px 14px;" title="Appliquer cette même date à tous les fauteuils">🔄 Tout appliquer</button>
                     <button id="fauteuil-goto-cabinet-btn" class="btn" style="font-size: 0.9em; padding: 8px 14px; background: #64748b; color: white;" title="Ouvrir le cabinet dans la vue Maintenance">🏢 Ouvrir Cabinet</button>
                     <button class="btn" data-close="fauteuil-overlay" style="font-size: 0.9em; padding: 8px 14px;">Ignorer pour l'instant</button>
                 </div>
@@ -1734,15 +1709,8 @@
                     ⚠️ RAPPEL ATTENTION DOSIMETRES
                 </p>
                 <div style="display: flex; flex-direction: column; gap: 10px; align-items: center;">
-                    <label>Rappeler dans :</label>
-                    <select id="dosi-rappel-select" class="combo">
-                        <option value="1">1 jour</option>
-                        <option value="7">1 semaine</option>
-                        <option value="30">1 mois</option>
-                        <option value="90">3 mois</option>
-                        <option value="180">6 mois</option>
-                        <option value="365">1 an</option>
-                    </select>
+                    <label for="dosi-custom-date">📅 Choisir le jour du prochain rappel :</label>
+                    <input type="date" id="dosi-custom-date" class="input" style="padding: 7px 10px; font-size: 1em; font-weight: 600; border: 2px solid #3498db; border-radius: 6px;">
                 </div>
                 <div class="dialog-buttons centered" style="margin-top: 20px;">
                     <button id="dosi-validate-btn" class="btn btn-green">Valider & Reporter</button>

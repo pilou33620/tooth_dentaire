@@ -8,6 +8,7 @@
 import { getDocument, setDocument } from '../core/api.js';
 import { escapeHtml } from '../core/utils.js';
 import { nomsDuPlanning } from '../planning/team-planning.js';
+import { ouvrirPopup } from '../machines/dosi-alert.js';
 
 /* Données en base (document "dosimetres") : aucun nom dans le code. */
 
@@ -408,12 +409,7 @@ export function initDosimetres() {
     // Bouton configurer le rappel (ouvre le dialogue d'alerte dosimètre existant)
     const alertConfigBtn = document.getElementById("dosi-config-alert-btn");
     if (alertConfigBtn) {
-        alertConfigBtn.addEventListener("click", () => {
-            const dosiOverlay = document.getElementById("dosi-overlay");
-            if (dosiOverlay) {
-                dosiOverlay.classList.remove("hidden");
-            }
-        });
+        alertConfigBtn.addEventListener("click", ouvrirPopup);
     }
 
     // Mettre à jour le badge au démarrage

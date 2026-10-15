@@ -33,7 +33,7 @@ const MARKUP = `
         <table><tbody id="dosi-table-body"></tbody></table>
     </div>
     <div id="dosi-overlay" class="hidden">
-        <select id="dosi-rappel-select"><option value="30">30</option></select>
+        <input type="date" id="dosi-custom-date">
         <button id="dosi-validate-btn"></button>
         <button data-close="dosi-overlay"></button>
     </div>
@@ -446,7 +446,10 @@ describe('alerte périodique dosimètres (dosi-alert.js)', () => {
     test('valider un rappel repousse l\'échéance, l\'envoie au serveur et masque le bouton', async () => {
         await chargerAlerte();
         await initialiser();
-        document.getElementById('dosi-rappel-select').value = '30';
+        const dans30j = new Date(Date.now() + 30 * JOUR);
+        const pad = n => String(n).padStart(2, '0');
+        document.getElementById('dosi-custom-date').value =
+            `${dans30j.getFullYear()}-${pad(dans30j.getMonth() + 1)}-${pad(dans30j.getDate())}`;
         document.getElementById('dosi-validate-btn').click();
         await microtaches();
 

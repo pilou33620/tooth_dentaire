@@ -6,6 +6,7 @@
    ============================================================ */
 
 import { getDocument, setDocument, pret } from '../core/api.js';
+import { formatDateInput, parseDateInput } from './mire-alert.js';
 
 function prochaineEcheance() {
     const doc = getDocument("rappel_dosimetres") || {};
@@ -24,6 +25,17 @@ let dosiPopupDejaOuverte = false;
 
 function setDosiSnoozed(value) {
     dosiSnoozed = value;
+}
+
+// Ouvre la popup, calendrier pré-rempli à l'échéance actuelle si elle est
+// future, sinon dans un mois.
+export function ouvrirPopup() {
+    const champ = document.getElementById('dosi-custom-date');
+    if (champ) {
+        const actuelle = prochaineEcheance();
+        champ.value = formatDateInput(actuelle && actuelle > Date.now() ? actuelle : Date.now() + 30 * 24 * 60 * 60 * 1000);
+    }
+    document.getElementById('dosi-overlay')?.classList.remove('hidden');
 }
 
 export function checkDosiAlert(force = false) {
@@ -49,8 +61,7 @@ export function checkDosiAlert(force = false) {
     // force=true (clic manuel) passe outre la mise en veille et le fait que la
     // popup ait deja ete presentee.
     if (force || (!dosiSnoozed && !dosiPopupDejaOuverte)) {
-        const overlay = document.getElementById('dosi-overlay');
-        if (overlay) overlay.classList.remove('hidden');
+        ouvrirPopup();
         dosiPopupDejaOuverte = true;
     }
 }
@@ -87,9 +98,9 @@ document.addEventListener("DOMContentLoaded", () => pret.then(() => {
     const btnDosiValidate = document.getElementById('dosi-validate-btn');
     if (btnDosiValidate) {
         btnDosiValidate.addEventListener('click', () => {
-            const select = document.getElementById('dosi-rappel-select');
-            const days = parseInt(select.value, 10) || 1;
-            const nextTime = Date.now() + days * 24 * 60 * 60 * 1000;
+            const nextTime = parseDateInput(document.getElementById('dosi-custom-date')?.value);
+            if (!nextTime) return;
+            const days = Math.max(1, Math.round((nextTime - Date.now()) / (24 * 60 * 60 * 1000)));
             setDocument("rappel_dosimetres", { nextTime });
             const overlay = document.getElementById('dosi-overlay');
             if (overlay) overlay.classList.add('hidden');
@@ -110,8 +121,7 @@ document.addEventListener("DOMContentLoaded", () => pret.then(() => {
     if (mainDosiBtn) {
         mainDosiBtn.addEventListener('click', () => {
             setDosiSnoozed(false);
-            const overlay = document.getElementById('dosi-overlay');
-            if (overlay) overlay.classList.remove('hidden');
+            ouvrirPopup();
         });
     }
 
@@ -128,3 +138,4 @@ document.addEventListener("DOMContentLoaded", () => pret.then(() => {
 
 // Export to window for global access
 window.checkDosiAlert = checkDosiAlert;
+window.ouvrirPopupDosi = ouvrirPopup;

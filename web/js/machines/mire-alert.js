@@ -201,14 +201,17 @@ function refreshMireDialogUI() {
         });
     }
 
-    // Choix du rappel et date pré-calculée
-    const rappelSelect = document.getElementById('mire-rappel-select');
+    // Calendrier pré-rempli avec la périodicité habituelle de l'appareil
     const customDateInput = document.getElementById('mire-custom-date');
-    if (rappelSelect && customDateInput) {
-        const days = parseInt(rappelSelect.value, 10) || cfg.defaultDays || 30;
-        const targetTime = Date.now() + days * 24 * 60 * 60 * 1000;
-        customDateInput.value = formatDateInput(targetTime);
+    if (customDateInput) {
+        const days = status.intervalDays || cfg.defaultDays || 30;
+        customDateInput.value = formatDateInput(Date.now() + days * 24 * 60 * 60 * 1000);
     }
+}
+
+// Jour choisi dans le calendrier (null si vide ou invalide)
+function dateChoisie() {
+    return parseDateInput(document.getElementById('mire-custom-date')?.value || "");
 }
 
 // Ouvrir la boîte de dialogue pour un cabinet / machine
@@ -334,36 +337,13 @@ if (typeof document !== "undefined") {
             });
         }
 
-        // Changement de délai prédéfini -> met à jour la date personnalisée
-        const select = document.getElementById('mire-rappel-select');
-        if (select) {
-            select.addEventListener('change', () => {
-                const days = parseInt(select.value, 10) || 30;
-                const targetTime = Date.now() + days * 24 * 60 * 60 * 1000;
-                const customDateInput = document.getElementById('mire-custom-date');
-                if (customDateInput) {
-                    customDateInput.value = formatDateInput(targetTime);
-                }
-            });
-        }
-
         // Validation pour le cabinet en cours
         const btnMireValidate = document.getElementById('mire-validate-btn');
         if (btnMireValidate) {
             btnMireValidate.addEventListener('click', () => {
-                const customDateInput = document.getElementById('mire-custom-date');
-                const customTime = parseDateInput(customDateInput ? customDateInput.value : "");
-
-                let nextTime;
-                let days = 30;
-                if (customTime) {
-                    nextTime = customTime;
-                    days = Math.max(1, Math.round((nextTime - Date.now()) / (24 * 60 * 60 * 1000)));
-                } else {
-                    const sel = document.getElementById('mire-rappel-select');
-                    days = parseInt(sel?.value, 10) || 30;
-                    nextTime = Date.now() + days * 24 * 60 * 60 * 1000;
-                }
+                const nextTime = dateChoisie();
+                if (!nextTime) return;
+                const days = Math.max(1, Math.round((nextTime - Date.now()) / (24 * 60 * 60 * 1000)));
 
                 saveMireDataForMachine(currentMireMachine, nextTime, days);
 
@@ -380,9 +360,9 @@ if (typeof document !== "undefined") {
         const btnMireValidateAll = document.getElementById('mire-validate-all-btn');
         if (btnMireValidateAll) {
             btnMireValidateAll.addEventListener('click', () => {
-                const sel = document.getElementById('mire-rappel-select');
-                const days = parseInt(sel?.value, 10) || 30;
-                const nextTime = Date.now() + days * 24 * 60 * 60 * 1000;
+                const nextTime = dateChoisie();
+                if (!nextTime) return;
+                const days = Math.max(1, Math.round((nextTime - Date.now()) / (24 * 60 * 60 * 1000)));
 
                 MIRE_RADIOS.forEach(r => {
                     const st = getMireStatus(r.machine);

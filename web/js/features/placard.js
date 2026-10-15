@@ -348,6 +348,27 @@ export function filterPlacardTable() {
     }
 }
 
+/**
+ * Recherche de l'accueil : ouvre tous les espaces et range le texte dans la
+ * bonne colonne. Un code scanné va dans « Réf. Scan », un nom tapé à la main
+ * va dans « Nom » (un code tapé à la main dans « Référence »).
+ */
+export function rechercherPartout(texte) {
+    openPlacard("TOUS");
+    const t = texte.toLowerCase();
+    const stock = getStock("TOUS");
+    const contient = k => stock.some(s => String(s[k] ?? "").toLowerCase().includes(t));
+    const champ = contient("ref_scannette") ? "filter-scannette"
+        : contient("nom") ? "filter-nom"
+        : contient("reference") ? "filter-ref"
+        : "filter-nom";
+    const input = document.getElementById(champ);
+    input.value = texte;
+    filterPlacardTable();
+    // Si l'on tape un nom, la saisie continue directement dans le filtre
+    if (champ === "filter-nom") input.focus();
+}
+
 // Export to window for global access
 window.openPlacard = openPlacard;
 window.refreshPlacardTable = refreshPlacardTable;

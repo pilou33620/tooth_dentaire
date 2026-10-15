@@ -215,12 +215,11 @@ function refreshFauteuilDialogUI() {
 
     // Champ date personnalisée : si déjà une date future, on l'affiche, sinon date par défaut
     const customDateInput = document.getElementById('fauteuil-custom-date');
-    const rappelSelect = document.getElementById('fauteuil-rappel-select');
     if (customDateInput) {
         if (status.nextTime) {
             customDateInput.value = formatDateInput(status.nextTime);
         } else {
-            const days = parseInt(rappelSelect?.value, 10) || cfg.defaultDays || 180;
+            const days = cfg.defaultDays || 180;
             const targetTime = Date.now() + days * 24 * 60 * 60 * 1000;
             customDateInput.value = formatDateInput(targetTime);
         }
@@ -355,19 +354,6 @@ if (typeof document !== "undefined") {
             });
         }
 
-        // Changement de délai prédéfini -> préremplit immédiatement la date personnalisée
-        const select = document.getElementById('fauteuil-rappel-select');
-        if (select) {
-            select.addEventListener('change', () => {
-                const days = parseInt(select.value, 10) || 180;
-                const targetTime = Date.now() + days * 24 * 60 * 60 * 1000;
-                const customDateInput = document.getElementById('fauteuil-custom-date');
-                if (customDateInput) {
-                    customDateInput.value = formatDateInput(targetTime);
-                }
-            });
-        }
-
         // Validation pour le fauteuil en cours
         const btnValidate = document.getElementById('fauteuil-validate-btn');
         if (btnValidate) {
@@ -377,16 +363,9 @@ if (typeof document !== "undefined") {
                 const noteInput = document.getElementById('fauteuil-maint-note');
                 const note = noteInput ? noteInput.value.trim() : "";
 
-                let nextTime;
-                let days = 180;
-                if (customTime) {
-                    nextTime = customTime;
-                    days = Math.max(1, Math.round((nextTime - Date.now()) / (24 * 60 * 60 * 1000)));
-                } else {
-                    const sel = document.getElementById('fauteuil-rappel-select');
-                    days = parseInt(sel?.value, 10) || 180;
-                    nextTime = Date.now() + days * 24 * 60 * 60 * 1000;
-                }
+                if (!customTime) return;
+                const nextTime = customTime;
+                const days = Math.max(1, Math.round((nextTime - Date.now()) / (24 * 60 * 60 * 1000)));
 
                 saveFauteuilDataForMachine(currentFauteuilMachine, nextTime, days, note);
 
@@ -408,16 +387,9 @@ if (typeof document !== "undefined") {
                 const noteInput = document.getElementById('fauteuil-maint-note');
                 const note = noteInput ? noteInput.value.trim() : "";
 
-                let nextTime;
-                let days = 180;
-                if (customTime) {
-                    nextTime = customTime;
-                    days = Math.max(1, Math.round((nextTime - Date.now()) / (24 * 60 * 60 * 1000)));
-                } else {
-                    const sel = document.getElementById('fauteuil-rappel-select');
-                    days = parseInt(sel?.value, 10) || 180;
-                    nextTime = Date.now() + days * 24 * 60 * 60 * 1000;
-                }
+                if (!customTime) return;
+                const nextTime = customTime;
+                const days = Math.max(1, Math.round((nextTime - Date.now()) / (24 * 60 * 60 * 1000)));
 
                 FAUTEUILS.forEach(f => {
                     saveFauteuilDataForMachine(f.machine, nextTime, days, note);

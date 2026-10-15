@@ -4,7 +4,7 @@
  */
 
 import { jest } from '@jest/globals';
-import { openPlacard, refreshPlacardTable, filterPlacardTable } from '../js/features/placard.js';
+import { openPlacard, refreshPlacardTable, filterPlacardTable, rechercherPartout } from '../js/features/placard.js';
 import { setDbCache, loadDB } from '../js/core/database.js';
 import { installerServeurFactice, attendreEcritures, appelsVers } from './helpers/serveur-factice.js';
 
@@ -431,6 +431,47 @@ describe('filtres', () => {
         document.getElementById('filter-ref').value = 'zzz';
         filterPlacardTable();
         expect(visibles()).toHaveLength(1);
+    });
+});
+
+describe('recherche de l\'accueil', () => {
+
+    beforeEach(() => {
+        preparer([
+            ligne({ reference: 'REF1' }),
+            ligne({ reference: 'REF2' })
+        ], [
+            { reference: 'REF1', nom: 'Gant nitrile', groupe: 'Protection', ref_scannette: '3401111' },
+            { reference: 'REF2', nom: 'Compresse', groupe: 'Soin', ref_scannette: '3402222' }
+        ]);
+    });
+
+    const valeurs = () => ['filter-ref', 'filter-scannette', 'filter-nom']
+        .map(id => document.getElementById(id).value);
+
+    test('un nom tapé va dans la colonne Nom', () => {
+        rechercherPartout('compresse');
+        expect(valeurs()).toEqual(['', '', 'compresse']);
+        expect(visibles()).toHaveLength(1);
+        expect(document.activeElement.id).toBe('filter-nom');
+    });
+
+    test('un code scanné va dans la colonne Réf. Scan', () => {
+        rechercherPartout('3401111');
+        expect(valeurs()).toEqual(['', '3401111', '']);
+        expect(visibles()).toHaveLength(1);
+    });
+
+    test('une référence tapée va dans la colonne Référence', () => {
+        rechercherPartout('REF2');
+        expect(valeurs()).toEqual(['REF2', '', '']);
+        expect(visibles()).toHaveLength(1);
+    });
+
+    test('un texte inconnu va dans la colonne Nom', () => {
+        rechercherPartout('xyz');
+        expect(valeurs()).toEqual(['', '', 'xyz']);
+        expect(visibles()).toHaveLength(0);
     });
 });
 
