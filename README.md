@@ -101,6 +101,22 @@ si `requirements.txt` a changé, puis redémarre ; les pages se rechargent seule
 Mises à jour) si le dossier n'est pas un clone git, s'il est sur une autre
 branche ou si des fichiers de l'outil ont été modifiés sur le poste.
 
+## Signaler un bug / proposer une idée
+
+Réglages > « Signaler un bug ou proposer une idée » : le serveur en fait un
+ticket (issue) GitHub du dépôt (`python/signalements.py`), étiqueté `bug` ou
+`enhancement`, avec la version de l'outil. **Le dépôt est public** : le
+formulaire rappelle de n'y mettre aucun nom de patient. Sans internet ou sans
+clé, le signalement est gardé (`donnees/signalements_en_attente.json`) et
+renvoyé toutes les 30 minutes.
+
+Clé à saisir une fois, dans les Réglages **du poste qui fait tourner le serveur**
+(elle est enregistrée dans `donnees/config.json` et jamais renvoyée aux postes) :
+GitHub > Settings > Developer settings > Personal access tokens > Fine-grained
+tokens > *Generate new token* ; *Repository access* : seulement `tooth_dentaire` ;
+*Permissions* : **Issues : Read and write** (rien d'autre). Une clé expire (un an
+au plus) : en saisir une nouvelle à ce moment-là.
+
 ## Interface
 
 L'accueil s'inspire de l'extension [Bonjourr](https://bonjourr.fr) : fond plein écran

@@ -29,6 +29,7 @@ import { initScreensaver } from './ui/screensaver.js';
 import { initBonjourr } from './ui/bonjourr.js';
 import { initMeteo } from './ui/meteo.js';
 import { initMiseAJour } from './ui/mise-a-jour.js';
+import { initSignalement } from './ui/signalement.js';
 import { initNotes, afficherNotes } from './features/notes.js';
 import { initChecklist, rafraichirChecklist } from './features/checklist.js';
 import { initMinuteurs, rafraichirMinuteurs } from './features/minuteurs.js';
@@ -403,6 +404,7 @@ Rechargez la page (F5) une fois le serveur relancé.`);
 
     // --- Mises à jour de l'outil (GitHub, vérifiées par le serveur) ---
     initMiseAJour();
+    initSignalement();
 
     // --- Accueil : notes, checklist du jour, minuteurs ---
     initNotes();

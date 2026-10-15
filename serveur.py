@@ -70,6 +70,7 @@ import exports                                # noqa: E402
 import meteo                                  # noqa: E402
 import mise_a_jour                            # noqa: E402
 import sauvegarde                             # noqa: E402
+import signalements                           # noqa: E402
 
 # Origines acceptees pour les requetes qui modifient les donnees (CSRF) :
 # localhost et les adresses des reseaux prives (postes du cabinet).
@@ -95,6 +96,15 @@ def enregistrer_config(config):
     os.makedirs(os.path.dirname(FICHIER_CONFIG), exist_ok=True)
     with open(FICHIER_CONFIG, "w", encoding="utf-8") as f:
         json.dump(config, f, indent=2, ensure_ascii=False)
+
+
+def jeton_github():
+    """Clé GitHub des signalements (Réglages du poste serveur), ou ""."""
+    return str(charger_config().get("github_token") or "")
+
+
+def dossier_signalements():
+    return os.path.dirname(FICHIER_CONFIG)
 
 
 def chemin_base_configure():
@@ -280,7 +290,7 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
             self._json(resultat)
         except base.ErreurConflit as exc:
             self._json({"status": "error", "conflit": True, "message": str(exc)}, 409)
-        except base.ErreurDonnees as exc:
+        except (base.ErreurDonnees, signalements.SignalementInvalide) as exc:
             self._json({"status": "error", "message": str(exc)}, 400)
         except (exports.ExportIndisponible, meteo.MeteoIndisponible) as exc:
             self._json({"status": "error", "message": str(exc)}, 503)
@@ -324,6 +334,8 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
             })
         if route == "/api/sauvegardes":
             return self._executer(self._sauvegardes)
+        if route == "/api/signalements":
+            return self._executer(self._etat_signalements)
         self._json({"status": "error", "message": "Route inconnue."}, 404)
 
     def do_HEAD(self):
@@ -346,6 +358,9 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
             "/api/base": self._changer_base,
             "/api/sauvegardes": lambda d: {"sauvegarde": self._sans_chemin(sauvegarde.sauvegarder())},
             "/api/mise-a-jour/verifier": lambda d: mise_a_jour.verifier(),
+            "/api/signalements": lambda d: signalements.signaler(
+                d, dossier_signalements(), jeton_github(), self._version_complete()),
+            "/api/signalements/cle": self._enregistrer_cle_github,
             "/api/mise-a-jour/installer": self._installer_mise_a_jour,
             "/api/export/stock": lambda d: self._export(exports.export_stock(base.charger_base())),
             "/api/export/liste-courses": lambda d: self._export(
@@ -391,6 +406,30 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
             ["http://%s:%d/" % (get_local_ip(), port)]
         return {"version": VERSION, "adresses_reseau": adresses,
                 "commit": mise_a_jour.etat()["version_locale"]}
+
+    @staticmethod
+    def _version_complete():
+        commit = mise_a_jour.etat()["version_locale"]
+        return "%s (%s)" % (VERSION, commit) if commit else VERSION
+
+    def _etat_signalements(self):
+        jeton = jeton_github()
+        return {"cle_configuree": bool(jeton),
+                "en_attente": signalements.envoyer_en_attente(dossier_signalements(), jeton),
+                "cle_modifiable": self._client_local()}
+
+    def _enregistrer_cle_github(self, data):
+        if not self._client_local():
+            raise base.ErreurDonnees(
+                "La clé GitHub ne se saisit que sur le poste qui fait tourner le serveur.")
+        cle = str((data or {}).get("cle") or "").strip()
+        config = charger_config()
+        if cle:
+            config["github_token"] = cle
+        else:
+            config.pop("github_token", None)
+        enregistrer_config(config)
+        return self._etat_signalements()
 
     @staticmethod
     def _sans_chemin(copie):
@@ -497,6 +536,7 @@ def start_server(host, port, navigateur=True):
         ouvrir_navigateur(url)
     mise_a_jour.demarrer_verifications()
     sauvegarde.demarrer()
+    signalements.demarrer_renvois(dossier_signalements(), jeton_github)
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

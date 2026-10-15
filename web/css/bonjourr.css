@@ -2538,6 +2538,21 @@ body.customization-active .draggable-item {
     white-space: pre-line;
 }
 
+#signalement-form {
+    display: grid;
+    gap: 10px;
+}
+
+.signalement-texte {
+    width: 100%;
+    resize: vertical;
+    font: inherit;
+}
+
+.signalement-avertissement {
+    color: #b45309;
+}
+
 /* Fiche produit : barre de boutons collée en bas, sur le fond de la fenêtre */
 .bj .dialog-edit .dialog-buttons {
     bottom: -18px;

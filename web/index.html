@@ -1964,8 +1964,41 @@
                 </section>
 
                 <!-- ---------- Cabinet ---------- -->
+                <section class="bj-section" id="signalement">
+                    <h3 class="bj-section-titre">Signaler un bug ou proposer une idée</h3>
+                    <button type="button" id="signalement-ouvrir" class="btn btn-blue">🐞 Signaler un bug / 💡 Proposer une idée</button>
+                    <form id="signalement-form" class="hidden">
+                        <div class="bj-champ">
+                            <label for="signalement-type">C'est…</label>
+                            <select id="signalement-type" class="input">
+                                <option value="bug">🐞 Un bug (quelque chose ne marche pas)</option>
+                                <option value="idee">💡 Une idée / une fonction à ajouter</option>
+                            </select>
+                        </div>
+                        <label for="signalement-description" class="bj-aide">Que se passe-t-il ? (où, ce que vous avez fait, ce que vous attendiez)</label>
+                        <textarea id="signalement-description" class="input signalement-texte" rows="5" maxlength="5000" required></textarea>
+                        <div class="bj-champ">
+                            <label for="signalement-auteur">Prénom <small>(facultatif)</small></label>
+                            <input type="text" id="signalement-auteur" class="input" maxlength="40">
+                        </div>
+                        <p class="bj-aide signalement-avertissement">⚠️ Le signalement est public sur GitHub : aucun nom de patient ni information médicale.</p>
+                        <div class="bj-ligne bj-ligne-boutons">
+                            <button type="submit" id="signalement-envoyer" class="btn btn-green">Envoyer</button>
+                            <button type="button" id="signalement-annuler" class="btn">Annuler</button>
+                        </div>
+                    </form>
+                    <p id="signalement-etat" class="bj-aide"></p>
+                    <div id="signalement-cle" class="hidden">
+                        <h4 class="bj-sous-titre">Clé GitHub <small>sur ce poste serveur uniquement</small></h4>
+                        <div class="bj-ligne">
+                            <input type="password" id="signalement-cle-saisie" class="input" placeholder="github_pat_…" autocomplete="off" aria-label="Clé GitHub">
+                            <button type="button" id="signalement-cle-enregistrer" class="btn btn-small">Enregistrer</button>
+                        </div>
+                    </div>
+                </section>
+
                 <section class="bj-section">
-                    <h3 class="bj-section-titre">Mises à jour <small>vérifiées toutes les 4 heures</small></h3>
+                    <h3 class="bj-section-titre">Mises à jour <small>au démarrage et toutes les 4 heures</small></h3>
                     <div id="maj-reglages-etat" class="bj-aide maj-reglages-etat">Chargement...</div>
                     <div class="bj-ligne">
                         <button type="button" id="maj-reglages-verifier" class="btn">Vérifier maintenant</button>
