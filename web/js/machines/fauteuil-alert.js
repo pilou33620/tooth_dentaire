@@ -9,6 +9,7 @@
    ============================================================ */
 
 import { getDocument, setDocument, pret } from '../core/api.js';
+import { bornerCalendrier, jourChoisi } from './mire-alert.js';
 
 export const FAUTEUILS = [
     { machine: "Fauteuil Sinius", cabinet: "Cabinet 1", label: "Cabinet 1 (Sinius)", shortLabel: "Cab 1 - Sinius", defaultDays: 180 },
@@ -213,10 +214,11 @@ function refreshFauteuilDialogUI() {
         });
     }
 
-    // Champ date personnalisée : si déjà une date future, on l'affiche, sinon date par défaut
+    // Calendrier : l'échéance actuelle si elle est future, sinon date par défaut
     const customDateInput = document.getElementById('fauteuil-custom-date');
     if (customDateInput) {
-        if (status.nextTime) {
+        bornerCalendrier(customDateInput);
+        if (status.nextTime && !status.isDue) {
             customDateInput.value = formatDateInput(status.nextTime);
         } else {
             const days = cfg.defaultDays || 180;
@@ -358,8 +360,7 @@ if (typeof document !== "undefined") {
         const btnValidate = document.getElementById('fauteuil-validate-btn');
         if (btnValidate) {
             btnValidate.addEventListener('click', () => {
-                const customDateInput = document.getElementById('fauteuil-custom-date');
-                const customTime = parseDateInput(customDateInput ? customDateInput.value : "");
+                const customTime = jourChoisi(document.getElementById('fauteuil-custom-date'));
                 const noteInput = document.getElementById('fauteuil-maint-note');
                 const note = noteInput ? noteInput.value.trim() : "";
 
@@ -382,8 +383,7 @@ if (typeof document !== "undefined") {
         const btnValidateAll = document.getElementById('fauteuil-validate-all-btn');
         if (btnValidateAll) {
             btnValidateAll.addEventListener('click', () => {
-                const customDateInput = document.getElementById('fauteuil-custom-date');
-                const customTime = parseDateInput(customDateInput ? customDateInput.value : "");
+                const customTime = jourChoisi(document.getElementById('fauteuil-custom-date'));
                 const noteInput = document.getElementById('fauteuil-maint-note');
                 const note = noteInput ? noteInput.value.trim() : "";
 

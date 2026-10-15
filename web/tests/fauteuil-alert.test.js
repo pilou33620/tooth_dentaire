@@ -13,8 +13,10 @@ import {
     getFauteuilDataForMachine,
     saveFauteuilDataForMachine,
     getFauteuilStatus,
-    setFauteuilSnoozed
+    setFauteuilSnoozed,
+    openFauteuilDialog
 } from '../js/machines/fauteuil-alert.js';
+import { jourChoisi } from '../js/machines/mire-alert.js';
 import { chargerEtat } from '../js/core/api.js';
 import { installerServeurFactice } from './helpers/serveur-factice.js';
 
@@ -146,6 +148,39 @@ describe('Fauteuil Alert Module Tests', () => {
             const status = getFauteuilStatus("Fauteuil Sinius");
             expect(status.isDue).toBe(false);
             expect(status.dateStr).not.toBe("Non définie");
+        });
+    });
+
+    describe('Calendrier du prochain rappel', () => {
+        const JOUR = 24 * 60 * 60 * 1000;
+
+        test('une échéance passée n\'est pas reproposée dans le calendrier', () => {
+            document.body.innerHTML = '<div id="fauteuil-overlay" class="hidden"></div><input type="date" id="fauteuil-custom-date">';
+            saveFauteuilDataForMachine('Fauteuil Sinius', Date.now() - 10 * JOUR);
+            openFauteuilDialog('Fauteuil Sinius');
+            const champ = document.getElementById('fauteuil-custom-date');
+            expect(champ.value).toBe(formatDateInput(Date.now() + 180 * JOUR));
+            expect(champ.min).toBe(formatDateInput(Date.now() + JOUR));
+        });
+
+        test('une échéance future est reproposée telle quelle', () => {
+            document.body.innerHTML = '<div id="fauteuil-overlay" class="hidden"></div><input type="date" id="fauteuil-custom-date">';
+            const echeance = Date.now() + 40 * JOUR;
+            saveFauteuilDataForMachine('Fauteuil Sinius', echeance);
+            openFauteuilDialog('Fauteuil Sinius');
+            expect(document.getElementById('fauteuil-custom-date').value).toBe(formatDateInput(echeance));
+        });
+
+        test('jourChoisi refuse un calendrier vide, aujourd\'hui ou un jour passé', () => {
+            document.body.innerHTML = '<input type="date" id="d">';
+            const champ = document.getElementById('d');
+            expect(jourChoisi(champ)).toBeNull();
+            champ.value = formatDateInput(Date.now());
+            expect(jourChoisi(champ)).toBeNull();
+            champ.value = formatDateInput(Date.now() - 3 * JOUR);
+            expect(jourChoisi(champ)).toBeNull();
+            champ.value = formatDateInput(Date.now() + 3 * JOUR);
+            expect(jourChoisi(champ)).toBe(parseDateInput(champ.value));
         });
     });
 });

@@ -6,7 +6,7 @@
    ============================================================ */
 
 import { getDocument, setDocument, pret } from '../core/api.js';
-import { formatDateInput, parseDateInput } from './mire-alert.js';
+import { formatDateInput, bornerCalendrier, jourChoisi } from './mire-alert.js';
 
 function prochaineEcheance() {
     const doc = getDocument("rappel_dosimetres") || {};
@@ -34,6 +34,7 @@ export function ouvrirPopup() {
     if (champ) {
         const actuelle = prochaineEcheance();
         champ.value = formatDateInput(actuelle && actuelle > Date.now() ? actuelle : Date.now() + 30 * 24 * 60 * 60 * 1000);
+        bornerCalendrier(champ);
     }
     document.getElementById('dosi-overlay')?.classList.remove('hidden');
 }
@@ -98,7 +99,7 @@ document.addEventListener("DOMContentLoaded", () => pret.then(() => {
     const btnDosiValidate = document.getElementById('dosi-validate-btn');
     if (btnDosiValidate) {
         btnDosiValidate.addEventListener('click', () => {
-            const nextTime = parseDateInput(document.getElementById('dosi-custom-date')?.value);
+            const nextTime = jourChoisi(document.getElementById('dosi-custom-date'));
             if (!nextTime) return;
             const days = Math.max(1, Math.round((nextTime - Date.now()) / (24 * 60 * 60 * 1000)));
             setDocument("rappel_dosimetres", { nextTime });

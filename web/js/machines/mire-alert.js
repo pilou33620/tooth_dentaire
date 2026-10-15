@@ -206,12 +206,30 @@ function refreshMireDialogUI() {
     if (customDateInput) {
         const days = status.intervalDays || cfg.defaultDays || 30;
         customDateInput.value = formatDateInput(Date.now() + days * 24 * 60 * 60 * 1000);
+        bornerCalendrier(customDateInput);
     }
 }
 
-// Jour choisi dans le calendrier (null si vide ou invalide)
+// Calendrier de rappel : jours passés et aujourd'hui grisés (un rappel daté
+// d'aujourd'hui ou d'avant redeviendrait aussitôt une alerte).
+export function bornerCalendrier(champ) {
+    champ.required = true;
+    champ.min = formatDateInput(Date.now() + 24 * 60 * 60 * 1000);
+}
+
+// Jour choisi dans un calendrier de rappel ; null, avec le message du
+// navigateur, s'il est vide ou n'est pas dans le futur.
+export function jourChoisi(champ) {
+    if (!champ) return null;
+    bornerCalendrier(champ);
+    const t = parseDateInput(champ.value);
+    if (t && champ.value >= champ.min) return t;
+    champ.reportValidity?.();
+    return null;
+}
+
 function dateChoisie() {
-    return parseDateInput(document.getElementById('mire-custom-date')?.value || "");
+    return jourChoisi(document.getElementById('mire-custom-date'));
 }
 
 // Ouvrir la boîte de dialogue pour un cabinet / machine
