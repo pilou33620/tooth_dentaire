@@ -89,7 +89,10 @@ la base (`donnees/stock.db` par défaut), et le dossier `donnees/` est exclu de 
 
 ## Mises à jour
 
-Sur un poste installé par `Installer.bat` (ou `git clone`), le serveur vérifie toutes les 4 heures si
+Sur un poste installé par `Installer.bat` (ou `git clone`), **au démarrage**,
+avant de lancer le serveur et l'interface, l'outil installe d'office la nouvelle
+version de `main` s'il y en a une, puis se relance (sans internet, il démarre
+normalement après 20 s au plus). Ensuite, le serveur vérifie toutes les 4 heures si
 la branche `main` a changé sur GitHub (`python/mise_a_jour.py`). Si oui, un
 bandeau propose « Mettre à jour » sur l'accueil : le serveur avance la copie
 locale (`git merge --ff-only`, jamais d'écrasement), réinstalle les dépendances

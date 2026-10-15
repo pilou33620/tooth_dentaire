@@ -2,8 +2,10 @@
 """
 Mises à jour de l'outil depuis GitHub (dossier installé par « git clone »).
 
-- Toutes les 4 heures, le serveur fait un « git fetch » de la branche suivie
-  (main) et retient s'il existe des commits plus récents.
+- Au démarrage, avant que le serveur et l'interface ne se lancent, la mise à
+  jour éventuelle est installée d'office, puis l'outil se relance.
+- Ensuite, toutes les 4 heures, le serveur fait un « git fetch » de la branche
+  suivie (main) et retient s'il existe des commits plus récents.
 - Les postes demandent l'état (GET /api/mise-a-jour) et proposent la mise à
   jour ; si quelqu'un accepte, le serveur avance la copie locale
   (« git merge --ff-only », jamais de fusion ni d'écrasement), réinstalle les
@@ -27,6 +29,7 @@ DISTANT = "origin"
 INTERVALLE = 4 * 60 * 60        # s : une vérification toutes les 4 heures
 PREMIERE_VERIFICATION = 60      # s après le démarrage
 DELAI_GIT = 120                 # s
+DELAI_DEMARRAGE = 20            # s : sans internet, l'outil démarre quand même vite
 # git portable (MinGit) posé par installation/Installer.bat sur les postes
 # où git n'est pas installé ; sinon le git du PATH.
 GIT_PORTABLE = os.path.join(RACINE, ".mingit", "cmd", "git.exe")
@@ -101,7 +104,7 @@ def _maj_etat(**valeurs):
         _etat.update(valeurs)
 
 
-def verifier(dossier=None, maintenant=None):
+def verifier(dossier=None, maintenant=None, delai=DELAI_GIT):
     """
     Interroge GitHub et met à jour l'état. Ne lève jamais d'exception : sans
     internet, l'outil continue de tourner et réessaiera 4 heures plus tard.
@@ -118,7 +121,7 @@ def verifier(dossier=None, maintenant=None):
             raise MiseAJourImpossible(
                 "L'outil est sur la branche « %s » : seules les mises à jour de « %s » "
                 "sont proposées." % (branche, BRANCHE))
-        git("fetch", "--quiet", DISTANT, BRANCHE, dossier=dossier)
+        git("fetch", "--quiet", DISTANT, BRANCHE, dossier=dossier, delai=delai)
         distante = git("rev-parse", "%s/%s" % (DISTANT, BRANCHE), dossier=dossier)
         nombre = int(git("rev-list", "--count", "HEAD..%s/%s" % (DISTANT, BRANCHE),
                          dossier=dossier) or 0)
@@ -169,7 +172,7 @@ def demarrer_verifications(intervalle=INTERVALLE, premiere=PREMIERE_VERIFICATION
 # Installation
 # ------------------------------------------------------------------
 
-def installer(dossier=None, pip=None):
+def installer(dossier=None, pip=None, delai=DELAI_GIT):
     """
     Avance la copie locale jusqu'à origin/main puis demande le redémarrage.
     Refuse (MiseAJourImpossible) plutôt que de risquer d'écraser quoi que ce soit.
@@ -180,7 +183,7 @@ def installer(dossier=None, pip=None):
             raise MiseAJourImpossible("Une mise à jour est déjà en cours.")
         _etat["en_cours"] = True
     try:
-        verifier(dossier)
+        verifier(dossier, delai=delai)
         courant = etat()
         if not courant["disponible"]:
             raise MiseAJourImpossible(courant["raison"] or "L'outil est déjà à jour.")
@@ -206,6 +209,29 @@ def installer(dossier=None, pip=None):
         _maj_etat(en_cours=False)
 
 
+# Mise à jour installée au démarrage : le navigateur n'a pas encore été ouvert,
+# la relance devra donc l'ouvrir.
+_installee_au_demarrage = False
+
+
+def au_demarrage(dossier=None, pip=None):
+    """
+    Installe la mise à jour éventuelle avant le démarrage du serveur. Renvoie
+    True si une version a été installée (REDEMARRER est alors positionné) ;
+    sans internet, ou si rien n'est à faire, l'outil démarre normalement.
+    """
+    global _installee_au_demarrage
+    print("[*] Recherche de mises a jour...")
+    try:
+        resultat = installer(dossier, pip=pip, delai=DELAI_DEMARRAGE)
+    except MiseAJourImpossible as exc:
+        print("[*] Mise a jour : %s" % exc)
+        return False
+    print("[*] Mise a jour installee (%s -> %s)." % (resultat["avant"], resultat["apres"]))
+    _installee_au_demarrage = True
+    return True
+
+
 def installer_dependances(dossier):
     """pip install -r requirements.txt ; un échec n'empêche pas le redémarrage."""
     try:
@@ -224,13 +250,20 @@ def installer_dependances(dossier):
 VARIABLE_REDEMARRAGE = "TOOTH_DENTAIRE_REDEMARRAGE"
 
 
+def arguments_relance(argv):
+    if _installee_au_demarrage:
+        return list(argv)
+    return [a for a in argv if a != "--sans-navigateur"] + ["--sans-navigateur"]
+
+
 def relancer(argv):
     """
-    Lance le serveur mis à jour (mêmes options, sans rouvrir le navigateur).
+    Lance le serveur mis à jour (mêmes options ; le navigateur n'est rouvert
+    que si la mise à jour a eu lieu au démarrage, avant de l'avoir ouvert).
     Sous Windows, dans une nouvelle fenêtre : celle-ci se ferme ensuite.
     """
     script = os.path.join(RACINE, "serveur.py")
-    arguments = [a for a in argv if a != "--sans-navigateur"] + ["--sans-navigateur"]
+    arguments = arguments_relance(argv)
     env = dict(os.environ, **{VARIABLE_REDEMARRAGE: "1"})
     if os.name == "nt":
         subprocess.Popen([sys.executable, script] + arguments, cwd=RACINE, env=env,

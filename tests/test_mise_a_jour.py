@@ -150,3 +150,47 @@ def test_route_etat(srv):  # noqa: F811
     assert "disponible" in data and "raison" in data
 
 
+
+
+# --- Mise à jour au démarrage, avant le serveur ---
+
+def test_au_demarrage_installe_la_nouvelle_version(depots, monkeypatch):
+    monkeypatch.setattr(mise_a_jour, "_installee_au_demarrage", False)
+    publier(depots["dev"], "serveur.py", "v2\n", "Correctif")
+    assert mise_a_jour.au_demarrage(depots["poste"], pip=lambda d: None) is True
+    with open(os.path.join(depots["poste"], "serveur.py"), encoding="utf-8") as f:
+        assert f.read() == "v2\n"
+    assert mise_a_jour.REDEMARRER.is_set()
+    # Le navigateur n'a pas encore été ouvert : la relance l'ouvrira
+    assert mise_a_jour.arguments_relance(["--local"]) == ["--local"]
+
+
+def test_au_demarrage_rien_a_faire(depots, monkeypatch):
+    monkeypatch.setattr(mise_a_jour, "_installee_au_demarrage", False)
+    assert mise_a_jour.au_demarrage(depots["poste"], pip=lambda d: None) is False
+    assert not mise_a_jour.REDEMARRER.is_set()
+    # Mise à jour en cours de route : les pages ouvertes se rechargent seules
+    assert mise_a_jour.arguments_relance(["--local"]) == ["--local", "--sans-navigateur"]
+
+
+def test_au_demarrage_sans_internet_demarre_quand_meme(depots, monkeypatch):
+    monkeypatch.setattr(mise_a_jour, "_installee_au_demarrage", False)
+    run(depots["poste"], "remote", "set-url", "origin", os.path.join(depots["poste"], "introuvable"))
+    assert mise_a_jour.au_demarrage(depots["poste"], pip=lambda d: None) is False
+
+
+def test_serveur_ne_demarre_pas_avant_la_relance(monkeypatch):
+    import serveur
+    monkeypatch.delenv(mise_a_jour.VARIABLE_REDEMARRAGE, raising=False)
+    monkeypatch.setattr(mise_a_jour, "au_demarrage", lambda: True)
+    monkeypatch.setattr(serveur, "start_server", lambda *a: pytest.fail("serveur démarré"))
+    assert serveur.main(["--sans-navigateur"]) == 0
+
+
+def test_pas_de_recherche_juste_apres_la_relance(monkeypatch):
+    import serveur
+    monkeypatch.setenv(mise_a_jour.VARIABLE_REDEMARRAGE, "1")
+    monkeypatch.setattr(mise_a_jour, "au_demarrage", lambda: pytest.fail("recherche relancée"))
+    monkeypatch.setattr(serveur, "start_server", lambda *a: 0)
+    monkeypatch.setattr(serveur.base, "definir_chemin", lambda c: None)
+    assert serveur.main(["--sans-navigateur"]) == 0

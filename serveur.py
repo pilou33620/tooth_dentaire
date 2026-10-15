@@ -528,6 +528,11 @@ def main(argv=None):
                     help="ne pas attendre Entree a la fermeture (Windows)")
     args = ap.parse_args(argv)
 
+    # Mise à jour installée avant de démarrer quoi que ce soit ; lancer() relance
+    # alors l'outil à jour. Pas de nouvelle recherche juste après cette relance.
+    if not os.environ.get(mise_a_jour.VARIABLE_REDEMARRAGE) and mise_a_jour.au_demarrage():
+        return 0
+
     chemin = os.path.abspath(args.base) if args.base else chemin_base_configure()
 
     if args.importer:
