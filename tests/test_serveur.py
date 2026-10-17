@@ -78,6 +78,13 @@ def test_host_inconnu_refuse(srv):
     assert code == 403
 
 
+@pytest.mark.parametrize("hote,attendu", [
+    ("100.80.111.121:8150", 200), ("100.64.0.1", 200), ("100.128.0.1:8150", 403)])
+def test_host_tailscale(srv, hote, attendu):
+    code, _, _ = requete(srv, "GET", "/api/revision", entetes={"Host": hote})
+    assert code == attendu
+
+
 # ------------------------------------------------------------------
 # API
 # ------------------------------------------------------------------
@@ -188,7 +195,8 @@ def test_info_version(srv):
 # CSRF : origine des requetes qui modifient les donnees
 # ------------------------------------------------------------------
 
-@pytest.mark.parametrize("origine", ["https://attaquant.example", "http://evil.com:8150"])
+@pytest.mark.parametrize("origine", ["https://attaquant.example", "http://evil.com:8150",
+                                     "http://100.128.0.1:8150"])
 def test_origine_externe_refusee(srv, origine):
     code, _, _ = requete(srv, "POST", "/api/produit", produit(), {"Origin": origine})
     assert code == 403
@@ -197,7 +205,7 @@ def test_origine_externe_refusee(srv, origine):
 
 @pytest.mark.parametrize("origine", [
     "http://127.0.0.1:8150", "http://localhost:8150", "http://192.168.1.20:8150",
-    "http://10.0.0.5:8150", "http://172.16.3.4:8150"])
+    "http://10.0.0.5:8150", "http://172.16.3.4:8150", "http://100.80.111.121:8150"])
 def test_origine_du_reseau_local_acceptee(srv, origine):
     code, _, _ = requete(srv, "POST", "/api/produit", produit(), {"Origin": origine})
     assert code == 200

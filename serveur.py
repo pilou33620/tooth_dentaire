@@ -73,10 +73,13 @@ import sauvegarde                             # noqa: E402
 import signalements                           # noqa: E402
 
 # Origines acceptees pour les requetes qui modifient les donnees (CSRF) :
-# localhost et les adresses des reseaux prives (postes du cabinet).
+# localhost, les adresses des reseaux prives (postes du cabinet) et
+# Tailscale (100.64.0.0/10, acces distant via le tailnet).
 ORIGINES = re.compile(
     r"^https?://(localhost|127\.\d+\.\d+\.\d+|\[::1\]|10\.\d+\.\d+\.\d+|"
-    r"192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)(:\d+)?$")
+    r"192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|"
+    r"100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.\d+\.\d+)(:\d+)?$")
+TAILSCALE = ipaddress.ip_network("100.64.0.0/10")
 
 
 # ------------------------------------------------------------------
@@ -142,6 +145,13 @@ def adresse_locale(host, port):
     return "http://%s:%d/" % (host, port)
 
 
+def est_tailscale(hote):
+    try:
+        return ipaddress.ip_address(hote) in TAILSCALE
+    except ValueError:
+        return False
+
+
 def est_boucle_locale(adresse):
     try:
         return ipaddress.ip_address(adresse.split("%")[0]).is_loopback
@@ -190,7 +200,7 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
                 permis.add(socket.gethostname().lower())
             except OSError:
                 pass
-            if hote not in permis:
+            if hote not in permis and not est_tailscale(hote):
                 self.send_error(403, "Host non autorise")
                 return False
         return True
