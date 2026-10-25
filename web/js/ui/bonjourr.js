@@ -26,7 +26,8 @@ export const DEFAUTS = Object.freeze({
     salutation: true,
     nom: "",
     citation: true,
-    signe: "",                  // signe de l'horoscope du jour ("" = pas d'horoscope)
+    horoscope: true,            // bouton « Horoscope » à côté de la citation
+    signe: "belier",            // signe affiché en premier dans la bulle
     meteoFond: true,            // le fond « selon l'heure » suit aussi la météo
     meteoTexte: true,           // température et temps à côté de la date
     widgets: Object.freeze({
@@ -123,6 +124,7 @@ export function normaliserOptions(brut) {
         salutation: typeof o.salutation === "boolean" ? o.salutation : DEFAUTS.salutation,
         nom: typeof o.nom === "string" ? o.nom.trim().slice(0, 40) : DEFAUTS.nom,
         citation: typeof o.citation === "boolean" ? o.citation : DEFAUTS.citation,
+        horoscope: typeof o.horoscope === "boolean" ? o.horoscope : DEFAUTS.horoscope,
         signe: Object.hasOwn(SIGNES, o.signe) ? o.signe : DEFAUTS.signe,
         meteoFond: typeof o.meteoFond === "boolean" ? o.meteoFond : DEFAUTS.meteoFond,
         meteoTexte: typeof o.meteoTexte === "boolean" ? o.meteoTexte : DEFAUTS.meteoTexte,
@@ -251,10 +253,7 @@ export function afficherCitation(date = new Date(), decalage = 0, doc = document
 }
 
 export function afficherHoroscope(date = new Date(), signe = etat.options.signe, doc = document) {
-    const bloc = doc.getElementById("bj-horoscope");
-    if (!bloc) return;
-    bloc.classList.toggle("hidden", !signe);
-    if (!signe) return;
+    etat.signeHoroscope = signe;
     const titre = doc.getElementById("bj-horoscope-signe");
     const texte = doc.getElementById("bj-horoscope-texte");
     if (titre) titre.textContent = SIGNES[signe];
@@ -308,6 +307,8 @@ export function appliquerOptions(options, doc = document, stockage = globalThis.
     if (sal) sal.classList.toggle("hidden", !options.salutation);
     const citation = doc.getElementById("bj-citation");
     if (citation) citation.classList.toggle("hidden", !options.citation);
+    const horoscope = doc.getElementById("bj-horoscope");
+    if (horoscope) horoscope.classList.toggle("hidden", !options.horoscope);
 
     // Widgets
     for (const [nom, visible] of Object.entries(options.widgets)) {
@@ -359,6 +360,7 @@ function reduireImage(fichier, max = 1920, qualite = 0.82) {
 const etat = {
     options: normaliserOptions({}),
     decalageCitation: 0,
+    signeHoroscope: DEFAUTS.signe,
     minuterie: null
 };
 
@@ -386,6 +388,7 @@ function remplirReglages(doc = document) {
     coche("bj-opt-secondes", o.secondes);
     coche("bj-opt-salutation", o.salutation);
     coche("bj-opt-citation", o.citation);
+    coche("bj-opt-horoscope", o.horoscope);
     coche("bj-opt-meteo-fond", o.meteoFond);
     coche("bj-opt-meteo-texte", o.meteoTexte);
     doc.querySelectorAll("[data-bj-widget]").forEach(el => {
@@ -410,6 +413,7 @@ function brancherReglages(doc = document) {
     sur("bj-opt-secondes", "change", e => maj({ secondes: e.target.checked }));
     sur("bj-opt-salutation", "change", e => maj({ salutation: e.target.checked }));
     sur("bj-opt-citation", "change", e => maj({ citation: e.target.checked }));
+    sur("bj-opt-horoscope", "change", e => maj({ horoscope: e.target.checked }));
     sur("bj-opt-signe", "change", e => maj({ signe: e.target.value }));
     sur("bj-opt-meteo-fond", "change", e => maj({ meteoFond: e.target.checked }));
     sur("bj-opt-meteo-texte", "change", e => maj({ meteoTexte: e.target.checked }));
@@ -464,6 +468,16 @@ function brancherAccueil(doc = document) {
             boutonHoroscope.setAttribute("aria-expanded", String(ouvert));
         };
         boutonHoroscope.addEventListener("click", () => ouvrir(!horoscope.classList.contains("ouvert")));
+        // Flèches : passer d'un signe à l'autre, en boucle sur les douze
+        const signes = Object.keys(SIGNES);
+        const decaler = pas => {
+            const i = signes.indexOf(etat.signeHoroscope);
+            afficherHoroscope(new Date(), signes[(i + pas + signes.length) % signes.length], doc);
+        };
+        const prec = doc.getElementById("bj-horoscope-prec");
+        const suiv = doc.getElementById("bj-horoscope-suiv");
+        if (prec) prec.addEventListener("click", () => decaler(-1));
+        if (suiv) suiv.addEventListener("click", () => decaler(1));
         doc.addEventListener("click", e => {
             if (!horoscope.contains(e.target)) ouvrir(false);
         });
@@ -524,7 +538,7 @@ export function initBonjourr(doc = document) {
         if (maintenant.getDate() !== jour) {
             jour = maintenant.getDate();
             afficherCitation(maintenant, etat.decalageCitation, doc);
-            afficherHoroscope(maintenant, etat.options.signe, doc);
+            afficherHoroscope(maintenant, etat.signeHoroscope, doc);
         }
     }, 1000);
     doc.documentElement.classList.add("bj-pret");

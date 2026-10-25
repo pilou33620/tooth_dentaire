@@ -25,7 +25,7 @@ const MARKUP = `
     <p id="bj-date"></p>
     <h1 id="bj-salutation"></h1>
     <figure id="bj-citation"><blockquote id="bj-citation-texte"></blockquote><figcaption id="bj-citation-auteur"></figcaption></figure>
-    <div id="bj-horoscope" class="hidden"><button id="bj-horoscope-bouton" aria-expanded="false"></button><div><strong id="bj-horoscope-signe"></strong><p id="bj-horoscope-texte"></p></div></div>
+    <div id="bj-horoscope" class="hidden"><button id="bj-horoscope-bouton" aria-expanded="false"></button><div><button id="bj-horoscope-prec"></button><strong id="bj-horoscope-signe"></strong><button id="bj-horoscope-suiv"></button><p id="bj-horoscope-texte"></p></div></div>
     <div class="bj-widget" data-widget="planning"></div>
     <div class="bj-widget" data-widget="taches"></div>
     <div class="bj-widget" data-widget="ruptures"></div>
@@ -226,11 +226,14 @@ describe('citation du jour', () => {
 });
 
 describe('horoscope du jour', () => {
-    test('signe inconnu refusé, pas d\'horoscope par défaut', () => {
-        expect(DEFAUTS.signe).toBe('');
+    test('activé d\'office, signe inconnu ou vide ramené au Bélier', () => {
+        expect(normaliserOptions({}).horoscope).toBe(true);
+        expect(normaliserOptions({ horoscope: false }).horoscope).toBe(false);
+        expect(normaliserOptions({}).signe).toBe('belier');
         expect(normaliserOptions({ signe: 'lion' }).signe).toBe('lion');
-        expect(normaliserOptions({ signe: 'toString' }).signe).toBe('');
-        expect(normaliserOptions({ signe: '<img>' }).signe).toBe('');
+        expect(normaliserOptions({ signe: '' }).signe).toBe('belier');
+        expect(normaliserOptions({ signe: 'toString' }).signe).toBe('belier');
+        expect(normaliserOptions({ signe: '<img>' }).signe).toBe('belier');
     });
 
     test('le même toute la journée, change le lendemain et selon le signe', () => {
@@ -252,12 +255,13 @@ describe('horoscope du jour', () => {
         }
     });
 
-    test('affiché seulement quand un signe est choisi', () => {
+    test('bouton masqué seulement si l\'horoscope est désactivé, texte du signe affiché', () => {
         const bloc = document.getElementById('bj-horoscope');
-        afficherHoroscope(SAMEDI, '');
+        appliquerOptions(normaliserOptions({ horoscope: false }));
         expect(bloc.classList.contains('hidden')).toBe(true);
-        afficherHoroscope(SAMEDI, 'poissons');
+        appliquerOptions(normaliserOptions({}));
         expect(bloc.classList.contains('hidden')).toBe(false);
+        afficherHoroscope(SAMEDI, 'poissons');
         expect(document.getElementById('bj-horoscope-signe').textContent).toBe(SIGNES.poissons);
         expect(document.getElementById('bj-horoscope-texte').textContent).toBe(horoscopeDuJour(SAMEDI, 'poissons'));
     });
@@ -397,6 +401,20 @@ describe('initialisation', () => {
         const avant = document.getElementById('bj-citation-texte').textContent;
         document.getElementById('bj-citation').click();
         expect(document.getElementById('bj-citation-texte').textContent).not.toBe(avant);
+    });
+
+    test('les flèches passent d\'un signe à l\'autre, en boucle', () => {
+        localStorage.setItem(CLE_OPTIONS, JSON.stringify({ signe: 'poissons' }));
+        initBonjourr();
+        const titre = () => document.getElementById('bj-horoscope-signe').textContent;
+        expect(titre()).toBe(SIGNES.poissons);
+        document.getElementById('bj-horoscope-suiv').click();
+        expect(titre()).toBe(SIGNES.belier);
+        expect(document.getElementById('bj-horoscope-texte').textContent).toBe(horoscopeDuJour(new Date(), 'belier'));
+        document.getElementById('bj-horoscope-prec').click();
+        document.getElementById('bj-horoscope-prec').click();
+        expect(titre()).toBe(SIGNES.verseau);
+        expect(document.getElementById('bj-horoscope').classList.contains('ouvert')).toBe(false);
     });
 
     test('un clic sur le bouton horoscope épingle la bulle, un clic ailleurs la ferme', () => {

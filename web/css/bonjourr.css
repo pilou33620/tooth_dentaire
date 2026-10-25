@@ -1532,6 +1532,31 @@ body.bj {
     opacity: 1;
 }
 
+.bj-horoscope-tete {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.bj-horoscope-fleche {
+    width: 30px;
+    height: 30px;
+    border: none;
+    border-radius: 50%;
+    background: var(--bj-trait);
+    color: var(--bj-fenetre-texte);
+    font-size: 1.2rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.bj-horoscope-fleche:hover,
+.bj-horoscope-fleche:focus-visible {
+    background: var(--bj-accent);
+    color: #fff;
+}
+
 .bj-horoscope-bulle p {
     margin: 4px 0 0;
     line-height: 1.45;

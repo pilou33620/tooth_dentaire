@@ -269,7 +269,11 @@
                     <button type="button" id="bj-horoscope-bouton" class="bj-horoscope-bouton"
                             aria-expanded="false" aria-controls="bj-horoscope-bulle">🔮 Horoscope</button>
                     <div id="bj-horoscope-bulle" class="bj-horoscope-bulle" role="tooltip">
-                        <strong id="bj-horoscope-signe"></strong>
+                        <div class="bj-horoscope-tete">
+                            <button type="button" id="bj-horoscope-prec" class="bj-horoscope-fleche" aria-label="Signe précédent">‹</button>
+                            <strong id="bj-horoscope-signe" aria-live="polite"></strong>
+                            <button type="button" id="bj-horoscope-suiv" class="bj-horoscope-fleche" aria-label="Signe suivant">›</button>
+                        </div>
                         <p id="bj-horoscope-texte"></p>
                     </div>
                 </div>
@@ -1943,10 +1947,10 @@
                         <input type="text" id="bj-opt-nom" class="input" placeholder="ex. l'équipe" maxlength="40">
                     </div>
                     <label class="bj-interrupteur"><input type="checkbox" id="bj-opt-citation"><span>Citation du jour</span></label>
+                    <label class="bj-interrupteur"><input type="checkbox" id="bj-opt-horoscope"><span>Horoscope du jour</span></label>
                     <div class="bj-champ">
-                        <label for="bj-opt-signe">Horoscope du jour</label>
+                        <label for="bj-opt-signe">Signe affiché en premier</label>
                         <select id="bj-opt-signe" class="input">
-                            <option value="">Pas d'horoscope</option>
                             <option value="belier">♈ Bélier</option>
                             <option value="taureau">♉ Taureau</option>
                             <option value="gemeaux">♊ Gémeaux</option>
