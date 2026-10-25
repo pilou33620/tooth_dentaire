@@ -25,7 +25,7 @@ const MARKUP = `
     <p id="bj-date"></p>
     <h1 id="bj-salutation"></h1>
     <figure id="bj-citation"><blockquote id="bj-citation-texte"></blockquote><figcaption id="bj-citation-auteur"></figcaption></figure>
-    <section id="bj-horoscope" class="hidden"><strong id="bj-horoscope-signe"></strong><p id="bj-horoscope-texte"></p></section>
+    <div id="bj-horoscope" class="hidden"><button id="bj-horoscope-bouton" aria-expanded="false"></button><div><strong id="bj-horoscope-signe"></strong><p id="bj-horoscope-texte"></p></div></div>
     <div class="bj-widget" data-widget="planning"></div>
     <div class="bj-widget" data-widget="taches"></div>
     <div class="bj-widget" data-widget="ruptures"></div>
@@ -397,6 +397,21 @@ describe('initialisation', () => {
         const avant = document.getElementById('bj-citation-texte').textContent;
         document.getElementById('bj-citation').click();
         expect(document.getElementById('bj-citation-texte').textContent).not.toBe(avant);
+    });
+
+    test('un clic sur le bouton horoscope épingle la bulle, un clic ailleurs la ferme', () => {
+        initBonjourr();
+        const bloc = document.getElementById('bj-horoscope');
+        const bouton = document.getElementById('bj-horoscope-bouton');
+        bouton.click();
+        expect(bloc.classList.contains('ouvert')).toBe(true);
+        expect(bouton.getAttribute('aria-expanded')).toBe('true');
+        bouton.click();
+        expect(bloc.classList.contains('ouvert')).toBe(false);
+        bouton.click();
+        document.body.click();
+        expect(bloc.classList.contains('ouvert')).toBe(false);
+        expect(bouton.getAttribute('aria-expanded')).toBe('false');
     });
 
     test('le carnet d\'adresses s\'ouvre depuis son lien', () => {

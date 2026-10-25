@@ -455,6 +455,20 @@ function brancherAccueil(doc = document) {
         });
     }
 
+    // Horoscope : la bulle s'ouvre au survol (CSS) ; un clic l'épingle, un clic ailleurs la ferme
+    const horoscope = doc.getElementById("bj-horoscope");
+    const boutonHoroscope = doc.getElementById("bj-horoscope-bouton");
+    if (horoscope && boutonHoroscope) {
+        const ouvrir = ouvert => {
+            horoscope.classList.toggle("ouvert", ouvert);
+            boutonHoroscope.setAttribute("aria-expanded", String(ouvert));
+        };
+        boutonHoroscope.addEventListener("click", () => ouvrir(!horoscope.classList.contains("ouvert")));
+        doc.addEventListener("click", e => {
+            if (!horoscope.contains(e.target)) ouvrir(false);
+        });
+    }
+
     // Carnet d'adresses (iframe) : recharge les contacts à chaque ouverture
     const annuaire = doc.getElementById("btn-annuaire");
     if (annuaire) {

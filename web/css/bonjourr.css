@@ -1441,8 +1441,9 @@ body.bj {
 .bj-pied {
     width: 100%;
     display: flex;
-    flex-direction: column;
     align-items: center;
+    justify-content: center;
+    gap: 18px;
     padding: 4vh 80px 0;
 }
 
@@ -1482,19 +1483,58 @@ body.bj {
     content: "— ";
 }
 
+/* ---------- Horoscope : bouton à côté de la citation, bulle au survol ou au clic ---------- */
 .bj-horoscope {
-    max-width: 640px;
-    margin: 10px auto 0;
-    text-align: center;
-    color: var(--bj-texte);
-    text-shadow: var(--bj-ombre-texte);
-    font-size: 0.9rem;
-    opacity: 0.88;
+    position: relative;
+    flex-shrink: 0;
 }
 
-.bj-horoscope p {
-    margin: 2px 0 0;
-    line-height: 1.4;
+.bj-horoscope-bouton {
+    padding: 6px 12px;
+    border: 1px solid var(--bj-verre-bord);
+    border-radius: 999px;
+    background: var(--bj-verre);
+    backdrop-filter: var(--bj-verre-flou);
+    -webkit-backdrop-filter: var(--bj-verre-flou);
+    color: var(--bj-texte);
+    font: inherit;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+.bj-horoscope-bouton:hover,
+.bj-horoscope-bouton:focus-visible {
+    background: var(--bj-verre-survol);
+}
+
+.bj-horoscope-bulle {
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + 10px);
+    z-index: 30;
+    width: min(340px, 80vw);
+    padding: 12px 14px;
+    border: 1px solid var(--bj-fenetre-bord);
+    border-radius: var(--bj-rayon-petit);
+    background: var(--bj-fenetre);
+    box-shadow: var(--bj-verre-ombre);
+    color: var(--bj-fenetre-texte);
+    font-size: 0.9rem;
+    text-align: left;
+    visibility: hidden;
+    opacity: 0;
+    transition: opacity 0.15s ease, visibility 0.15s;
+}
+
+.bj-horoscope:hover .bj-horoscope-bulle,
+.bj-horoscope.ouvert .bj-horoscope-bulle {
+    visibility: visible;
+    opacity: 1;
+}
+
+.bj-horoscope-bulle p {
+    margin: 4px 0 0;
+    line-height: 1.45;
 }
 
 /* ---------- Bouton Réglages et mini-jeu ---------- */

@@ -265,10 +265,14 @@
                     <blockquote id="bj-citation-texte"></blockquote>
                     <figcaption id="bj-citation-auteur"></figcaption>
                 </figure>
-                <section id="bj-horoscope" class="bj-horoscope hidden" aria-label="Horoscope du jour">
-                    <strong id="bj-horoscope-signe"></strong>
-                    <p id="bj-horoscope-texte"></p>
-                </section>
+                <div id="bj-horoscope" class="bj-horoscope hidden">
+                    <button type="button" id="bj-horoscope-bouton" class="bj-horoscope-bouton"
+                            aria-expanded="false" aria-controls="bj-horoscope-bulle">🔮 Horoscope</button>
+                    <div id="bj-horoscope-bulle" class="bj-horoscope-bulle" role="tooltip">
+                        <strong id="bj-horoscope-signe"></strong>
+                        <p id="bj-horoscope-texte"></p>
+                    </div>
+                </div>
             </footer>
 
             <!-- ============ BOUTON REGLAGES (coin bas droit) ============ -->
