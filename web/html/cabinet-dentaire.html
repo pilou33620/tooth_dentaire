@@ -600,9 +600,15 @@ function makePerson({suit, skin, hair, badge='', name=''}){
     <div class="head"></div>
     <div class="hair"></div>
     <div class="eye l"></div><div class="eye r"></div>
-    <div class="mouth"></div>
-    ${badge?`<div class="badge">${badge}</div>`:''}
-    ${name?`<div class="name">${name}</div>`:''}`;
+    <div class="mouth"></div>`;
+  // Noms venus du planning partagé : texte brut, jamais du HTML
+  for (const [cls, txt] of [['badge', badge], ['name', name]]) {
+    if (!txt) continue;
+    const d = document.createElement('div');
+    d.className = cls;
+    d.textContent = txt;
+    p.appendChild(d);
+  }
   return p;
 }
 
