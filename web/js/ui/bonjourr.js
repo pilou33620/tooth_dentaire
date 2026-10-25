@@ -26,6 +26,7 @@ export const DEFAUTS = Object.freeze({
     salutation: true,
     nom: "",
     citation: true,
+    signe: "",                  // signe de l'horoscope du jour ("" = pas d'horoscope)
     meteoFond: true,            // le fond « selon l'heure » suit aussi la météo
     meteoTexte: true,           // température et temps à côté de la date
     widgets: Object.freeze({
@@ -36,6 +37,50 @@ export const DEFAUTS = Object.freeze({
 
 const FONDS = ["dynamique", "paysage", "cabinet", "image", "uni"];
 const HORLOGES = ["numerique", "analogique"];
+
+export const SIGNES = Object.freeze({
+    belier: "♈ Bélier", taureau: "♉ Taureau", gemeaux: "♊ Gémeaux", cancer: "♋ Cancer",
+    lion: "♌ Lion", vierge: "♍ Vierge", balance: "♎ Balance", scorpion: "♏ Scorpion",
+    sagittaire: "♐ Sagittaire", capricorne: "♑ Capricorne", verseau: "♒ Verseau", poissons: "♓ Poissons"
+});
+
+/* Horoscope pour le plaisir : tiré au sort chaque jour, sans service extérieur */
+export const HOROSCOPE = Object.freeze({
+    climat: [
+        "Une belle énergie vous accompagne aujourd'hui.",
+        "Journée calme : idéale pour avancer à votre rythme.",
+        "Les astres vous sourient, profitez-en.",
+        "Un petit imprévu pourrait bien tourner en votre faveur.",
+        "Votre bonne humeur sera contagieuse.",
+        "La patience sera votre meilleure alliée.",
+        "Vous voyez clair dans les situations compliquées.",
+        "Une rencontre ou un échange vous fera plaisir.",
+        "Votre sens de l'organisation fait des merveilles.",
+        "Un vent de nouveauté souffle sur votre journée."
+    ],
+    travail: [
+        "Au travail, l'esprit d'équipe paiera.",
+        "Un dossier en attente se débloque enfin.",
+        "On appréciera votre efficacité discrète.",
+        "Prenez le temps de bien faire : la qualité sera remarquée.",
+        "Une idée simple réglera un vieux problème.",
+        "Votre calme rassurera les patients les plus anxieux.",
+        "Rangez un placard : vous y trouverez ce qui manquait.",
+        "Les tâches s'enchaînent sans accroc.",
+        "Un collègue aura besoin de votre aide, et vous le rendra.",
+        "Vérifiez deux fois les commandes, cela évitera une rupture."
+    ],
+    conseil: [
+        "Conseil du jour : buvez de l'eau et souriez.",
+        "Conseil du jour : une vraie pause à midi.",
+        "Conseil du jour : dites merci, ça ne coûte rien.",
+        "Conseil du jour : une chose à la fois.",
+        "Conseil du jour : quelques pas dehors vous feront du bien.",
+        "Conseil du jour : notez tout, votre mémoire vous remerciera.",
+        "Conseil du jour : un brin d'humour désamorce tout.",
+        "Conseil du jour : écoutez votre intuition."
+    ]
+});
 
 /* Proverbes et auteurs du domaine public */
 export const CITATIONS = Object.freeze([
@@ -78,6 +123,7 @@ export function normaliserOptions(brut) {
         salutation: typeof o.salutation === "boolean" ? o.salutation : DEFAUTS.salutation,
         nom: typeof o.nom === "string" ? o.nom.trim().slice(0, 40) : DEFAUTS.nom,
         citation: typeof o.citation === "boolean" ? o.citation : DEFAUTS.citation,
+        signe: Object.hasOwn(SIGNES, o.signe) ? o.signe : DEFAUTS.signe,
         meteoFond: typeof o.meteoFond === "boolean" ? o.meteoFond : DEFAUTS.meteoFond,
         meteoTexte: typeof o.meteoTexte === "boolean" ? o.meteoTexte : DEFAUTS.meteoTexte,
         widgets: Object.fromEntries(
@@ -153,6 +199,15 @@ export function citationDuJour(date, decalage = 0) {
     return CITATIONS[(((jour + decalage) % n) + n) % n];
 }
 
+/** Horoscope du jour d'un signe : le même toute la journée, différent d'un signe à l'autre. */
+export function horoscopeDuJour(date, signe) {
+    const jour = Math.floor(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86400000);
+    const rang = Object.keys(SIGNES).indexOf(signe);
+    // Pas premiers différents par liste : les combinaisons tournent sans se répéter en bloc
+    const tirer = (liste, pas) => liste[(jour * pas + rang * 7) % liste.length];
+    return [tirer(HOROSCOPE.climat, 3), tirer(HOROSCOPE.travail, 7), tirer(HOROSCOPE.conseil, 5)].join(" ");
+}
+
 /* ------------------------------------------------------------
    Rendu
    ------------------------------------------------------------ */
@@ -193,6 +248,17 @@ export function afficherCitation(date = new Date(), decalage = 0, doc = document
     const auteur = doc.getElementById("bj-citation-auteur");
     if (texte) texte.textContent = c.texte;
     if (auteur) auteur.textContent = c.auteur;
+}
+
+export function afficherHoroscope(date = new Date(), signe = etat.options.signe, doc = document) {
+    const bloc = doc.getElementById("bj-horoscope");
+    if (!bloc) return;
+    bloc.classList.toggle("hidden", !signe);
+    if (!signe) return;
+    const titre = doc.getElementById("bj-horoscope-signe");
+    const texte = doc.getElementById("bj-horoscope-texte");
+    if (titre) titre.textContent = SIGNES[signe];
+    if (texte) texte.textContent = horoscopeDuJour(date, signe);
 }
 
 /** Applique les réglages à la page (fond, horloge, widgets visibles...). */
@@ -301,6 +367,7 @@ function definir(options) {
     appliquerOptions(etat.options);
     window.dispatchEvent(new CustomEvent("bj-apparence", { detail: etat.options }));
     majHorloge(new Date(), etat.options);
+    afficherHoroscope();
     remplirReglages();
 }
 
@@ -315,6 +382,7 @@ function remplirReglages(doc = document) {
     val("bj-opt-horloge", o.horloge);
     val("bj-opt-taille", o.taille);
     val("bj-opt-nom", o.nom);
+    val("bj-opt-signe", o.signe);
     coche("bj-opt-secondes", o.secondes);
     coche("bj-opt-salutation", o.salutation);
     coche("bj-opt-citation", o.citation);
@@ -342,6 +410,7 @@ function brancherReglages(doc = document) {
     sur("bj-opt-secondes", "change", e => maj({ secondes: e.target.checked }));
     sur("bj-opt-salutation", "change", e => maj({ salutation: e.target.checked }));
     sur("bj-opt-citation", "change", e => maj({ citation: e.target.checked }));
+    sur("bj-opt-signe", "change", e => maj({ signe: e.target.value }));
     sur("bj-opt-meteo-fond", "change", e => maj({ meteoFond: e.target.checked }));
     sur("bj-opt-meteo-texte", "change", e => maj({ meteoTexte: e.target.checked }));
     doc.querySelectorAll("[data-bj-widget]").forEach(el => {
@@ -427,11 +496,22 @@ export function initBonjourr(doc = document) {
     appliquerOptions(etat.options, doc);
     majHorloge(new Date(), etat.options, doc);
     afficherCitation(new Date(), 0, doc);
+    afficherHoroscope(new Date(), etat.options.signe, doc);
     remplirReglages(doc);
     brancherReglages(doc);
     brancherAccueil(doc);
 
     clearInterval(etat.minuterie);
-    etat.minuterie = setInterval(() => majHorloge(new Date(), etat.options, doc), 1000);
+    let jour = new Date().getDate();
+    etat.minuterie = setInterval(() => {
+        const maintenant = new Date();
+        majHorloge(maintenant, etat.options, doc);
+        // Écran allumé toute la nuit : citation et horoscope changent à minuit
+        if (maintenant.getDate() !== jour) {
+            jour = maintenant.getDate();
+            afficherCitation(maintenant, etat.decalageCitation, doc);
+            afficherHoroscope(maintenant, etat.options.signe, doc);
+        }
+    }, 1000);
     doc.documentElement.classList.add("bj-pret");
 }

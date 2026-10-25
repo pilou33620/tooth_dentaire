@@ -1,15 +1,15 @@
 /**
  * Tests de l'accueil façon Bonjourr (js/ui/bonjourr.js) :
  * réglages d'apparence, salutation, moments de la journée, horloge,
- * citation et application des réglages à la page.
+ * citation, horoscope et application des réglages à la page.
  */
 
 import { jest } from '@jest/globals';
 import {
-    DEFAUTS, CLE_OPTIONS, CLE_IMAGE, CITATIONS,
+    DEFAUTS, CLE_OPTIONS, CLE_IMAGE, CITATIONS, SIGNES, HOROSCOPE,
     normaliserOptions, lireOptions, ecrireOptions,
-    salutation, phaseDuJour, formaterDate, anglesAiguilles, citationDuJour,
-    dimensionsReduites, majHorloge, afficherCitation, appliquerOptions, initBonjourr
+    salutation, phaseDuJour, formaterDate, anglesAiguilles, citationDuJour, horoscopeDuJour,
+    dimensionsReduites, majHorloge, afficherCitation, afficherHoroscope, appliquerOptions, initBonjourr
 } from '../js/ui/bonjourr.js';
 
 const MARKUP = `
@@ -25,6 +25,7 @@ const MARKUP = `
     <p id="bj-date"></p>
     <h1 id="bj-salutation"></h1>
     <figure id="bj-citation"><blockquote id="bj-citation-texte"></blockquote><figcaption id="bj-citation-auteur"></figcaption></figure>
+    <section id="bj-horoscope" class="hidden"><strong id="bj-horoscope-signe"></strong><p id="bj-horoscope-texte"></p></section>
     <div class="bj-widget" data-widget="planning"></div>
     <div class="bj-widget" data-widget="taches"></div>
     <div class="bj-widget" data-widget="ruptures"></div>
@@ -221,6 +222,44 @@ describe('citation du jour', () => {
         const c = citationDuJour(SAMEDI);
         expect(document.getElementById('bj-citation-texte').textContent).toBe(c.texte);
         expect(document.getElementById('bj-citation-auteur').textContent).toBe(c.auteur);
+    });
+});
+
+describe('horoscope du jour', () => {
+    test('signe inconnu refusé, pas d\'horoscope par défaut', () => {
+        expect(DEFAUTS.signe).toBe('');
+        expect(normaliserOptions({ signe: 'lion' }).signe).toBe('lion');
+        expect(normaliserOptions({ signe: 'toString' }).signe).toBe('');
+        expect(normaliserOptions({ signe: '<img>' }).signe).toBe('');
+    });
+
+    test('le même toute la journée, change le lendemain et selon le signe', () => {
+        const matin = horoscopeDuJour(new Date(2026, 9, 3, 8, 0), 'lion');
+        expect(horoscopeDuJour(new Date(2026, 9, 3, 23, 0), 'lion')).toBe(matin);
+        expect(horoscopeDuJour(new Date(2026, 9, 4, 8, 0), 'lion')).not.toBe(matin);
+        expect(horoscopeDuJour(new Date(2026, 9, 3, 8, 0), 'vierge')).not.toBe(matin);
+    });
+
+    test('trois phrases connues pour chaque signe, sur une année', () => {
+        for (const signe of Object.keys(SIGNES)) {
+            for (let j = 0; j < 366; j += 17) {
+                const texte = horoscopeDuJour(new Date(2026, 0, 1 + j), signe);
+                const [climat, travail, conseil] = Object.values(HOROSCOPE);
+                expect(climat.some(p => texte.startsWith(p))).toBe(true);
+                expect(travail.some(p => texte.includes(p))).toBe(true);
+                expect(conseil.some(p => texte.endsWith(p))).toBe(true);
+            }
+        }
+    });
+
+    test('affiché seulement quand un signe est choisi', () => {
+        const bloc = document.getElementById('bj-horoscope');
+        afficherHoroscope(SAMEDI, '');
+        expect(bloc.classList.contains('hidden')).toBe(true);
+        afficherHoroscope(SAMEDI, 'poissons');
+        expect(bloc.classList.contains('hidden')).toBe(false);
+        expect(document.getElementById('bj-horoscope-signe').textContent).toBe(SIGNES.poissons);
+        expect(document.getElementById('bj-horoscope-texte').textContent).toBe(horoscopeDuJour(SAMEDI, 'poissons'));
     });
 });
 

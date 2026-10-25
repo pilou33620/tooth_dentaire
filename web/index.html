@@ -265,6 +265,10 @@
                     <blockquote id="bj-citation-texte"></blockquote>
                     <figcaption id="bj-citation-auteur"></figcaption>
                 </figure>
+                <section id="bj-horoscope" class="bj-horoscope hidden" aria-label="Horoscope du jour">
+                    <strong id="bj-horoscope-signe"></strong>
+                    <p id="bj-horoscope-texte"></p>
+                </section>
             </footer>
 
             <!-- ============ BOUTON REGLAGES (coin bas droit) ============ -->
@@ -1935,6 +1939,24 @@
                         <input type="text" id="bj-opt-nom" class="input" placeholder="ex. l'équipe" maxlength="40">
                     </div>
                     <label class="bj-interrupteur"><input type="checkbox" id="bj-opt-citation"><span>Citation du jour</span></label>
+                    <div class="bj-champ">
+                        <label for="bj-opt-signe">Horoscope du jour</label>
+                        <select id="bj-opt-signe" class="input">
+                            <option value="">Pas d'horoscope</option>
+                            <option value="belier">♈ Bélier</option>
+                            <option value="taureau">♉ Taureau</option>
+                            <option value="gemeaux">♊ Gémeaux</option>
+                            <option value="cancer">♋ Cancer</option>
+                            <option value="lion">♌ Lion</option>
+                            <option value="vierge">♍ Vierge</option>
+                            <option value="balance">♎ Balance</option>
+                            <option value="scorpion">♏ Scorpion</option>
+                            <option value="sagittaire">♐ Sagittaire</option>
+                            <option value="capricorne">♑ Capricorne</option>
+                            <option value="verseau">♒ Verseau</option>
+                            <option value="poissons">♓ Poissons</option>
+                        </select>
+                    </div>
 
                     <h4 class="bj-sous-titre">Météo <small>même commune pour tous les postes</small></h4>
                     <label class="bj-interrupteur"><input type="checkbox" id="bj-opt-meteo-texte"><span>Afficher la température</span></label>
