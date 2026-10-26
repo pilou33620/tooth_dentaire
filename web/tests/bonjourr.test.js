@@ -6,11 +6,14 @@
 
 import { jest } from '@jest/globals';
 import {
-    DEFAUTS, CLE_OPTIONS, CLE_IMAGE, CITATIONS, SIGNES, HOROSCOPE,
+    DEFAUTS, CLE_OPTIONS, CLE_IMAGE, CITATIONS,
     normaliserOptions, lireOptions, ecrireOptions,
-    salutation, phaseDuJour, formaterDate, anglesAiguilles, citationDuJour, horoscopeDuJour,
+    salutation, phaseDuJour, formaterDate, anglesAiguilles, citationDuJour,
     dimensionsReduites, majHorloge, afficherCitation, afficherHoroscope, appliquerOptions, initBonjourr
 } from '../js/ui/bonjourr.js';
+import {
+    SIGNES, HOROSCOPE, horoscopeDuJour, signeDeLaDate, signeDeLaLune, phaseLune, saisonDeLaDate
+} from '../js/ui/horoscope.js';
 
 const MARKUP = `
     <div id="bj-fond">
@@ -243,16 +246,87 @@ describe('horoscope du jour', () => {
         expect(horoscopeDuJour(new Date(2026, 9, 3, 8, 0), 'vierge')).not.toBe(matin);
     });
 
-    test('trois phrases connues pour chaque signe, sur une année', () => {
+    test('signe du Soleil aux changements de signe', () => {
+        expect(signeDeLaDate(new Date(2026, 0, 1))).toBe('capricorne');
+        expect(signeDeLaDate(new Date(2026, 0, 19))).toBe('capricorne');
+        expect(signeDeLaDate(new Date(2026, 0, 20))).toBe('verseau');
+        expect(signeDeLaDate(new Date(2026, 2, 21))).toBe('belier');
+        expect(signeDeLaDate(new Date(2026, 9, 26))).toBe('scorpion');
+        expect(signeDeLaDate(new Date(2026, 11, 22))).toBe('capricorne');
+    });
+
+    test('saisons de l\'année', () => {
+        expect(saisonDeLaDate(new Date(2026, 2, 19))).toBe('hiver');
+        expect(saisonDeLaDate(new Date(2026, 2, 20))).toBe('printemps');
+        expect(saisonDeLaDate(new Date(2026, 6, 14))).toBe('ete');
+        expect(saisonDeLaDate(new Date(2026, 9, 26))).toBe('automne');
+        expect(saisonDeLaDate(new Date(2026, 11, 25))).toBe('hiver');
+    });
+
+    test('phases de la lune 2026 (éphémérides)', () => {
+        // Pleines lunes et nouvelles lunes publiées pour 2026
+        for (const [m, j] of [[0, 3], [3, 2], [6, 29], [9, 26], [11, 24]]) {
+            expect(phaseLune(new Date(2026, m, j))).toBe('pleine');
+        }
+        for (const [m, j] of [[0, 18], [4, 16], [7, 12], [9, 10], [11, 9]]) {
+            expect(phaseLune(new Date(2026, m, j))).toBe('nouvelle');
+        }
+        expect(phaseLune(new Date(2026, 9, 18))).toBe(null);
+    });
+
+    test('signe de la Lune : opposé au Soleil à la pleine lune, avec lui à la nouvelle lune', () => {
+        expect(signeDeLaLune(new Date(2026, 9, 26))).toBe('taureau');     // Soleil en Scorpion
+        expect(signeDeLaLune(new Date(2026, 9, 10))).toBe('balance');     // Soleil en Balance
+        expect(signeDeLaLune(new Date(2026, 0, 3))).toBe('cancer');       // Soleil en Capricorne
+        expect(signeDeLaLune(new Date(2026, 6, 14))).toBe('cancer');      // Soleil en Cancer
+    });
+
+    test('pendant sa saison, le signe a une phrase « votre saison »', () => {
+        const texte = horoscopeDuJour(new Date(2026, 9, 30), 'scorpion');
+        expect(HOROSCOPE.votreSaison.some(p => texte.startsWith(p))).toBe(true);
+    });
+
+    test('pleine lune : seul le signe où elle se trouve en parle', () => {
+        const pleine = d => HOROSCOPE.lune.pleine.some(p => horoscopeDuJour(d, signeDeLaLune(d)).startsWith(p));
+        expect(pleine(new Date(2026, 9, 26))).toBe(true);
+        const texte = horoscopeDuJour(new Date(2026, 9, 26), 'lion');
+        expect(HOROSCOPE.elements.feu.some(p => texte.startsWith(p))).toBe(true);
+    });
+
+    test('nouvelle lune dans le signe du Soleil, Lune de passage dans un autre signe', () => {
+        const nouvelle = horoscopeDuJour(new Date(2026, 9, 10), 'balance');
+        expect(HOROSCOPE.lune.nouvelle.some(p => nouvelle.startsWith(p))).toBe(true);
+        const d = new Date(2026, 9, 18);
+        const passage = horoscopeDuJour(d, signeDeLaLune(d));
+        expect(HOROSCOPE.lune.dansVotreSigne.some(p => passage.startsWith(p))).toBe(true);
+    });
+
+    test('lundi et vendredi ont leurs phrases, le conseil suit la saison', () => {
+        const lundi = horoscopeDuJour(new Date(2026, 9, 19), 'taureau');
+        expect(HOROSCOPE.jours[1].some(p => lundi.includes(p))).toBe(true);
+        const vendredi = horoscopeDuJour(new Date(2026, 9, 23), 'taureau');
+        expect(HOROSCOPE.jours[5].some(p => vendredi.includes(p))).toBe(true);
+        const conseils = HOROSCOPE.saisons.automne.concat(HOROSCOPE.conseils);
+        expect(conseils.some(p => lundi.endsWith(p))).toBe(true);
+    });
+
+    test('trois phrases connues pour chaque signe, tous les jours de l\'année', () => {
+        const ouvertures = [HOROSCOPE.votreSaison, ...Object.values(HOROSCOPE.lune),
+            ...Object.values(HOROSCOPE.elements)].flat();
+        const travail = [HOROSCOPE.travail, ...Object.values(HOROSCOPE.jours)].flat();
+        const conseils = [HOROSCOPE.conseils, ...Object.values(HOROSCOPE.saisons)].flat();
+        const vus = new Set();
         for (const signe of Object.keys(SIGNES)) {
-            for (let j = 0; j < 366; j += 17) {
+            for (let j = 0; j < 366; j++) {
                 const texte = horoscopeDuJour(new Date(2026, 0, 1 + j), signe);
-                const [climat, travail, conseil] = Object.values(HOROSCOPE);
-                expect(climat.some(p => texte.startsWith(p))).toBe(true);
+                expect(ouvertures.some(p => texte.startsWith(p))).toBe(true);
                 expect(travail.some(p => texte.includes(p))).toBe(true);
-                expect(conseil.some(p => texte.endsWith(p))).toBe(true);
+                expect(conseils.some(p => texte.endsWith(p))).toBe(true);
+                vus.add(texte);
             }
         }
+        // Très peu de répétitions sur une année
+        expect(vus.size).toBeGreaterThan(12 * 366 * 0.95);
     });
 
     test('bouton masqué seulement si l\'horoscope est désactivé, texte du signe affiché', () => {

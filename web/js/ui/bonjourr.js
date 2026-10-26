@@ -11,6 +11,7 @@
 
 import { getWeekNumber } from '../planning/clock.js';
 import { majPaysage } from './paysage.js';
+import { SIGNES, horoscopeDuJour } from './horoscope.js';
 
 export const CLE_OPTIONS = "bj-apparence";
 export const CLE_IMAGE = "bj-fond-image";
@@ -38,50 +39,6 @@ export const DEFAUTS = Object.freeze({
 
 const FONDS = ["dynamique", "paysage", "cabinet", "image", "uni"];
 const HORLOGES = ["numerique", "analogique"];
-
-export const SIGNES = Object.freeze({
-    belier: "♈ Bélier", taureau: "♉ Taureau", gemeaux: "♊ Gémeaux", cancer: "♋ Cancer",
-    lion: "♌ Lion", vierge: "♍ Vierge", balance: "♎ Balance", scorpion: "♏ Scorpion",
-    sagittaire: "♐ Sagittaire", capricorne: "♑ Capricorne", verseau: "♒ Verseau", poissons: "♓ Poissons"
-});
-
-/* Horoscope pour le plaisir : tiré au sort chaque jour, sans service extérieur */
-export const HOROSCOPE = Object.freeze({
-    climat: [
-        "Une belle énergie vous accompagne aujourd'hui.",
-        "Journée calme : idéale pour avancer à votre rythme.",
-        "Les astres vous sourient, profitez-en.",
-        "Un petit imprévu pourrait bien tourner en votre faveur.",
-        "Votre bonne humeur sera contagieuse.",
-        "La patience sera votre meilleure alliée.",
-        "Vous voyez clair dans les situations compliquées.",
-        "Une rencontre ou un échange vous fera plaisir.",
-        "Votre sens de l'organisation fait des merveilles.",
-        "Un vent de nouveauté souffle sur votre journée."
-    ],
-    travail: [
-        "Au travail, l'esprit d'équipe paiera.",
-        "Un dossier en attente se débloque enfin.",
-        "On appréciera votre efficacité discrète.",
-        "Prenez le temps de bien faire : la qualité sera remarquée.",
-        "Une idée simple réglera un vieux problème.",
-        "Votre calme rassurera les patients les plus anxieux.",
-        "Rangez un placard : vous y trouverez ce qui manquait.",
-        "Les tâches s'enchaînent sans accroc.",
-        "Un collègue aura besoin de votre aide, et vous le rendra.",
-        "Vérifiez deux fois les commandes, cela évitera une rupture."
-    ],
-    conseil: [
-        "Conseil du jour : buvez de l'eau et souriez.",
-        "Conseil du jour : une vraie pause à midi.",
-        "Conseil du jour : dites merci, ça ne coûte rien.",
-        "Conseil du jour : une chose à la fois.",
-        "Conseil du jour : quelques pas dehors vous feront du bien.",
-        "Conseil du jour : notez tout, votre mémoire vous remerciera.",
-        "Conseil du jour : un brin d'humour désamorce tout.",
-        "Conseil du jour : écoutez votre intuition."
-    ]
-});
 
 /* Proverbes et auteurs du domaine public */
 export const CITATIONS = Object.freeze([
@@ -199,15 +156,6 @@ export function citationDuJour(date, decalage = 0) {
     const jour = Math.floor((Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) - debut) / 86400000);
     const n = CITATIONS.length;
     return CITATIONS[(((jour + decalage) % n) + n) % n];
-}
-
-/** Horoscope du jour d'un signe : le même toute la journée, différent d'un signe à l'autre. */
-export function horoscopeDuJour(date, signe) {
-    const jour = Math.floor(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86400000);
-    const rang = Object.keys(SIGNES).indexOf(signe);
-    // Pas premiers différents par liste : les combinaisons tournent sans se répéter en bloc
-    const tirer = (liste, pas) => liste[(jour * pas + rang * 7) % liste.length];
-    return [tirer(HOROSCOPE.climat, 3), tirer(HOROSCOPE.travail, 7), tirer(HOROSCOPE.conseil, 5)].join(" ");
 }
 
 /* ------------------------------------------------------------
