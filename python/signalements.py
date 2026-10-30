@@ -7,9 +7,12 @@ clé GitHub (jeton « Issues : lecture et écriture » limité à ce dépôt) es
 saisie une fois dans les Réglages du poste qui fait tourner le serveur ; elle
 reste dans donnees/config.json, jamais dans le code ni renvoyée aux postes.
 
-Sans internet (ou sans clé), le signalement est gardé dans
+Sans internet, le signalement est gardé dans
 donnees/signalements_en_attente.json et renvoyé plus tard : à l'envoi suivant
-et toutes les 30 minutes.
+et toutes les 30 minutes. Sans clé, le ticket préparé est rendu au poste, qui
+ouvre Gmail avec le message prêt à envoyer (js/ui/signalement.js).
+
+Les journaux (navigateur du poste et serveur) sont joints au ticket.
 """
 
 import json
@@ -27,6 +30,7 @@ DELAI = 15                       # s
 INTERVALLE_RENVOI = 30 * 60      # s
 TYPES = {"bug": ("Bug", "bug"), "idee": ("Idée", "enhancement")}
 LONGUEUR_MAX = 5000
+JOURNAUX_MAX = 20000             # caractères par journal (GitHub accepte 65536 au total)
 
 _verrou = threading.Lock()
 
@@ -56,7 +60,13 @@ def _ecrire_attente(dossier, liste):
     os.replace(chemin + ".tmp", chemin)
 
 
-def preparer(data, version="", maintenant=None):
+def _bloc_journal(titre, texte):
+    texte = str(texte or "").strip()[-JOURNAUX_MAX:]
+    # Clôture à 4 accents graves : un ``` dans le journal ne la ferme pas
+    return "\n\n<details><summary>%s</summary>\n\n````\n%s\n````\n</details>" % (titre, texte) if texte else ""
+
+
+def preparer(data, version="", maintenant=None, journal_serveur=""):
     """Valide le formulaire et construit le ticket {title, body, labels}."""
     data = data if isinstance(data, dict) else {}
     genre = data.get("type")
@@ -72,6 +82,8 @@ def preparer(data, version="", maintenant=None):
     quand = time.strftime("%d/%m/%Y %H:%M", time.localtime(maintenant or time.time()))
     corps = "%s\n\n---\n_Envoyé depuis l'outil du cabinet le %s%s — version %s._" % (
         description, quand, (" par " + auteur) if auteur else "", version or "inconnue")
+    corps += _bloc_journal("Journal du navigateur", data.get("journaux"))
+    corps += _bloc_journal("Journal du serveur", journal_serveur)
     return {"title": "[%s] %s" % (libelle, premiere_ligne), "body": corps, "labels": [etiquette]}
 
 
@@ -110,22 +122,24 @@ def envoyer_en_attente(dossier, jeton, ouvrir=None):
         return len(restants)
 
 
-def signaler(data, dossier, jeton, version="", ouvrir=None):
+def signaler(data, dossier, jeton, version="", ouvrir=None, journal_serveur=""):
     """
-    Envoie un signalement. Renvoie {"envoye": True, "url"} ou, sans internet /
-    sans clé, {"envoye": False, "en_attente": n} : rien n'est perdu.
+    Envoie un signalement. Renvoie {"envoye": True, "url"} ; sans internet,
+    {"envoye": False, "en_attente": n} : rien n'est perdu ; sans clé,
+    {"envoye": False, "ticket"} : le poste l'envoie par Gmail.
     """
-    ticket = preparer(data, version)
+    ticket = preparer(data, version, journal_serveur=journal_serveur)
+    if not jeton:
+        return {"envoye": False, "cle_configuree": False, "ticket": ticket}
     envoyer_en_attente(dossier, jeton, ouvrir)
-    if jeton:
-        try:
-            return {"envoye": True, "url": _poster(ticket, jeton, ouvrir)}
-        except OSError:
-            pass
+    try:
+        return {"envoye": True, "url": _poster(ticket, jeton, ouvrir)}
+    except OSError:
+        pass
     with _verrou:
         attente = _lire_attente(dossier) + [ticket]
         _ecrire_attente(dossier, attente)
-    return {"envoye": False, "en_attente": len(attente), "cle_configuree": bool(jeton)}
+    return {"envoye": False, "en_attente": len(attente), "cle_configuree": True}
 
 
 def demarrer_renvois(dossier, lire_jeton, intervalle=INTERVALLE_RENVOI):

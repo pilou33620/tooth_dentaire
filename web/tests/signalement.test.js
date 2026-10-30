@@ -15,6 +15,8 @@ const MARKUP = `
         <button type="button" id="signalement-annuler"></button>
     </form>
     <p id="signalement-etat"></p>
+    <a id="signalement-gmail" class="hidden"></a>
+    <div class="bj-widget" data-widget="notes"></div>
     <div id="signalement-cle" class="hidden">
         <ol id="signalement-cle-guide"></ol>
         <input id="signalement-cle-saisie">
@@ -64,7 +66,8 @@ test('envoi d\'un bug : le formulaire part au serveur puis se referme', async ()
     $('signalement-form').dispatchEvent(new Event('submit', { cancelable: true }));
     await attendre();
     expect(requetes.at(-1)).toEqual({ methode: 'POST', route: '/api/signalements',
-        corps: { type: 'bug', description: 'Le placard ne s\'ouvre plus', auteur: 'Léa' } });
+        corps: { type: 'bug', description: 'Le placard ne s\'ouvre plus', auteur: 'Léa',
+            journaux: expect.stringContaining('Widgets : notes 0x0') } });
     expect(visible('signalement-form')).toBe(false);
     expect($('signalement-description').value).toBe('');
     expect($('signalement-etat').textContent).toContain('bien été envoyé');
@@ -94,7 +97,7 @@ test('poste serveur sans clé : la saisie de la clé est proposée et enregistr�
     await charger({ status: 'ok', cle_configuree: false, en_attente: 2, cle_modifiable: true });
     expect(visible('signalement-cle')).toBe(true);
     expect(visible('signalement-cle-guide')).toBe(true);
-    expect($('signalement-etat').textContent).toContain('Clé GitHub non saisie');
+    expect($('signalement-etat').textContent).toBe('');
     $('signalement-cle-saisie').value = 'github_pat_x';
     $('signalement-cle-enregistrer').click();
     await attendre();
@@ -104,4 +107,36 @@ test('poste serveur sans clé : la saisie de la clé est proposée et enregistr�
     // Clé en place : plus de guide, le champ reste pour la remplacer
     expect(visible('signalement-cle-guide')).toBe(false);
     expect(visible('signalement-cle')).toBe(true);
+});
+
+test('sans clé GitHub : Gmail s\'ouvre avec le message prêt pour le développeur', async () => {
+    await charger({ status: 'ok', cle_configuree: false, en_attente: 0, cle_modifiable: false });
+    reponses['POST /api/signalements'] = { status: 'ok', envoye: false,
+        ticket: { title: '[Bug] Widgets absents', body: 'Au démarrage\n\nJournal…' } };
+    const ouvertes = [];
+    window.open = (url) => { ouvertes.push(url); return null; };
+    window.lireJournal = () => '2026-10-30T08:00:00Z [erreur] boum';
+    $('signalement-ouvrir').click();
+    $('signalement-description').value = 'Widgets absents';
+    $('signalement-form').dispatchEvent(new Event('submit', { cancelable: true }));
+    await attendre();
+    expect(requetes.at(-1).corps.journaux).toContain('[erreur] boum');
+    const url = new URL(ouvertes[0]);
+    expect(url.host).toBe('mail.google.com');
+    expect(url.searchParams.get('to')).toBe('pilou33620@gmail.com');
+    expect(url.searchParams.get('su')).toBe('[Bug] Widgets absents');
+    expect(url.searchParams.get('body')).toBe('Au démarrage\n\nJournal…');
+    expect(visible('signalement-gmail')).toBe(true);
+    expect($('signalement-gmail').href).toBe(ouvertes[0]);
+    expect($('signalement-etat').textContent).toContain('cliquer « Envoyer »');
+});
+
+test('message trop long pour Gmail : raccourci, la version complète sera jointe', async () => {
+    const { lienGmail } = await import('../js/ui/signalement.js');
+    const court = lienGmail({ title: 'T', body: 'court' });
+    expect(court.coupe).toBe(false);
+    const long = lienGmail({ title: 'T', body: 'é'.repeat(20000) }, 3000);
+    expect(long.coupe).toBe(true);
+    expect(long.url.length).toBeLessThanOrEqual(3000);
+    expect(new URL(long.url).searchParams.get('body')).toContain('suite dans le fichier joint');
 });

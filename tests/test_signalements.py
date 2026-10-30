@@ -1,10 +1,13 @@
 # -*- coding: utf-8 -*-
 """Tests des signalements de bug / idées (python/signalements.py), sans appel réel à GitHub."""
 
+import io
 import json
+import sys
 
 import pytest
 
+import journal
 import serveur
 import signalements
 from test_serveur import srv, requete  # noqa: F401  (fixture)
@@ -56,12 +59,30 @@ def test_sans_internet_garde_puis_renvoie(tmp_path):
     assert signalements.envoyer_en_attente(str(tmp_path), "cle") == 0
 
 
-def test_sans_cle_rien_n_est_perdu(tmp_path):
+def test_sans_cle_ticket_rendu_pour_gmail(tmp_path):
     r = signalements.signaler(BUG, str(tmp_path), "")
-    assert r == {"envoye": False, "en_attente": 1, "cle_configuree": False}
-    envoyes = []
-    assert signalements.envoyer_en_attente(str(tmp_path), "cle", faux_github(envoyes)) == 0
-    assert len(envoyes) == 1
+    assert r["envoye"] is False and r["cle_configuree"] is False
+    assert r["ticket"]["title"] == "[Bug] Le placard ne s'ouvre plus"
+    # Parti par Gmail : rien gardé, sinon il partirait aussi sur GitHub le jour d'une clé
+    assert signalements.envoyer_en_attente(str(tmp_path), "cle") == 0
+
+
+def test_journaux_joints_et_bornes():
+    data = dict(BUG, journaux="[erreur] boum ``` fin\n" + "x" * 30000)
+    corps = signalements.preparer(data, journal_serveur="GET /api/etat 500")["body"]
+    assert "<summary>Journal du navigateur</summary>" in corps and "x" * 100 in corps
+    assert "<summary>Journal du serveur</summary>" in corps and "GET /api/etat 500" in corps
+    assert len(corps) < 2 * signalements.JOURNAUX_MAX + 1000
+    # Sans journaux, pas de bloc vide
+    assert "<details>" not in signalements.preparer(BUG)["body"]
+
+
+def test_journal_serveur_garde_la_fin(tmp_path):
+    chemin = tmp_path / "journal_serveur.log"
+    chemin.write_text("".join("ligne %d\n" % i for i in range(500)), "utf-8")
+    fin = journal.dernieres_lignes(3, str(chemin))
+    assert fin == "ligne 497\nligne 498\nligne 499"
+    assert journal.dernieres_lignes(3, str(tmp_path / "absent.log")) == ""
 
 
 # --- Routes du serveur ---
@@ -97,3 +118,14 @@ def test_cle_refusee_depuis_un_autre_poste(srv, config_temp, monkeypatch):  # no
     code, data, _ = requete(srv, "POST", "/api/signalements/cle", {"cle": "x"})
     assert code == 400 and "poste" in data["message"]
     assert not (config_temp / "config.json").exists()
+
+
+def test_journal_copie_la_console(tmp_path, monkeypatch):
+    monkeypatch.setattr(journal, "_chemin", None)
+    monkeypatch.setattr(sys, "stdout", io.StringIO())
+    monkeypatch.setattr(sys, "stderr", io.StringIO())
+    journal.demarrer(str(tmp_path))
+    print("bonjour")
+    sys.stderr.write("oups\n")
+    assert journal.dernieres_lignes() == "bonjour\noups"
+    assert sys.stdout._flux.getvalue() == "bonjour\n"     # la console garde son affichage

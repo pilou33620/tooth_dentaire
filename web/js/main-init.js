@@ -410,4 +410,5 @@ Rechargez la page (F5) une fois le serveur relancé.`);
     initNotes();
     initChecklist();
     initMinuteurs();
+    window.noterJournal?.("accueil prêt");
 });

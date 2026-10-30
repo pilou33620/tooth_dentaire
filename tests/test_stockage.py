@@ -23,6 +23,8 @@ AUTORISES = {
     "js/ui/bonjourr.js": "apparence de l'accueil et image de fond du poste",
     "js/features/checklist.js": "prénom proposé par défaut sur ce poste",
     "js/features/minuteurs.js": "minuteurs lancés depuis ce poste (pour sonner ici)",
+    "js/journal.js": "erreurs récentes de ce poste, jointes aux signalements de bug",
+    "js/ui/signalement.js": "lecture des réglages du poste joints aux signalements",
 }
 
 STOCKAGE_NAVIGATEUR = re.compile(r"\b(localStorage|sessionStorage|indexedDB)\b")

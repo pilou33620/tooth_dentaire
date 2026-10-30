@@ -67,6 +67,7 @@ if DOSSIER_PYTHON not in sys.path:
 
 import base                                   # noqa: E402
 import exports                                # noqa: E402
+import journal                                # noqa: E402
 import meteo                                  # noqa: E402
 import mise_a_jour                            # noqa: E402
 import sauvegarde                             # noqa: E402
@@ -369,7 +370,8 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
             "/api/sauvegardes": lambda d: {"sauvegarde": self._sans_chemin(sauvegarde.sauvegarder())},
             "/api/mise-a-jour/verifier": lambda d: mise_a_jour.verifier(),
             "/api/signalements": lambda d: signalements.signaler(
-                d, dossier_signalements(), jeton_github(), self._version_complete()),
+                d, dossier_signalements(), jeton_github(), self._version_complete(),
+                journal_serveur=journal.dernieres_lignes()),
             "/api/signalements/cle": self._enregistrer_cle_github,
             "/api/mise-a-jour/installer": self._installer_mise_a_jour,
             "/api/export/stock": lambda d: self._export(exports.export_stock(base.charger_base())),
@@ -602,6 +604,7 @@ def main(argv=None):
 def lancer(argv=None):
     """Point d'entree double-clic : la fenetre ne se ferme pas sur une erreur."""
     argv = sys.argv[1:] if argv is None else list(argv)
+    journal.demarrer(dossier_signalements())
     try:
         code = main(argv)
     except KeyboardInterrupt:

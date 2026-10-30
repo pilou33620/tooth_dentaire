@@ -13,6 +13,8 @@
          ne dépend plus d'une URL externe. Build classique 3.11.174 : les builds 4.x
          ne sont publiées qu'en module ES, que Chromium refuse de charger en file://. -->
     <script src="vendor/pdf.min.js"></script>
+    <!-- En premier : garde les erreurs du poste pour les signalements de bug -->
+    <script src="js/journal.js"></script>
 </head>
 <body class="bj">
     <!-- BANDEAU MODE PERSONNALISATION -->
@@ -2000,7 +2002,7 @@
                     <div id="signalement-cle" class="hidden">
                         <h4 class="bj-sous-titre">Clé GitHub <small>sur ce poste serveur uniquement</small></h4>
                         <ol id="signalement-cle-guide" class="bj-aide signalement-guide">
-                            <li>Première fois : pour que les signalements arrivent sur GitHub, il faut une clé (à faire une seule fois).</li>
+                            <li>Facultatif : sans clé, chaque signalement ouvre Gmail avec le message prêt à envoyer. Avec une clé, il arrive directement sur GitHub.</li>
                             <li><a id="signalement-cle-lien" class="btn btn-small" target="_blank" rel="noopener"
                                    href="https://github.com/settings/personal-access-tokens/new?name=Outil%20cabinet%20-%20signalements&amp;description=Signalements%20de%20bug%20envoy%C3%A9s%20depuis%20l%27outil%20du%20cabinet&amp;target_name=pilou33620&amp;expires_in=365&amp;issues=write">Créer la clé sur GitHub ↗</a>
                                 et se connecter au compte GitHub de l'outil.</li>
@@ -2027,13 +2029,14 @@
                             <label for="signalement-auteur">Prénom <small>(facultatif)</small></label>
                             <input type="text" id="signalement-auteur" class="input" maxlength="40">
                         </div>
-                        <p class="bj-aide signalement-avertissement">⚠️ Le signalement est public sur GitHub : aucun nom de patient ni information médicale.</p>
+                        <p class="bj-aide signalement-avertissement">⚠️ Aucun nom de patient ni information médicale. Les erreurs récentes de l'outil sont jointes pour aider à corriger le bug.</p>
                         <div class="bj-ligne bj-ligne-boutons">
                             <button type="submit" id="signalement-envoyer" class="btn btn-green">Envoyer</button>
                             <button type="button" id="signalement-annuler" class="btn">Annuler</button>
                         </div>
                     </form>
                     <p id="signalement-etat" class="bj-aide"></p>
+                    <a id="signalement-gmail" class="btn btn-small hidden" target="_blank" rel="noopener">Ouvrir Gmail ↗</a>
                 </section>
 
                 <section class="bj-section">
