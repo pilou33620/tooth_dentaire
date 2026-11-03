@@ -10,9 +10,10 @@
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="css/bonjourr.css">
     <!-- PDF.js embarqué (vendor/) : l'import de factures fonctionne hors ligne et
-         ne dépend plus d'une URL externe. Build classique 3.11.174 : les builds 4.x
-         ne sont publiées qu'en module ES, que Chromium refuse de charger en file://. -->
-    <script src="vendor/pdf.min.js"></script>
+         ne dépend plus d'une URL externe. Build « legacy » 4.10.38 (navigateurs plus
+         anciens acceptés), en module ES : l'outil est servi par serveur.py, pas en file://.
+         4.2.67 et plus : corrige la faille CVE-2024-4367 (PDF piégé). -->
+    <script type="module">import * as pdfjsLib from "./vendor/pdf.min.mjs"; window.pdfjsLib = pdfjsLib;</script>
     <!-- En premier : garde les erreurs du poste pour les signalements de bug -->
     <script src="js/journal.js"></script>
 </head>

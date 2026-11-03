@@ -275,7 +275,7 @@ document.addEventListener("DOMContentLoaded", () => {
             previewData.forEach(t => {
                 const tr = document.createElement("tr");
                 tr.innerHTML = `
-                    <td>${escapeHtml(t.date ? t.date.substring(0, 10) : "")}</td>
+                    <td>${escapeHtml(t.date ? String(t.date).substring(0, 10) : "")}</td>
                     <td>${escapeHtml(t.reference || "")}</td>
                     <td>${escapeHtml(t.utilisateur || "")}</td>
                     <td>${escapeHtml(t.type_transaction || "")}</td>

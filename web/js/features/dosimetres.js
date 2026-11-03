@@ -91,9 +91,9 @@ function renderDosimetresTable() {
 
     const filtered = items.filter(item => {
         if (!term) return true;
-        const num = (item.number || "").toLowerCase();
-        const user = (item.user || "").toLowerCase();
-        const note = (item.note || "").toLowerCase();
+        const num = String(item.number || "").toLowerCase();
+        const user = String(item.user || "").toLowerCase();
+        const note = String(item.note || "").toLowerCase();
         return num.includes(term) || user.includes(term) || note.includes(term);
     });
 

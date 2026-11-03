@@ -18,8 +18,9 @@ function normaliserTaches(doc) {
         header1: d.header1 || "",
         header2: d.header2 || "",
         note: d.note || "",
-        rows: Array.isArray(d.rows) ? d.rows.map(r => ({
-            task: r.task || "", nature: r.nature || "", col1: r.col1 || "", col2: r.col2 || ""
+        // Texte forcé : une valeur non textuelle reçue de l'API ferait planter l'affichage (trim, etc.)
+        rows: Array.isArray(d.rows) ? d.rows.filter(r => r && typeof r === "object").map(r => ({
+            task: String(r.task || ""), nature: String(r.nature || ""), col1: String(r.col1 || ""), col2: String(r.col2 || "")
         })) : []
     };
 }

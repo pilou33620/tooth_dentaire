@@ -585,4 +585,13 @@ describe('tableau des tâches', () => {
         t.updateTasksPreview();
         expect(document.querySelector('#tasks-preview-content img')).toBeNull();
     });
+
+    test('une valeur non textuelle ou une ligne vide ne fait pas planter l\'aperçu', async () => {
+        const docs = JSON.parse(JSON.stringify({ taches: TACHES }));
+        docs.taches.rows[0].col1 = 42;
+        docs.taches.rows.unshift(null);
+        const t = await chargerTasks(docs);
+        expect(() => t.updateTasksPreview()).not.toThrow();
+        expect(document.querySelector('#tasks-preview-content').textContent).toContain('42');
+    });
 });

@@ -13,11 +13,11 @@ import { parseNombreFR, round2, round4 } from '../core/utils.js';
    lignes fictives à l'enregistrement. Une erreur explicite vaut mieux. */
 export async function extractStockFromPdf(file) {
     if (typeof pdfjsLib === "undefined") {
-        return { items: [], erreur: "PDF.js n'a pas pu être chargé (web/vendor/pdf.min.js manquant ?). L'import de factures est indisponible." };
+        return { items: [], erreur: "PDF.js n'a pas pu être chargé (web/vendor/pdf.min.mjs manquant ?). L'import de factures est indisponible." };
     }
 
     try {
-        pdfjsLib.GlobalWorkerOptions.workerSrc = "vendor/pdf.worker.min.js";
+        pdfjsLib.GlobalWorkerOptions.workerSrc = "vendor/pdf.worker.min.mjs";
 
         const buffer = await file.arrayBuffer();
         const pdf = await pdfjsLib.getDocument({
