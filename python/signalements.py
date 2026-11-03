@@ -147,7 +147,10 @@ def demarrer_renvois(dossier, lire_jeton, intervalle=INTERVALLE_RENVOI):
     def boucle():
         while True:
             time.sleep(intervalle)
-            envoyer_en_attente(dossier, lire_jeton())
+            try:
+                envoyer_en_attente(dossier, lire_jeton())
+            except Exception as exc:              # noqa: BLE001 — sinon le fil s'arrête pour de bon
+                print("[!] Renvoi des signalements impossible : %s" % exc)
 
     fil = threading.Thread(target=boucle, name="signalements", daemon=True)
     fil.start()

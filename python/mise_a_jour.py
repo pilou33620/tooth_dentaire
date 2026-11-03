@@ -160,7 +160,10 @@ def demarrer_verifications(intervalle=INTERVALLE, premiere=PREMIERE_VERIFICATION
     def boucle():
         time.sleep(premiere)
         while not REDEMARRER.is_set():
-            verifier()
+            try:
+                verifier()
+            except Exception as exc:              # noqa: BLE001 — sinon plus aucune vérification jusqu'au redémarrage
+                print("[!] Recherche de mise a jour impossible : %s" % exc)
             REDEMARRER.wait(intervalle)
 
     fil = threading.Thread(target=boucle, name="mises-a-jour", daemon=True)
