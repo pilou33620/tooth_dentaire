@@ -502,6 +502,48 @@ describe('enregistrement', () => {
         expect(refs).toEqual(['REF1-BIS']);
     });
 
+    test('changer d\'espace vers une ligne existante est refusé sans rien écraser', async () => {
+        const ligne = (espace, qte) => ({ reference: 'REF1', utilisateur: espace, quantite: qte,
+            stock_minimum: 0, alerte_active: 0, alerte_peremption_active: 0,
+            delai_peremption: 30, date_peremption: '', date_import: '', fournisseur: '',
+            lot: '', lots_details: '[]', prix_unitaire_ht: 0, prix_unitaire_ttc: 0 });
+        preparer([{ reference: 'REF1', nom: 'Gant', groupe: 'G', ref_scannette: '3401',
+                    type_stockage: 'unite', quantite_par_carton: 1 }],
+                 [ligne('Cabinet 1', 5), ligne('Cabinet 2', 9)]);
+        openEditDialog(getStock('Cabinet 1')[0]);
+        document.getElementById('edit-user').value = 'Cabinet 2';
+        await enregistrer();
+
+        expect(getStock('Cabinet 1')[0].quantite).toBe(5);
+        expect(getStock('Cabinet 2')[0].quantite).toBe(9);
+        expect(document.getElementById('msg-title').textContent).toContain('déjà présent');
+    });
+
+    test('une ligne modifiée par un autre poste pendant la saisie n\'est pas écrasée', async () => {
+        preparer([{ reference: 'REF1', nom: 'Gant', groupe: 'G', ref_scannette: '3401',
+                    type_stockage: 'unite', quantite_par_carton: 1 }],
+                 [{ reference: 'REF1', utilisateur: 'Cabinet 1', quantite: 5, version: 1,
+                    stock_minimum: 0, alerte_active: 0, alerte_peremption_active: 0,
+                    delai_peremption: 30, date_peremption: '', date_import: '', fournisseur: '',
+                    lot: '', lots_details: '[]', prix_unitaire_ht: 0, prix_unitaire_ttc: 0 }]);
+        openEditDialog(getStock('Cabinet 1')[0]);
+        // Rechargement en arrière-plan : un autre poste a sorti 2 unités
+        Object.assign(loadDB().stock[0], { quantite: 3, version: 2 });
+        saisir('edit-min', '1');
+        await enregistrer();
+
+        expect(loadDB().stock[0]).toMatchObject({ quantite: 3, stock_minimum: 0 });
+        expect(document.getElementById('msg-text').textContent).toContain('autre poste');
+    });
+
+    test('une date de péremption illisible est refusée', async () => {
+        remplirNouveauProduit();
+        window.renderEditLots([{ lot: 'A', date: '31/12/26', qte: 15 }]);
+        await enregistrer();
+        expect(loadDB().stock).toHaveLength(0);
+        expect(document.getElementById('msg-title').textContent).toContain('Date invalide');
+    });
+
     test('la boîte se ferme après un enregistrement réussi', async () => {
         remplirNouveauProduit();
         await enregistrer();

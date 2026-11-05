@@ -37,6 +37,7 @@ export const LEGENDE_DEFAUT = [
 const MOTS_INACTIFS = ["", "-", "repos", "ecole", "école"];
 
 let brouillon = null; // copie en cours d'édition (fenêtre du planning ouverte)
+let copieInitiale = ""; // couleurs à l'ouverture de la fenêtre (JSON)
 
 function norm(s) {
     return String(s ?? "").trim().toLowerCase();
@@ -45,9 +46,12 @@ function norm(s) {
 /** Document des couleurs, complété si besoin. */
 export function normaliserCouleurs(doc) {
     const d = (doc && typeof doc === "object") ? doc : {};
+    // Une entrée nulle (donnée abîmée) ferait planter l'aperçu sur tous les postes
+    const objets = liste => (Array.isArray(liste) ? liste : []).filter(e => e && typeof e === "object");
+    const legende = objets(d.legende);
     return {
-        legende: Array.isArray(d.legende) && d.legende.length > 0 ? d.legende : LEGENDE_DEFAUT.map(l => ({ ...l })),
-        regles: Array.isArray(d.regles) ? d.regles : []
+        legende: legende.length > 0 ? legende : LEGENDE_DEFAUT.map(l => ({ ...l })),
+        regles: objets(d.regles)
     };
 }
 
@@ -57,13 +61,17 @@ export function getCouleurs() {
 
 export function commencerEditionCouleurs() {
     brouillon = normaliserCouleurs(getDocument("planning_couleurs"));
+    copieInitiale = JSON.stringify(brouillon);
     return brouillon;
 }
 
+/** Ferme l'édition ; rend les couleurs à enregistrer, ou null si rien n'a changé. */
 export function terminerEditionCouleurs() {
     const resultat = brouillon;
     brouillon = null;
-    return resultat;
+    // Couleurs non touchées : ne pas réécrire la copie de l'ouverture par-dessus
+    // un changement fait entre-temps sur un autre poste
+    return resultat && JSON.stringify(resultat) !== copieInitiale ? resultat : null;
 }
 
 export function estInactif(valeur) {

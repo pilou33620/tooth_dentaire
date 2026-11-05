@@ -91,17 +91,25 @@ def sauvegarder(chemin_base=None, dossier=None, garder=GARDER, maintenant=None):
 
     with _verrou_copie:
         # Sous le verrou d'ecriture : aucun poste n'ecrit pendant la copie (quelques ms).
-        with base._VERROU:
-            source = sqlite3.connect(chemin_base, timeout=15)
-            try:
-                cible = sqlite3.connect(temporaire)
+        try:
+            with base._VERROU:
+                source = sqlite3.connect(chemin_base, timeout=15)
                 try:
-                    source.backup(cible)
+                    cible = sqlite3.connect(temporaire)
+                    try:
+                        source.backup(cible)
+                    finally:
+                        cible.close()
                 finally:
-                    cible.close()
-            finally:
-                source.close()
-        os.replace(temporaire, final)
+                    source.close()
+            os.replace(temporaire, final)
+        except BaseException:
+            # copie interrompue (disque plein...) : pas de fichier partiel laissé
+            try:
+                os.remove(temporaire)
+            except OSError:
+                pass
+            raise
         _nettoyer(dossier, garder)
         return {"nom": nom, "chemin": final, "date": maintenant.isoformat(),
                 "taille": os.path.getsize(final)}

@@ -670,10 +670,10 @@ async function syncPlanning() {
   if (calendarData && calendarData[parity]) {
       if (Array.isArray(calendarData[parity])) {
           calendarData[parity].forEach(row => {
-              const d = row.days && row.days[currentDayStr];
+              const d = row && row.days && row.days[currentDayStr];
               if (d) {
-                  const amDentist = (d.am && d.am.trim() !== "Repos" && !d.am.toLowerCase().includes("ecole") && !d.am.toLowerCase().includes("école")) ? d.am.trim() : "-";
-                  const pmDentist = (d.pm && d.pm.trim() !== "Repos" && !d.pm.toLowerCase().includes("ecole") && !d.pm.toLowerCase().includes("école")) ? d.pm.trim() : "-";
+                  const amDentist = (d.am && d.am.trim().toLowerCase() !== "repos" && !d.am.toLowerCase().includes("ecole") && !d.am.toLowerCase().includes("école")) ? d.am.trim() : "-";
+                  const pmDentist = (d.pm && d.pm.trim().toLowerCase() !== "repos" && !d.pm.toLowerCase().includes("ecole") && !d.pm.toLowerCase().includes("école")) ? d.pm.trim() : "-";
                   const activeDentist = isMorning ? amDentist : pmDentist;
                   if (activeDentist && activeDentist !== "-") {
                       dayData.push({
@@ -719,6 +719,11 @@ async function syncPlanning() {
 }
 
 syncPlanning();
+// Page ouverte des semaines (fond et économiseur) : l'équipe est relue à chaque
+// demi-journée ; syncPlanning crée les personnages, d'où un rechargement complet.
+const demiJournee = () => new Date().toDateString() + (new Date().getHours() < 13);
+const demiJourneeChargee = demiJournee();
+setInterval(() => { if (demiJournee() !== demiJourneeChargee) location.reload(); }, 60000);
 
 /* ============================================================
    Simulation

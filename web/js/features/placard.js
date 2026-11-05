@@ -6,7 +6,7 @@
 
 import { ESPACES_SUIVI_LOT } from '../core/constants.js';
 import { loadDB, saveDB, findProduit, persister } from '../core/database.js';
-import { getStock, sortirStock, setStockAbsolu, ajouterStockParLots } from './stock.js';
+import { getStock, sortirStock, ajouterStock, ajouterStockParLots } from './stock.js';
 import { openLotMoveDialog } from './lot-moves.js';
 import { parsePeremption, daysUntil, showMessage } from '../core/utils.js';
 import { checkAlerts } from './alerts.js';
@@ -207,15 +207,12 @@ export function refreshPlacardTable() {
                 return;
             }
 
-            setStockAbsolu(row.reference, row.quantite + 1, {
+            // Ajout relatif : la ligne affichée peut dater d'avant le dernier
+            // rechargement, une quantité absolue effacerait la sortie d'un autre poste.
+            ajouterStock(row.reference, 1, {
                 nom: row.nom, groupe: row.groupe, ref_scannette: row.ref_scannette,
                 type_stockage: row.type_stockage, quantite_par_carton: row.quantite_par_carton,
-                stock_minimum: row.stock_minimum, alerte_active: row.alerte_active,
-                alerte_peremption_active: row.alerte_peremption_active,
-                delai_peremption: row.delai_peremption,
-                utilisateur: row.utilisateur, date_peremption: row.date_peremption,
-                en_commande: row.en_commande, date_commande: row.date_commande,
-                lot: row.lot, lots_details: row.lots_details
+                type_transaction: "AJUSTEMENT_MANUEL", utilisateur: row.utilisateur
             });
             refreshPlacardTable();
             checkAlerts();

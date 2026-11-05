@@ -120,6 +120,7 @@ class ClientCabinet:
         donnees = None
         headers = {
             "Origin": self.session_origin,
+            "X-Tooth": "1",
             "User-Agent": f"AgentCabinet/{self.nom}",
         }
         if corps is not None:

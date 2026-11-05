@@ -24,6 +24,10 @@ export function initScreensaver() {
         const screensaver = document.getElementById('screensaver-overlay');
         if (screensaver) {
             clearTimeout(hideScreensaverTimeout);
+            // L'animation lit le planning à son chargement : la recharger pour la demi-journée en cours
+            try {
+                screensaver.querySelector('iframe')?.contentWindow?.location.reload();
+            } catch (e) { /* page pas encore chargée : elle lira le planning d'elle-même */ }
             screensaver.classList.remove('hidden');
             setTimeout(() => {
                 screensaver.style.opacity = '1';

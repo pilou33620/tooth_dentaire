@@ -59,6 +59,7 @@ class ClientCabinet:
         url = self.base_url + chemin
         headers = {
             "Origin": self.origin,
+            "X-Tooth": "1",
             "User-Agent": f"AgentCabinet/{self.nom}",
         }
         data = None

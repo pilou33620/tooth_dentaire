@@ -312,6 +312,9 @@ export function checkFauteuilAlert(force = false, targetMachine = null) {
     updateFauteuilIconStatus();
 
     // 3. Popup automatique si échéance échue et non mise en veille
+    // Boîte déjà ouverte : ne pas la réinitialiser (machine choisie, date et note en cours)
+    const overlayOuvert = document.getElementById('fauteuil-overlay');
+    if (overlayOuvert && !overlayOuvert.classList.contains('hidden')) return;
     if (overdueList.length > 0 && !fauteuilDismissed && (force || !fauteuilGlobalSnooze)) {
         openFauteuilDialog(overdueList[0].machine);
     }

@@ -54,6 +54,15 @@ describe('économiseur d\'écran', () => {
         expect(voile().classList.contains('hidden')).toBe(false);
     });
 
+    test('l\'animation est rechargée à l\'affichage (planning de la demi-journée en cours)', () => {
+        const reload = jest.fn();
+        voile().innerHTML = '<iframe></iframe>';
+        Object.defineProperty(voile().querySelector('iframe'), 'contentWindow', { value: { location: { reload } } });
+        screensaver.initScreensaver();
+        jest.advanceTimersByTime(30 * 60 * 1000);
+        expect(reload).toHaveBeenCalledTimes(1);
+    });
+
     test('le fondu d\'apparition est déclenché', () => {
         screensaver.initScreensaver();
         jest.advanceTimersByTime(30 * 60 * 1000 + 20);

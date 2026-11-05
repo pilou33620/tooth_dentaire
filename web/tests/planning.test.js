@@ -278,6 +278,28 @@ describe('couleurs du planning (règles en base)', () => {
         expect(envoi).toHaveLength(1);
         expect(envoi[0].corps.regles.at(-1).nom).toBe('Dr Delta');
     });
+
+    test('enregistrer sans toucher aux couleurs ne réécrit pas celles d\'un autre poste', async () => {
+        const team = await chargerTeam();
+        team.openCalendarModal();
+        team.saveCalendarData();
+        await attendreEcritures();
+        expect(appelsVers(serveur, 'PUT', '/api/documents/planning_couleurs')).toHaveLength(0);
+    });
+
+    test('une entrée nulle en base ne bloque pas les aperçus', async () => {
+        const team = await chargerTeam({
+            planning: PLANNING,
+            planning_couleurs: { legende: [null], regles: [null, ...COULEURS.regles] },
+            taches: { rows: [null, ...TACHES.rows] },
+        });
+        team.updateTeamPlanning(10);
+        expect(document.getElementById('calendar-preview-content').innerHTML)
+            .toContain(`background-color: ${ROUGE}`);
+        const tasks = await import('../js/planning/tasks-planning.js');
+        tasks.updateTasksPreview();
+        expect(document.getElementById('tasks-preview-content').innerHTML).toContain('Tâche 1');
+    });
 });
 
 describe('données du calendrier', () => {
@@ -373,6 +395,18 @@ describe('parité de la semaine', () => {
         team.setPreviewParity('odd');
         expect(document.getElementById('btn-preview-odd').classList.contains('actif')).toBe(true);
         expect(document.getElementById('btn-preview-even').classList.contains('actif')).toBe(false);
+    });
+
+    test('au changement de jour, l\'aperçu revient sur aujourd\'hui et la semaine réelle', () => {
+        team.updateTeamPlanning(11);
+        team.setPreviewParity('even');
+        window.navPlanningDay(2);
+        jest.setSystemTime(new Date(2026, 2, 12, 0, 1));   // jeudi, juste après minuit
+        team.updateTeamPlanning(11);
+        expect(team.getPreviewParity()).toBe('odd');
+        const html = document.getElementById('calendar-preview-content').innerHTML;
+        window.resetPlanningDay();   // aucun décalage restant
+        expect(document.getElementById('calendar-preview-content').innerHTML).toBe(html);
     });
 
     test('un dimanche, la parité est celle du lundi suivant', () => {

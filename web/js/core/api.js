@@ -19,6 +19,12 @@ import { setDbCache, loadDB, findStockEntry } from './database.js';
 const INTERVALLE_SURVEILLANCE = 4000; // ms
 
 let documents = {};
+// Version de chaque document lue sur le serveur : envoyée avec l'écriture, pour
+// qu'il refuse (409) d'écraser ce qu'un autre poste a enregistré entre-temps.
+let versionsDocuments = {};
+// Incrémentée par document après un refus : ses écritures encore en file,
+// calculées sur des données périmées, sont abandonnées.
+const generationsDocuments = new Map();
 let revisionConnue = null;
 let fileEcriture = Promise.resolve();
 let ecrituresEnCours = 0;
@@ -37,6 +43,11 @@ export const MESSAGE_CONFLIT =
     "Votre dernière opération n'a PAS été enregistrée, pour ne pas effacer la sienne. " +
     "Les données à jour viennent d'être rechargées : vérifiez puis recommencez.";
 
+const MESSAGE_CONFLIT_DOCUMENT =
+    "Un autre poste vient de modifier ces données pendant votre saisie.\n\n" +
+    "Votre dernière modification n'a PAS été enregistrée, pour ne pas effacer la sienne. " +
+    "Les données à jour viennent d'être rechargées : vérifiez puis recommencez.";
+
 /** Résolue quand les données ont été chargées une première fois. */
 export const pret = new Promise(resolve => { resoudrePret = resolve; });
 
@@ -53,8 +64,9 @@ function numeroRevision(revision, reference) {
 }
 
 /** Appel JSON au serveur. Rejette avec un message lisible en cas d'erreur. */
-export async function api(methode, route, corps) {
-    const options = { method: methode, headers: {} };
+export async function api(methode, route, corps, entetes = {}) {
+    // X-Tooth : exigé par le serveur sur les écritures (une page d'un autre site ne peut pas l'ajouter)
+    const options = { method: methode, headers: { "X-Tooth": "1", ...entetes } };
     if (corps !== undefined) {
         options.headers["Content-Type"] = "application/json";
         options.body = JSON.stringify(corps);
@@ -86,6 +98,7 @@ export async function chargerEtat() {
     setDbCache(data.base);
     versionsSuivies = new Map();
     documents = data.documents || {};
+    versionsDocuments = data.versions_documents || {};
     revisionConnue = data.revision;
     resoudrePret();
     return data;
@@ -98,29 +111,6 @@ function suivreRevision(data) {
     if (n !== null && attendu !== null && n === attendu + 1) {
         revisionConnue = data.revision;
     }
-}
-
-/**
- * Écriture ordonnée : les requêtes partent l'une après l'autre, dans l'ordre
- * où l'interface les a demandées (une sortie de stock suit son transfert...).
- */
-function ecrire(methode, route, corps) {
-    ecrituresEnCours++;
-    const tache = fileEcriture.then(async () => {
-        try {
-            const data = await api(methode, route, corps);
-            suivreRevision(data);
-            return data;
-        } catch (e) {
-            console.error(`Erreur d'enregistrement [${methode} ${route}] :`, e);
-            alert(`Erreur de sauvegarde : ${e.message}`);
-            return null;
-        } finally {
-            ecrituresEnCours--;
-        }
-    });
-    fileEcriture = tache;
-    return tache;
 }
 
 const enc = encodeURIComponent;
@@ -232,10 +222,48 @@ export function getDocument(cle, defaut = null) {
     return cle in documents ? copie(documents[cle]) : copie(defaut);
 }
 
-/** Enregistre un document (cache local immédiat + envoi au serveur). */
-export function setDocument(cle, valeur) {
+/** Version du document lue sur le serveur (à retenir à l'ouverture d'un éditeur). */
+export function getVersionDocument(cle) {
+    return versionsDocuments[cle] ?? 0;
+}
+
+/**
+ * Enregistre un document (cache local immédiat + envoi au serveur, dans l'ordre
+ * des demandes). version : celle lue à l'ouverture d'un éditeur resté ouvert
+ * (sinon la dernière connue). Refus ou échec : l'écran est resynchronisé sur
+ * le serveur ; silencieux : sans message (écritures de fond).
+ */
+export function setDocument(cle, valeur, { version, silencieux = false } = {}) {
     documents[cle] = copie(valeur);
-    return ecrire("PUT", `/api/documents/${enc(cle)}`, valeur);
+    const gen = generationsDocuments.get(cle) || 0;
+    ecrituresEnCours++;
+    const tache = fileEcriture.then(async () => {
+        try {
+            if (gen !== (generationsDocuments.get(cle) || 0)) return null;   // calculée avant un refus
+            const lue = version ?? getVersionDocument(cle);
+            const data = await api("PUT", `/api/documents/${enc(cle)}`, valeur, { "X-Version": String(lue) });
+            if (data.version !== undefined) versionsDocuments[cle] = data.version;
+            suivreRevision(data);
+            return data;
+        } catch (e) {
+            console.error(`Erreur d'enregistrement [${cle}] :`, e);
+            generationsDocuments.set(cle, gen + 1);
+            try {
+                await chargerEtat();
+                window.dispatchEvent(new CustomEvent("donnees-modifiees"));
+            } catch (erreur) {
+                /* serveur injoignable : on garde l'affichage actuel */
+            }
+            if (!silencieux) {
+                alert(e.conflit ? MESSAGE_CONFLIT_DOCUMENT : `Erreur de sauvegarde : ${e.message}`);
+            }
+            return null;
+        } finally {
+            ecrituresEnCours--;
+        }
+    });
+    fileEcriture = tache;
+    return tache;
 }
 
 /* ---------------- Fichiers ---------------- */
@@ -294,6 +322,7 @@ if (typeof window !== "undefined") {
     window.api = api;
     window.getDocument = getDocument;
     window.setDocument = setDocument;
+    window.getVersionDocument = getVersionDocument;
     window.exporter = exporter;
     window.donneesPretes = pret;
 }

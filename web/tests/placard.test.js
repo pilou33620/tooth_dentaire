@@ -275,6 +275,13 @@ describe('boutons + et -', () => {
         expect(loadDB().stock[0].quantite).toBe(4);
     });
 
+    test('le bouton + ajoute à la quantité à jour, pas à celle affichée', () => {
+        // Un autre poste a sorti 3 unités : le cache est rechargé, le tableau pas encore
+        loadDB().stock[0].quantite = 2;
+        document.querySelector('.qte-plus').click();
+        expect(loadDB().stock[0].quantite).toBe(3);
+    });
+
     test('le tableau est réaffiché après un ajout', () => {
         document.querySelector('.qte-plus').click();
         expect(document.querySelector('.qte-cell').textContent).toContain('6');

@@ -378,7 +378,8 @@
         let contacts = [];
 
         async function appelApi(methode, route, corps) {
-            const options = { method: methode, headers: {} };
+            // X-Tooth : exigé par le serveur sur les écritures (protection CSRF)
+            const options = { method: methode, headers: { 'X-Tooth': '1' } };
             if (corps !== undefined) {
                 options.headers['Content-Type'] = 'application/json';
                 options.body = JSON.stringify(corps);

@@ -91,6 +91,14 @@ describe('lots.js - helpers', () => {
         expect(res.lots).toEqual(lots);
     });
 
+    test('retirerDesLots ignore un index qui ne désigne plus le même lot', () => {
+        // Liste rechargée entre l'ouverture du dialogue et la sortie : B est passé en tête
+        const lots = [{ lot: 'B', date: '', qte: 4 }, { lot: 'A', date: '', qte: 3 }];
+        const res = retirerDesLots(lots, [{ index: 0, lot: 'A', date: '', qte: 1 }]);
+        expect(res.ok).toBe(true);
+        expect(res.lots).toEqual([{ lot: 'B', date: '', qte: 4 }, { lot: 'A', date: '', qte: 2 }]);
+    });
+
     test('retirerFEFO consomme d\'abord le lot qui périme le plus tôt', () => {
         const lots = [
             { lot: 'TARD', date: '31/12/2030', qte: 5 },

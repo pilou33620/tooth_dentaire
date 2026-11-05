@@ -71,6 +71,9 @@ export function saveTransferDialog() {
         appliquerLots(sourceEntry, res.lots);
     }
 
+    // Lues avant la remise à zéro d'une source vidée : la destination les reprend
+    const datePeremptionSource = sourceEntry.date_peremption || "";
+    const lotSource = sourceEntry.lot || "";
     sourceEntry.quantite -= qte;
     if (sourceEntry.quantite <= 0) {
         sourceEntry.quantite = 0;
@@ -99,9 +102,9 @@ export function saveTransferDialog() {
                 destLots = lotsFromStrings(destEntry.lot, destEntry.date_peremption, destEntry.quantite - qte);
             }
             appliquerLots(destEntry, mergeLots(destLots, lotsTransferes));
-        } else if (sourceEntry.date_peremption || sourceEntry.lot) {
-            if (!destEntry.date_peremption) destEntry.date_peremption = sourceEntry.date_peremption;
-            if (!destEntry.lot) destEntry.lot = sourceEntry.lot;
+        } else if (datePeremptionSource || lotSource) {
+            if (!destEntry.date_peremption) destEntry.date_peremption = datePeremptionSource;
+            if (!destEntry.lot) destEntry.lot = lotSource;
         }
     } else {
         db.stock.push({
@@ -112,7 +115,7 @@ export function saveTransferDialog() {
             alerte_active: sourceEntry.alerte_active || false,
             alerte_peremption_active: sourceEntry.alerte_peremption_active !== undefined ? sourceEntry.alerte_peremption_active : 0,
             delai_peremption: sourceEntry.delai_peremption !== undefined ? sourceEntry.delai_peremption : 30,
-            date_peremption: lotsTransferes.length > 0 ? datesToString(lotsTransferes) : (sourceEntry.date_peremption || ""),
+            date_peremption: lotsTransferes.length > 0 ? datesToString(lotsTransferes) : datePeremptionSource,
             // todayFR() et non toISOString() : partout ailleurs date_import est
             // au format JJ/MM/AAAA, et une date ISO cassait le tri de la
             // colonne « Date Import » du placard en plus de s'afficher brute.
@@ -120,7 +123,7 @@ export function saveTransferDialog() {
             fournisseur: sourceEntry.fournisseur || "",
             prix_unitaire_ht: sourceEntry.prix_unitaire_ht || 0,
             prix_unitaire_ttc: sourceEntry.prix_unitaire_ttc || 0,
-            lot: lotsTransferes.length > 0 ? lotsToString(lotsTransferes) : (sourceEntry.lot || ""),
+            lot: lotsTransferes.length > 0 ? lotsToString(lotsTransferes) : lotSource,
             lots_details: lotsTransferes.length > 0 ? serializeLots(lotsTransferes) : "[]"
         });
 

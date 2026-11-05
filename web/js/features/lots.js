@@ -206,7 +206,9 @@ export function retirerDesLots(lots, demandes) {
         if (qte <= 0) continue;
 
         let cible = null;
-        if (Number.isInteger(d.index) && restants[d.index]) {
+        // L'index vient d'une liste lue à l'ouverture du dialogue : il ne sert que
+        // s'il désigne encore le même lot (le cache a pu être rechargé depuis).
+        if (Number.isInteger(d.index) && restants[d.index] && memeLot(restants[d.index], d)) {
             cible = restants[d.index];
         } else {
             cible = restants.find(l => memeLot(l, d));

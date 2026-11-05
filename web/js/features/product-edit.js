@@ -10,6 +10,7 @@ import { setStockAbsolu } from './stock.js';
 import { normalizeLots, lotsFromStrings, lotsPerimesEntrants, messageLotsPerimes } from './lots.js';
 import { fillGroupsDatalist, showMessage, parsePeremption, daysUntil, parseBarcodes, formatBarcodes } from '../core/utils.js';
 import { checkAlerts } from './alerts.js';
+import { MESSAGE_CONFLIT } from '../core/api.js';
 import { refreshPlacardTable, placardUser } from './placard.js';
 
 /**
@@ -263,6 +264,9 @@ export function openEditDialog(row = null) {
     refInput.value = isEdit ? row.reference : "";
     // refInput.readOnly = isEdit;
     refInput.dataset.originalRef = isEdit ? row.reference : "";
+    // Version de la ligne à l'ouverture : le cache peut être rechargé pendant la saisie
+    const ligneOuverte = isEdit ? findStockEntry(loadDB(), row.reference, row.utilisateur) : null;
+    refInput.dataset.originalVersion = String(ligneOuverte?.version ?? "");
 
     document.getElementById("edit-nom").value = isEdit ? row.nom : "";
     const scannetteVal = isEdit ? (row.ref_scannette || "") : "";
@@ -435,6 +439,13 @@ export async function saveEditDialog() {
         })
         .filter(a => a.lot || a.date || (a.qte !== null && a.qte > 0));
 
+    // Une date illisible serait enregistrée mais jamais alertée
+    const dateInvalide = lotsSaisis.find(a => a.date && !parsePeremption(a.date));
+    if (dateInvalide) {
+        await showMessage("Date invalide", `La date de péremption « ${dateInvalide.date} » n'est pas au format JJ/MM/AAAA.`);
+        return;
+    }
+
     const datePeremptionVal = lotsSaisis.map(a => a.date).filter(Boolean).join(", ");
     const lotVal = lotsSaisis.map(a => a.lot).filter(Boolean).join(", ");
     const lotsDetailsVal = JSON.stringify(lotsSaisis);
@@ -473,6 +484,23 @@ export async function saveEditDialog() {
                 );
             }
         }
+    }
+
+    // La paire (référence, espace) visée ne doit pas être une autre ligne :
+    // l'écrire écraserait sa quantité, ses lots et ses prix.
+    const memeLigne = oldRef === ref && oldUser === newUser;
+    if (!memeLigne && findStockEntry(loadDB(), ref, newUser)) {
+        await showMessage("Produit déjà présent", `La référence ${ref} existe déjà dans l'espace ${newUser}.\n\nModifiez cette ligne plutôt que d'en créer une seconde.`);
+        return;
+    }
+
+    // Un autre poste a modifié la ligne pendant la saisie (cache rechargé) :
+    // la quantité saisie, absolue, effacerait son opération.
+    if (oldRef && oldUser && String(findStockEntry(loadDB(), oldRef, oldUser)?.version ?? "") !== document.getElementById("edit-ref").dataset.originalVersion) {
+        await showMessage("Conflit", MESSAGE_CONFLIT);
+        document.getElementById("edit-overlay").classList.add("hidden");
+        refreshPlacardTable();
+        return;
     }
 
     // Changement de référence ou d'espace : l'ancienne ligne n'est retirée

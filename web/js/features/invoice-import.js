@@ -6,7 +6,7 @@
 
 import { CONDITIONNEMENTS, estConditionnementGroupe } from '../core/constants.js';
 import { getAllGroups, getStockInfo } from '../core/database.js';
-import { fillUserSelect, todayFR, showMessage, parseBarcodes, formatBarcodes } from '../core/utils.js';
+import { fillUserSelect, todayFR, showMessage, parseBarcodes, formatBarcodes, parsePeremption } from '../core/utils.js';
 import { ajouterStock } from './stock.js';
 import { estPerime, messageLotsPerimes } from './lots.js';
 import { checkAlerts } from './alerts.js';
@@ -391,6 +391,9 @@ export async function validateImport() {
     
     const rows = document.querySelectorAll("#import-tbody tr");
     const lignes = [];
+    // Tout est contrôlé avant le premier ajout : une facture interrompue puis
+    // revalidée importait deux fois les lignes déjà passées.
+    const aImporter = [];
     const db = loadDB();
 
     // Contrôle avant tout ajout : la facture n'est pas importée à moitié
@@ -436,6 +439,16 @@ export async function validateImport() {
         if (qteBase === 0) {
             // Ligne volontairement écartée par l'utilisateur
             continue;
+        }
+
+        // Une date illisible serait enregistrée mais jamais alertée
+        const dateInvalide = lotsArray.find(a => a.date && !parsePeremption(a.date));
+        if (dateInvalide) {
+            await showMessage(
+                "Date invalide",
+                `Article ${item.reference} : la date de péremption « ${dateInvalide.date} » n'est pas au format JJ/MM/AAAA.\n\nL'importation est interrompue.`
+            );
+            return;
         }
         
         let qteAjouter = qteBase;
@@ -489,7 +502,7 @@ export async function validateImport() {
             }
         }
 
-        ajouterStock(item.reference, qteAjouter, {
+        aImporter.push([item.reference, qteAjouter, {
             nom: designation,
             groupe: groupe,
             ref_scannette: ref_scannette,
@@ -506,9 +519,11 @@ export async function validateImport() {
             prix_unitaire_ttc: (typeof pUTTC === "number") ? pUTTC : null,
             lot: lot,
             lots_details: lotsDetailsJson
-        });
+        }]);
         lignes.push(`- ${qteAjouter}x ${item.reference} (${designation}) -> ${userDest}`);
     }
+
+    aImporter.forEach(args => ajouterStock(...args));
 
     if (lignes.length === 0) {
         await showMessage("Aucun article importé", "Toutes les lignes étaient à une quantité de 0 : rien n'a été ajouté au stock.");

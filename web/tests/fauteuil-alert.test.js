@@ -14,7 +14,8 @@ import {
     saveFauteuilDataForMachine,
     getFauteuilStatus,
     setFauteuilSnoozed,
-    openFauteuilDialog
+    openFauteuilDialog,
+    checkFauteuilAlert
 } from '../js/machines/fauteuil-alert.js';
 import { jourChoisi } from '../js/machines/mire-alert.js';
 import { chargerEtat } from '../js/core/api.js';
@@ -169,6 +170,13 @@ describe('Fauteuil Alert Module Tests', () => {
             saveFauteuilDataForMachine('Fauteuil Sinius', echeance);
             openFauteuilDialog('Fauteuil Sinius');
             expect(document.getElementById('fauteuil-custom-date').value).toBe(formatDateInput(echeance));
+        });
+
+        test('la vérification automatique ne réinitialise pas une boîte déjà ouverte', () => {
+            document.body.innerHTML = '<div id="fauteuil-overlay" class="hidden"><div id="fauteuil-cabinet-display"></div></div>';
+            openFauteuilDialog('Fauteuil Anthos');
+            checkFauteuilAlert();   // minuteur 60 s ou donnees-modifiees
+            expect(document.getElementById('fauteuil-cabinet-display').textContent).toContain('Anthos');
         });
 
         test('jourChoisi refuse un calendrier vide, aujourd\'hui ou un jour passé', () => {

@@ -12,6 +12,8 @@
  * entrée par opération, avec la route d'origine (POST /api/stock...).
  * serveur.conflitSur = "REF|Espace" : le prochain lot qui écrit cette ligne
  * est refusé en conflit (409), comme si un autre poste l'avait modifiée.
+ * Les documents ont une version (serveur.versions) : un PUT dont l'en-tête
+ * X-Version n'est pas la version actuelle est refusé en conflit (409).
  */
 
 const ROUTES_LOT = {
@@ -30,6 +32,7 @@ export function installerServeurFactice({ base, documents } = {}) {
     const etat = {
         base: base || { produits: [], stock: [], transactions: [], autoclave: [], historique_prix: [], nextTxId: 1, nextAutoId: 1 },
         documents: { ...(documents || {}) },
+        versions: {},
         revision: 0,
         appels: [],
         lots: [],
@@ -40,7 +43,7 @@ export function installerServeurFactice({ base, documents } = {}) {
         const methode = options.method || "GET";
         const corps = options.body ? JSON.parse(options.body) : undefined;
         const route = String(url).split("?")[0];
-        etat.appels.push({ methode, url: String(url), corps });
+        etat.appels.push({ methode, url: String(url), corps, entetes: options.headers || {} });
 
         let data = {};
         if (route === "/api/lot") {
@@ -67,11 +70,22 @@ export function installerServeurFactice({ base, documents } = {}) {
             etat.revision++;
         } else if (route === "/api/etat") {
             // Copie : comme un vrai serveur, l'état renvoyé n'est pas l'objet modifié par l'interface
-            data = JSON.parse(JSON.stringify({ base: etat.base, documents: etat.documents }));
+            data = JSON.parse(JSON.stringify({ base: etat.base, documents: etat.documents,
+                                               versions_documents: etat.versions }));
         } else if (route.startsWith("/api/documents/")) {
             const cle = decodeURIComponent(route.slice("/api/documents/".length));
             if (methode === "PUT") {
+                const lue = (options.headers || {})["X-Version"];
+                if (lue !== undefined && Number(lue) !== (etat.versions[cle] || 0)) {
+                    return {
+                        ok: false,
+                        status: 409,
+                        json: async () => ({ status: "error", conflit: true, message: "Conflit" })
+                    };
+                }
                 etat.documents[cle] = corps;
+                etat.versions[cle] = (etat.versions[cle] || 0) + 1;
+                data = { version: etat.versions[cle] };
                 etat.revision++;
             } else {
                 data = { valeur: etat.documents[cle] ?? null };

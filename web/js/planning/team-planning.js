@@ -8,7 +8,7 @@ documents "planning" et "planning_couleurs" : rien n'est écrit dans le code.
 ============================================================ */
 
 import { escapeHtml } from '../core/utils.js';
-import { getDocument, setDocument } from '../core/api.js';
+import { getDocument, setDocument, getVersionDocument } from '../core/api.js';
 import { getWeekNumber } from './clock.js';
 import {
     JOURS, couleurCellule, attributsCouleur, renderLegende, renderEditeurCouleurs,
@@ -40,6 +40,8 @@ export function normaliserPlanning(doc) {
     return resultat;
 }
 
+let versionsOuverture = {}; // versions des documents à l'ouverture de la fenêtre
+
 export function getCalendarData() {
     return brouillon || normaliserPlanning(getDocument("planning"));
 }
@@ -48,8 +50,9 @@ export function saveCalendarData() {
     const donnees = brouillon || getCalendarData();
     const couleurs = terminerEditionCouleurs();
     brouillon = null;
-    setDocument("planning", donnees);
-    if (couleurs) setDocument("planning_couleurs", couleurs);
+    // Versions lues à l'ouverture : refus si un autre poste a enregistré entre-temps
+    setDocument("planning", donnees, { version: versionsOuverture.planning });
+    if (couleurs) setDocument("planning_couleurs", couleurs, { version: versionsOuverture.couleurs });
 }
 
 function abandonnerEdition() {
@@ -79,6 +82,7 @@ let currentActualWeekNo = null;
 let currentActualParity = 'even';
 let currentPreviewParity = null; // null = suit la parité réelle
 let currentDayOffset = 0; // 0 = aujourd'hui (ou lundi si dimanche)
+let dernierJour = ""; // jour du dernier affichage (toDateString)
 
 export function getActualParity() {
     return currentActualParity;
@@ -140,6 +144,13 @@ export function updateTeamPlanning(weekNo) {
 
     const now = new Date();
     const dayOfWeek = now.getDay(); // 0 = Dimanche, 1 = Lundi, ...
+
+    // Écran resté allumé : au changement de jour, revenir sur aujourd'hui et la semaine réelle
+    if (now.toDateString() !== dernierJour) {
+        dernierJour = now.toDateString();
+        currentDayOffset = 0;
+        currentPreviewParity = null;
+    }
 
     // Si c'est dimanche (0), la prochaine journée travaillée est lundi (semaine suivante !)
     let effectiveWeekNo = currentActualWeekNo;
@@ -321,6 +332,8 @@ export function openCalendarModal() {
     const modal = document.getElementById("calendar-overlay");
     if (!modal) return;
     brouillon = normaliserPlanning(getDocument("planning"));
+    versionsOuverture = { planning: getVersionDocument("planning"),
+                          couleurs: getVersionDocument("planning_couleurs") };
     commencerEditionCouleurs();
     renderAllCalendars();
     switchCalendarModalTab(getPreviewParity());

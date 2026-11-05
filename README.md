@@ -54,9 +54,26 @@ reprendre une base existante : copier son `stock.db` dans `C:\tooth_dentaire\don
 Au premier lancement en réseau, Windows demande d'autoriser Python dans le
 pare-feu : accepter pour les **réseaux privés**.
 
-> Le serveur n'a pas de mot de passe : il est prévu pour le réseau du cabinet
-> uniquement. Les requêtes venant d'un autre site web sont refusées, et le
-> changement de base ne peut se faire que depuis le poste qui fait tourner le serveur.
+### Utiliser depuis un autre poste (code d'appairage)
+
+La première fois, un autre poste (ou une tablette) qui ouvre l'adresse réseau
+arrive sur une page qui demande un **code à 6 chiffres** : il est affiché dans
+la console du serveur (`Code d'appairage … : 123 456`, valable 10 minutes, usage
+unique). Le bon code donne au navigateur un cookie valable un an ; le poste qui
+fait tourner le serveur n'a jamais besoin de code. Le jeton est dans
+`~/.web_tools/jeton-reseau.txt` (le supprimer oblige tous les postes à refaire le code).
+
+Si la commande `openssl` existe sur le poste serveur (Git pour Windows, Linux),
+le réseau passe en **HTTPS** : chaque poste installe une fois la CA du poste
+(`/appairage/ca.pem`, adresse affichée dans la console). Sans `openssl`, ou avec
+la variable `WEB_TOOLS_HTTP=1`, tout reste en HTTP et la console le dit.
+
+Autres protections : un appareil d'Internet ou un nom d'hôte inconnu (DNS
+rebinding) est refusé ; une écriture doit porter l'en-tête `X-Tooth: 1` (une page
+d'un autre site ne peut pas l'ajouter) ; deux postes qui modifient le même
+document (planning, notes, checklist…) ne s'écrasent plus : le second est prévenu
+et l'écran est rechargé. Le changement de base et la clé GitHub ne se règlent
+que depuis le poste qui fait tourner le serveur.
 
 ## Données et confidentialité
 

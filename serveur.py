@@ -27,8 +27,9 @@ Un double-clic suffit sous Windows : le navigateur s'ouvre sur la bonne adresse
 et la console reste ouverte. Les autres postes du cabinet ouvrent l'adresse
 reseau affichee au demarrage (http://<ip>:8150/).
 
-C'est un serveur sans authentification : a n'utiliser que sur le reseau du
-cabinet. --local coupe l'acces depuis les autres postes.
+Chaque autre poste saisit une fois le code d'appairage a 6 chiffres affiche
+dans la console (appairage.py, commun aux web tools). --local coupe l'acces
+depuis les autres postes.
 """
 
 import argparse
@@ -39,7 +40,6 @@ import json
 import math
 import os
 import posixpath
-import re
 import socket
 import socketserver
 import sys
@@ -65,6 +65,7 @@ DOSSIER_PYTHON = os.path.join(ROOT, "python")
 if DOSSIER_PYTHON not in sys.path:
     sys.path.insert(0, DOSSIER_PYTHON)
 
+import appairage                              # noqa: E402
 import base                                   # noqa: E402
 import exports                                # noqa: E402
 import journal                                # noqa: E402
@@ -73,14 +74,13 @@ import mise_a_jour                            # noqa: E402
 import sauvegarde                             # noqa: E402
 import signalements                           # noqa: E402
 
-# Origines acceptees pour les requetes qui modifient les donnees (CSRF) :
-# localhost, les adresses des reseaux prives (postes du cabinet) et
-# Tailscale (100.64.0.0/10, acces distant via le tailnet).
-ORIGINES = re.compile(
-    r"^https?://(localhost|127\.\d+\.\d+\.\d+|\[::1\]|10\.\d+\.\d+\.\d+|"
-    r"192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|"
-    r"100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.\d+\.\d+)(:\d+)?$")
-TAILSCALE = ipaddress.ip_network("100.64.0.0/10")
+# En-tete maison exige sur les requetes qui modifient les donnees (CSRF) : une
+# page d'un autre site ne peut pas l'ajouter sans pre-vol CORS, jamais accepte ici.
+ENTETE_CSRF = "X-Tooth"
+
+# Controle d'acces reseau (code d'appairage, jeton, Host, refus d'Internet) :
+# remplace dans start_server selon l'adresse d'ecoute.
+GARDE = appairage.Garde("tooth_dentaire", actif=False)
 
 
 # ------------------------------------------------------------------
@@ -146,13 +146,6 @@ def adresse_locale(host, port):
     return "http://%s:%d/" % (host, port)
 
 
-def est_tailscale(hote):
-    try:
-        return ipaddress.ip_address(hote) in TAILSCALE
-    except ValueError:
-        return False
-
-
 def est_boucle_locale(adresse):
     try:
         return ipaddress.ip_address(adresse.split("%")[0]).is_loopback
@@ -163,6 +156,10 @@ def est_boucle_locale(adresse):
 # ------------------------------------------------------------------
 # Gestionnaire HTTP
 # ------------------------------------------------------------------
+
+class CorpsTropGros(base.ErreurDonnees):
+    """Corps au-dela de TAILLE_MAX_CORPS (repondu en 413)."""
+
 
 def _refuser_constante(nom):
     raise ValueError("valeur non numerique : %s" % nom)
@@ -180,6 +177,7 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
 
     server_version = "StockCabinet/" + VERSION
     ECOUTE_LOCALE = False                     # fixe par start_server
+    timeout = 60                              # un client muet libere son fil
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=DOSSIER_WEB, **kwargs)
@@ -187,30 +185,14 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
     # -- securite ---------------------------------------------------
 
     def parse_request(self):
-        if not super().parse_request():
-            return False
-        # Protection DNS rebinding : seul un Host connu est accepte.
-        hote = (self.headers.get("Host") or "").rsplit(":", 1)[0].strip("[]").lower()
-        if hote:
-            permis = {"localhost", "127.0.0.1", "::1", get_local_ip()}
-            try:
-                permis.add(str(self.server.server_address[0]).split("%")[0])
-            except (AttributeError, IndexError):
-                pass
-            try:
-                permis.add(socket.gethostname().lower())
-            except OSError:
-                pass
-            if hote not in permis and not est_tailscale(hote):
-                self.send_error(403, "Host non autorise")
-                return False
-        return True
+        # Host (DNS rebinding), Internet, HTTPS, jeton : avant toute route
+        return super().parse_request() and GARDE.filtrer(self)
 
     def _origine_valide(self):
         """Rejette les requetes modificatrices venant d'un autre site (CSRF)."""
-        origine = self.headers.get("Origin")
-        if origine and not ORIGINES.match(origine):
-            self._json({"status": "error", "message": "Origine refusee."}, 403)
+        if self.headers.get(ENTETE_CSRF) != "1":
+            self.close_connection = True
+            self._json({"status": "error", "message": "Requête refusée."}, 403)
             return False
         return True
 
@@ -248,8 +230,8 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
     def log_message(self, format, *args):
         # Journal lisible : on n'affiche ni les fichiers statiques ni la
         # surveillance de revision qui tourne toutes les quelques secondes.
-        texte = format % args
-        if "/api/revision" in texte or ("/api/" not in texte and '" 200 ' in texte) \
+        texte = appairage.masquer(format % args)
+        if "Request timed out" in texte or "/api/revision" in texte or ("/api/" not in texte and '" 200 ' in texte) \
                 or '" 304 ' in texte:
             return
         sys.stderr.write("[%s] %s\n" % (self.log_date_time_string(), texte))
@@ -278,7 +260,8 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
         except ValueError:
             taille = 0
         if taille > TAILLE_MAX_CORPS:
-            raise base.ErreurDonnees("Requete trop volumineuse.")
+            self.close_connection = True          # corps non lu : la connexion ne resservira pas
+            raise CorpsTropGros("Requete trop volumineuse.")
         brut = self.rfile.read(taille) if taille > 0 else b""
         if not brut:
             return None
@@ -290,6 +273,13 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
         except (UnicodeDecodeError, ValueError):
             raise base.ErreurDonnees("JSON invalide.")
 
+    def _lire_objet(self):
+        """Corps JSON d'une route POST : un objet (ou rien)."""
+        data = self._lire_json()
+        if data is not None and not isinstance(data, dict):
+            raise base.ErreurDonnees("Format de donnees invalide (objet attendu).")
+        return data
+
     def _executer(self, action):
         """Execute action() et traduit les erreurs en JSON."""
         try:
@@ -299,6 +289,8 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
             resultat.setdefault("status", "ok")
             resultat.setdefault("revision", base.revision())
             self._json(resultat)
+        except CorpsTropGros as exc:
+            self._json({"status": "error", "message": str(exc)}, 413)
         except base.ErreurConflit as exc:
             self._json({"status": "error", "conflit": True, "message": str(exc)}, 409)
         except (base.ErreurDonnees, signalements.SignalementInvalide) as exc:
@@ -309,7 +301,8 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
             self._json({"status": "error", "message": str(exc)}, 409)
         except Exception as exc:                          # noqa: BLE001
             traceback.print_exc()
-            self._json({"status": "error", "message": "Erreur serveur : %s" % exc}, 500)
+            # le detail (chemins disque...) reste dans le journal du serveur
+            self._json({"status": "error", "message": "Erreur serveur (%s)." % type(exc).__name__}, 500)
 
     # -- routes -------------------------------------------------------
 
@@ -324,6 +317,7 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
             return self._executer(lambda: {
                 "base": base.charger_base(),
                 "documents": base.lire_documents(),
+                "versions_documents": base.versions_documents(),
             })
         if route == "/api/info":
             return self._executer(self._info)
@@ -385,7 +379,7 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
         action = routes.get(route)
         if action is None:
             return self._json({"status": "error", "message": "Route inconnue."}, 404)
-        self._executer(lambda: action(self._lire_json()))
+        self._executer(lambda: action(self._lire_objet()))
 
     def do_PUT(self):
         route = self._route()
@@ -393,7 +387,11 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
             return
         if route.startswith("/api/documents/"):
             cle = route[len("/api/documents/"):]
-            return self._executer(lambda: base.ecrire_document(cle, self._lire_json()))
+            # X-Version : version du document lue par le poste ; refus (409) si un
+            # autre poste l'a reecrit entre-temps. Absent (ancienne page) : pas de controle.
+            version = self.headers.get("X-Version")
+            return self._executer(lambda: base.ecrire_document(
+                cle, self._lire_json(), None if version is None else base.safe_int(version, -1)))
         self._json({"status": "error", "message": "Route inconnue."}, 404)
 
     def do_DELETE(self):
@@ -414,8 +412,7 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
 
     def _info(self):
         port = self.server.server_address[1]
-        adresses = [] if CustomHandler.ECOUTE_LOCALE else \
-            ["http://%s:%d/" % (get_local_ip(), port)]
+        adresses = [] if CustomHandler.ECOUTE_LOCALE else [GARDE.adresse(get_local_ip(), port)]
         return {"version": VERSION, "adresses_reseau": adresses,
                 "commit": mise_a_jour.etat()["version_locale"]}
 
@@ -527,6 +524,9 @@ def start_server(host, port, navigateur=True):
 
     hote, port_obtenu = httpd.server_address[0], httpd.server_address[1]
     CustomHandler.ECOUTE_LOCALE = est_boucle_locale(hote)
+    global GARDE
+    GARDE = appairage.Garde("tooth_dentaire", actif=not CustomHandler.ECOUTE_LOCALE)
+    GARDE.brancher(httpd)
     url = adresse_locale(hote, port_obtenu)
 
     print("=" * 62)
@@ -538,9 +538,10 @@ def start_server(host, port, navigateur=True):
     if CustomHandler.ECOUTE_LOCALE:
         print("  reseau          : desactive (--local)")
     else:
-        print("  autres postes   : http://%s:%d/" % (get_local_ip(), port_obtenu))
+        print("  autres postes   : %s" % GARDE.adresse(get_local_ip(), port_obtenu))
         print("  (au premier lancement, autoriser Python dans le pare-feu Windows)")
     print("=" * 62)
+    GARDE.annoncer()
     print("Ctrl+C pour arreter le serveur.")
     print("")
 

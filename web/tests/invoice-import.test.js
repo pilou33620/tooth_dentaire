@@ -218,6 +218,14 @@ describe('validation de l\'import', () => {
             .toContain('Quantité invalide');
     });
 
+    test('une erreur sur une ligne suivante n\'importe pas les lignes déjà vues', async () => {
+        preparerImport([article({ reference: 'A' }), article({ reference: 'B' })]);
+        lignes().forEach(tr => poserCodeBarres(tr, '3401'));
+        lignes()[1].querySelector('.import-qte-base').value = '-2';
+        await validerAvecMessages();
+        expect(loadDB().stock).toHaveLength(0);
+    });
+
     test('un champ quantité vide retombe sur la quantité facturée', async () => {
         preparerImport([article({ quantite: 7 })]);
         poserCodeBarres(lignes()[0], '3401');
@@ -431,6 +439,13 @@ describe('produits périmés sur la facture', () => {
         lignes()[1].querySelector('.import-qte-base').value = '0';
         await validerAvecMessages();
         expect(loadDB().stock.map(s => s.reference)).toEqual(['REF1']);
+    });
+
+    test('une date illisible bloque toute la facture', async () => {
+        poserLot(lignes()[1], 'L1', '31/12/26');
+        await validerAvecMessages();
+        expect(loadDB().stock).toHaveLength(0);
+        expect(document.getElementById('msg-title').textContent).toContain('Date invalide');
     });
 
     test('des lots valides sont importés normalement', async () => {

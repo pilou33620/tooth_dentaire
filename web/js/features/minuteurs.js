@@ -100,8 +100,8 @@ function lire() {
     return normaliserMinuteurs(getDocument(CLE_MINUTEURS));
 }
 
-function enregistrer(doc) {
-    return setDocument(CLE_MINUTEURS, doc);
+function enregistrer(doc, options) {
+    return setDocument(CLE_MINUTEURS, doc, options);
 }
 
 function lireLocaux() {
@@ -154,7 +154,7 @@ export function nettoyer(maintenant = Date.now()) {
     const retires = doc.actifs.length - gardes.length;
     if (retires > 0) {
         doc.actifs = gardes;
-        enregistrer(doc);
+        enregistrer(doc, { silencieux: true });     // ménage de fond, fait par chaque poste
     }
     return retires;
 }

@@ -77,6 +77,7 @@ class ClientApi:
         url = self.base_url + route
         hdrs = {
             "Origin": self.origin,
+            "X-Tooth": "1",
             "User-Agent": "Benchmarker/1.0",
         }
         if headers:
@@ -461,7 +462,8 @@ def tester_securite_et_robustesse(client, r):
     # 4. JSON malforme
     url = client.base_url + "/api/produit"
     req = urllib.request.Request(url, data=b"{malformed json", headers={
-        "Origin": client.origin, "Content-Type": "application/json"
+        "Origin": client.origin,
+        "X-Tooth": "1", "Content-Type": "application/json"
     }, method="POST")
     try:
         urllib.request.urlopen(req)

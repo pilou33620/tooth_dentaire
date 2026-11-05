@@ -5,12 +5,13 @@
    ============================================================ */
 
 import { escapeHtml } from '../core/utils.js';
-import { getDocument, setDocument } from '../core/api.js';
+import { getDocument, setDocument, getVersionDocument } from '../core/api.js';
 import { couleurTache, attributsCouleur } from './couleurs.js';
 
 /* Les tâches sont en base (document "taches") : aucun nom dans le code. */
 
 let brouillon = null; // copie en cours d'édition (fenêtre ouverte)
+let versionOuverture; // version du document à l'ouverture de la fenêtre
 
 function normaliserTaches(doc) {
     const d = (doc && typeof doc === "object") ? doc : {};
@@ -30,7 +31,7 @@ export function getTasksData() {
 }
 
 export function saveTasksData() {
-    if (brouillon) setDocument("taches", brouillon);
+    if (brouillon) setDocument("taches", brouillon, { version: versionOuverture });
     brouillon = null;
 }
 
@@ -128,6 +129,7 @@ window.updateTasksHeader = function (field, value) {
 /** Ouvre la fenêtre d'édition sur une copie du tableau enregistré. */
 export function ouvrirTaches() {
     brouillon = normaliserTaches(getDocument("taches"));
+    versionOuverture = getVersionDocument("taches");
     const note = document.getElementById("tasks-note");
     if (note) note.value = brouillon.note;
     const overlay = document.getElementById("tasks-overlay");

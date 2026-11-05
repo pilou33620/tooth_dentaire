@@ -197,6 +197,14 @@ describe('transfert sans suivi de lot', () => {
         expect(source.lots_details).toBe('[]');
     });
 
+    test('transférer tout le stock garde la date de péremption à destination', () => {
+        setDbCache(baseDeTest([ligneStock({ date_peremption: '31/12/2030' })]));
+        remplirDialogue({ qte: '10' });
+        saveTransferDialog();
+        expect(entree('REF1', 'Cabinet 2').date_peremption).toBe('31/12/2030');
+        expect(entree('REF1', 'Cabinet 1').date_peremption).toBe('');
+    });
+
     test('la boîte de dialogue se ferme après un transfert réussi', () => {
         remplirDialogue({ qte: '1' });
         saveTransferDialog();

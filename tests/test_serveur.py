@@ -29,6 +29,8 @@ def srv(base_temp):
 def requete(port, methode, chemin, corps=None, entetes=None):
     conn = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
     h = {"Host": "127.0.0.1:%d" % port}
+    if methode not in ("GET", "HEAD"):
+        h[serveur.ENTETE_CSRF] = "1"
     h.update(entetes or {})
     donnees = None
     if corps is not None:
@@ -79,8 +81,10 @@ def test_host_inconnu_refuse(srv):
 
 
 @pytest.mark.parametrize("hote,attendu", [
-    ("100.80.111.121:8150", 200), ("100.64.0.1", 200), ("100.128.0.1:8150", 403)])
-def test_host_tailscale(srv, hote, attendu):
+    ("100.80.111.121:8150", 200), ("100.64.0.1", 200), ("192.168.1.20:8150", 200),
+    ("[::1]:8150", 200), ("piege.example:8150", 403)])
+def test_host_ip_ou_poste_accepte(srv, hote, attendu):
+    # Une IP litterale ne se rebranche pas (DNS rebinding) : seule un nom inconnu est refuse
     code, _, _ = requete(srv, "GET", "/api/revision", entetes={"Host": hote})
     assert code == attendu
 
@@ -159,7 +163,8 @@ def test_donnees_invalides_400(srv):
 def test_json_invalide_400(srv):
     conn = http.client.HTTPConnection("127.0.0.1", srv, timeout=10)
     conn.request("POST", "/api/stock", body=b"{pas du json",
-                 headers={"Host": "127.0.0.1", "Content-Type": "application/json"})
+                 headers={"Host": "127.0.0.1", "Content-Type": "application/json",
+                          "X-Tooth": "1"})
     rep = conn.getresponse()
     assert rep.status == 400
     conn.close()
@@ -172,7 +177,8 @@ def test_nombres_non_finis_refuses(srv, corps):
     # Enregistrés, ils rendraient /api/etat illisible pour les navigateurs
     conn = http.client.HTTPConnection("127.0.0.1", srv, timeout=10)
     conn.request("PUT", "/api/documents/notes", body=corps,
-                 headers={"Host": "127.0.0.1", "Content-Type": "application/json"})
+                 headers={"Host": "127.0.0.1", "Content-Type": "application/json",
+                          "X-Tooth": "1"})
     rep = conn.getresponse()
     assert rep.status == 400
     conn.close()
@@ -192,23 +198,58 @@ def test_info_version(srv):
 
 
 # ------------------------------------------------------------------
-# CSRF : origine des requetes qui modifient les donnees
+# CSRF : en-tete maison exige sur les requetes qui modifient les donnees
 # ------------------------------------------------------------------
 
-@pytest.mark.parametrize("origine", ["https://attaquant.example", "http://evil.com:8150",
-                                     "http://100.128.0.1:8150"])
-def test_origine_externe_refusee(srv, origine):
-    code, _, _ = requete(srv, "POST", "/api/produit", produit(), {"Origin": origine})
+@pytest.mark.parametrize("methode,chemin", [
+    ("POST", "/api/produit"), ("PUT", "/api/documents/notes"), ("DELETE", "/api/produit?reference=X")])
+def test_ecriture_sans_entete_maison_refusee(srv, methode, chemin):
+    base.update_produit(produit("X"))
+    code, _, _ = requete(srv, methode, chemin, {"items": []}, {serveur.ENTETE_CSRF: ""})
     assert code == 403
-    assert base.charger_base()["produits"] == []
+    assert [p["reference"] for p in base.charger_base()["produits"]] == ["X"]
+    assert base.lire_document("notes") == base.DOCUMENTS_DEFAUT["notes"]
 
 
-@pytest.mark.parametrize("origine", [
-    "http://127.0.0.1:8150", "http://localhost:8150", "http://192.168.1.20:8150",
-    "http://10.0.0.5:8150", "http://172.16.3.4:8150", "http://100.80.111.121:8150"])
-def test_origine_du_reseau_local_acceptee(srv, origine):
-    code, _, _ = requete(srv, "POST", "/api/produit", produit(), {"Origin": origine})
-    assert code == 200
+def test_corps_trop_gros_413(srv, monkeypatch):
+    monkeypatch.setattr(serveur, "TAILLE_MAX_CORPS", 10)
+    code, _, rep = requete(srv, "POST", "/api/produit", produit())
+    assert code == 413
+
+
+def test_post_qui_n_est_pas_un_objet_400(srv):
+    code, data, _ = requete(srv, "POST", "/api/lot", [1, 2])
+    assert code == 400 and "objet" in data["message"]
+
+
+def test_erreur_500_sans_detail(srv, monkeypatch):
+    def plante():
+        raise OSError("/chemin/secret/stock.db")
+    monkeypatch.setattr(base, "lister_contacts", plante)
+    code, data, _ = requete(srv, "GET", "/api/contacts")
+    assert code == 500 and "secret" not in data["message"]
+
+
+# ------------------------------------------------------------------
+# Documents : un poste n'ecrase pas ce qu'un autre a enregistre entre-temps
+# ------------------------------------------------------------------
+
+def test_document_version_perimee_refusee(srv):
+    _, etat, _ = requete(srv, "GET", "/api/etat")
+    assert etat["versions_documents"]["notes"] == 0
+    code, data, _ = requete(srv, "PUT", "/api/documents/notes", {"items": ["A"]}, {"X-Version": "0"})
+    assert code == 200 and data["version"] == 1
+    # Un second poste qui avait lu la version 0
+    code, data, _ = requete(srv, "PUT", "/api/documents/notes", {"items": ["B"]}, {"X-Version": "0"})
+    assert code == 409 and data["conflit"] is True
+    assert base.lire_document("notes") == {"items": ["A"]}
+    # Sans X-Version (ancienne page) : pas de controle
+    assert requete(srv, "PUT", "/api/documents/notes", {"items": ["C"]})[0] == 200
+    assert base.versions_documents()["notes"] == 2
+
+
+def test_document_vide_refuse(srv):
+    assert requete(srv, "PUT", "/api/documents/notes")[0] == 400
 
 
 # ------------------------------------------------------------------
@@ -307,3 +348,22 @@ def test_lot_en_conflit_repond_409(srv):
     code, corps, _ = requete(srv, "POST", "/api/lot", {"operations": [
         {"action": "updateStockItem", "donnees": ligne_stock(version=None)}]})
     assert code == 409 and corps["conflit"] is True and "autre poste" in corps["message"]
+
+
+# ------------------------------------------------------------------
+# Appairage : un autre poste sans le jeton n'accede a rien
+# ------------------------------------------------------------------
+
+def test_appareil_non_appaire_refuse(srv, monkeypatch, tmp_path):
+    import appairage
+    monkeypatch.setenv("WEB_TOOLS_JETON_FICHIER", str(tmp_path / "jeton.txt"))
+    garde = appairage.Garde("tooth_dentaire", actif=True, afficher=lambda *a: None)
+    monkeypatch.setattr(serveur, "GARDE", garde)
+    monkeypatch.setattr(appairage.Garde, "ce_poste", staticmethod(lambda h: False))
+    assert requete(srv, "GET", "/api/etat")[0] == 403
+    code, _, rep = requete(srv, "GET", "/", entetes={"Accept": "text/html"})
+    assert code == 303 and rep.getheader("Location") == appairage.PAGE
+    assert requete(srv, "POST", "/api/produit", produit())[0] == 403
+    assert base.charger_base()["produits"] == []
+    biscuit = "%s=%s" % (appairage.BISCUIT, garde.jeton)
+    assert requete(srv, "GET", "/api/etat", entetes={"Cookie": biscuit})[0] == 200

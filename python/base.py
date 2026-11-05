@@ -251,6 +251,8 @@ def init_db():
                 valeur      TEXT NOT NULL,
                 modifie_le  TEXT DEFAULT (datetime('now', 'localtime'))
             )""")
+        # +1 a chaque ecriture : detecte deux postes qui reecrivent le meme document
+        _ajouter_colonne(cur, "documents", "version INTEGER DEFAULT 0")
         conn.commit()
     finally:
         conn.close()
@@ -733,13 +735,38 @@ def lire_documents():
     return {cle: _decoder_document(cle, valeurs.get(cle)) for cle in DOCUMENTS_DEFAUT}
 
 
-def ecrire_document(cle, valeur):
+def versions_documents():
+    """Version de chaque document (0 s'il n'a jamais ete ecrit)."""
+    conn = connexion()
+    try:
+        versions = {r["cle"]: safe_int(r["version"]) for r in
+                    conn.execute("SELECT cle, version FROM documents")}
+    finally:
+        conn.close()
+    return {cle: versions.get(cle, 0) for cle in DOCUMENTS_DEFAUT}
+
+
+def ecrire_document(cle, valeur, version=None):
+    """Remplace le document. version : celle que le poste a lue ; s'il a ete
+    reecrit depuis par un autre poste, ErreurConflit et rien n'est ecrit."""
     _cle_valide(cle)
+    if valeur is None:
+        raise ErreurDonnees("Document vide.")
     texte = json.dumps(valeur, ensure_ascii=False)
-    _ecrire(lambda cur: cur.execute("""
-        INSERT INTO documents (cle, valeur, modifie_le) VALUES (?, ?, datetime('now', 'localtime'))
-        ON CONFLICT(cle) DO UPDATE SET valeur=excluded.valeur, modifie_le=excluded.modifie_le
-    """, (cle, texte)))
+
+    def faire(cur):
+        ligne = cur.execute("SELECT version FROM documents WHERE cle = ?", (cle,)).fetchone()
+        actuelle = safe_int(ligne["version"]) if ligne else 0
+        if version is not None and version != actuelle:
+            raise ErreurConflit("Ces données viennent d'être modifiées depuis un autre poste.")
+        cur.execute("""
+            INSERT INTO documents (cle, valeur, modifie_le, version)
+            VALUES (?, ?, datetime('now', 'localtime'), ?)
+            ON CONFLICT(cle) DO UPDATE SET valeur=excluded.valeur,
+              modifie_le=excluded.modifie_le, version=excluded.version
+        """, (cle, texte, actuelle + 1))
+        return {"version": actuelle + 1}
+    return _ecrire(faire)
 
 
 def document_present(cle):

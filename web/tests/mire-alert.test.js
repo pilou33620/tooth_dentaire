@@ -228,6 +228,13 @@ describe('checkMireAlert et affichage', () => {
             .toBe(true);
     });
 
+    test('la vérification automatique ne réinitialise pas une boîte déjà ouverte', () => {
+        mire.checkMireAlert(false, 'Radio Cabinet 4');
+        mire.checkMireAlert();   // minuteur 60 s ou donnees-modifiees
+        expect(document.getElementById('mire-cabinet-display').textContent)
+            .toContain('Cabinet 4');
+    });
+
     test('cibler une machine ouvre directement sa fiche', () => {
         mire.checkMireAlert(false, 'Radio Cabinet 4');
         expect(document.getElementById('mire-overlay').classList.contains('hidden'))

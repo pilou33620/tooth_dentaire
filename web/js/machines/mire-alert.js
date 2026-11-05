@@ -311,6 +311,9 @@ export function checkMireAlert(force = false, targetMachine = null) {
     updateMireIconStatus();
 
     // 3. Popup automatique si échéance échue et pas de mise en veille
+    // Boîte déjà ouverte : ne pas la réinitialiser (machine choisie, date et note en cours)
+    const overlayOuvert = document.getElementById('mire-overlay');
+    if (overlayOuvert && !overlayOuvert.classList.contains('hidden')) return;
     if (overdueList.length > 0 && !mireDismissed && (force || !mireGlobalSnooze)) {
         openMireDialog(overdueList[0].machine);
     }
