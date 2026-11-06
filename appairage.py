@@ -26,7 +26,7 @@ appareil l'installe une fois (/appairage/ca.pem) et fait confiance à tous les
 tools du poste. Le MÊME PORT sert HTTPS et HTTP : un premier octet 0x16 est une
 poignée de main TLS. La boucle locale garde HTTP (navigateur du poste, MCP,
 bancs) ; un autre appareil arrivé en HTTP est renvoyé vers https://. Sans
-openssl (Pyto, Windows sans Git), ou avec WEB_TOOLS_HTTP=1, tout reste en HTTP
+openssl (Windows sans Git), ou avec WEB_TOOLS_HTTP=1, tout reste en HTTP
 et le terminal le dit.
 
 Usage dans un serveur (http.server) :
@@ -119,7 +119,7 @@ def jeton(ancien=None):
         # shortcut: deux tools qui le remplacent au même instant gardent le dernier écrit ; un verrou si ça arrive
         return _lire(chemin) or neuf
     except OSError:
-        # Dossier personnel en lecture seule (Pyto sur iPad…) : un jeton pour
+        # Dossier personnel en lecture seule : un jeton pour
         # cette session seulement ; les appareils redonneront le code au redémarrage.
         return neuf
     with os.fdopen(fd, "w", encoding="utf-8") as f:
