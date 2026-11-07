@@ -40,6 +40,7 @@ Usage dans un serveur (http.server) :
     GARDE.annoncer()          # au démarrage : affiche le code dans le terminal
 """
 
+import functools
 import hashlib
 import hmac
 import ipaddress
@@ -146,13 +147,26 @@ def ip_tailscale():
     return ip if ipaddress.ip_address(ip) in ipaddress.ip_network("100.64.0.0/10") else None
 
 
+@functools.lru_cache(maxsize=1)
+def nom_tailscale():
+    """Le nom MagicDNS exact de CE poste (pilou.tailxxxx.ts.net), "" sans Tailscale."""
+    # shortcut: gardé jusqu'au redémarrage de l'outil, à revoir si le poste change de nom Tailscale
+    try:
+        r = subprocess.run(["tailscale", "status", "--json", "--peers=false"], stdin=subprocess.DEVNULL,
+                           capture_output=True, timeout=3)
+        return json.loads(r.stdout)["Self"]["DNSName"].lower().rstrip(".")
+    except (OSError, subprocess.SubprocessError, ValueError, KeyError, TypeError, AttributeError):
+        return ""
+
+
 def hote_permis(entete):
     """L'en-tête Host désigne-t-il ce poste ? (parade au DNS rebinding)
 
     Une page piégée qui fait résoudre son nom vers 127.0.0.1 devient « de même
     origine » ; elle envoie alors SON nom dans Host. Une IP littérale ne se
     rebranche pas : on accepte toutes les IP (la tablette tape celle du poste),
-    localhost et le nom du poste."""
+    localhost, le nom du poste et son nom Tailscale exact (jamais tout *.ts.net : n'importe
+    qui peut en avoir un)."""
     h = (entete or "").strip().lower().rstrip(".")
     if h.startswith("["):
         if "]" not in h:
@@ -163,6 +177,8 @@ def hote_permis(entete):
     nom = socket.gethostname().lower()
     if h in ("", "localhost", nom, nom + ".local"):
         return True
+    if h.endswith(".ts.net"):
+        return h == nom_tailscale()
     try:
         ipaddress.ip_address(h.split("%")[0])
         return True
@@ -380,7 +396,8 @@ def brancher_tls(serveur, ctx):
 
 
 def en_https(handler):
-    return isinstance(getattr(handler, "connection", None), ssl.SSLSocket)
+    # SSLObject : un serveur asyncio (web_theme_H), qui n'a pas de socket SSL à lui
+    return isinstance(getattr(handler, "connection", None), (ssl.SSLSocket, ssl.SSLObject))
 
 
 def filtrer_tls(handler, ce_poste=None):
@@ -856,6 +873,11 @@ if __name__ == "__main__":
         assert req("/app.js", entetes={"Accept": "text/html"}).getheader("Location") == PAGE
         assert req("/api/x", "POST").status == 403
         assert req("/", entetes={"Host": "piege.example:80"}).status == 403
+        vrai_nom, nom_tailscale = nom_tailscale, lambda: "pi.tail1.ts.net"
+        assert hote_permis("PI.tail1.ts.net:8000") and not hote_permis("autre.tail1.ts.net:8000")
+        nom_tailscale = lambda: ""                               # sans Tailscale : aucun nom en .ts.net
+        assert not hote_permis("pi.tail1.ts.net")
+        nom_tailscale = vrai_nom
         r = req(PAGE)
         assert r.status == 200 and b"/api/appairer" in r.corps and b"TEST" in r.corps
         assert b"opaqueredirect" in r.corps                       # déjà autorisé : la page repart seule
