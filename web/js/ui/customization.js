@@ -11,6 +11,7 @@
 import { getDocument } from '../core/api.js';
 
 let isCustomizationModeActive = false;
+const GRID_SIZE = 20;
 const DRAGGABLE_ELEMENT_SELECTORS = [
     "#datetime-container",
     "#team-planning-container",
@@ -63,6 +64,7 @@ export function initCustomizationMode() {
         el.style.flex = "";
     });
 
+    migrerPositionsEnPourcent();
     loadElementPositions();
 
     const banner = document.getElementById("customization-banner");
@@ -142,7 +144,6 @@ export function initCustomizationMode() {
             currentDragEl.parentNode.insertBefore(placeholder, currentDragEl);
 
             currentDragEl.style.width = cssWidth + "px";
-            currentDragEl.style.height = cssHeight + "px";
             currentDragEl.style.boxSizing = "border-box";
 
             const oldTransition = currentDragEl.style.transition;
@@ -165,9 +166,8 @@ export function initCustomizationMode() {
 
             const offsetParent = currentDragEl.offsetParent || document.documentElement;
             const cw = offsetParent.clientWidth || 1;
-            const ch = offsetParent.clientHeight || 1;
             currentDragEl.style.left = ((leftPx / cw) * 100) + "%";
-            currentDragEl.style.top = ((topPx / ch) * 100) + "%";
+            currentDragEl.style.top = topPx + "px";
 
             currentDragEl.offsetHeight; // Force layout before restoring transition
             currentDragEl.style.transition = oldTransition;
@@ -227,9 +227,7 @@ export function initCustomizationMode() {
 
         const offsetParent = currentDragEl.offsetParent || document.documentElement;
         const cw = offsetParent.clientWidth || 1;
-        const ch = offsetParent.clientHeight || 1;
 
-        const GRID_SIZE = 20;
         let newLeftPx = initialLeft + dx;
         let newTopPx = initialTop + dy;
 
@@ -237,7 +235,8 @@ export function initCustomizationMode() {
         newTopPx = Math.round(newTopPx / GRID_SIZE) * GRID_SIZE;
 
         currentDragEl.style.left = ((newLeftPx / cw) * 100) + "%";
-        currentDragEl.style.top = ((newTopPx / ch) * 100) + "%";
+        // En pixels : un % suivrait la hauteur de la page, variable selon le contenu
+        currentDragEl.style.top = newTopPx + "px";
     });
 
     document.addEventListener("click", (e) => {
@@ -287,6 +286,60 @@ function saveElementPosition(el) {
     localStorage.setItem("ui-positions", JSON.stringify(positions));
 }
 
+/**
+ * Hauteur de .bj-widgets au moment où chaque ancien « top » en % a été enregistré :
+ * les positions étaient calées sur la grille, seules quelques hauteurs tombent donc
+ * juste. Plusieurs possibles : celle que partagent le plus de widgets, puis la plus
+ * petite. null si aucune ne convient. Le navigateur arrondit les % à 6 chiffres.
+ */
+export function hauteursEnregistrees(pourcents) {
+    const candidates = pourcents.map(p => {
+        const liste = [];
+        for (let h = 40; h <= 1500; h++) {
+            const px = Math.round(p * h / 100 / GRID_SIZE) * GRID_SIZE;
+            if (parseFloat((px / h * 100).toPrecision(6)) === p) liste.push(h);
+        }
+        return liste;
+    });
+    const votes = new Map();
+    candidates.flat().forEach(h => votes.set(h, (votes.get(h) || 0) + 1));
+    return candidates.map(liste => liste.reduce((a, h) => (votes.get(h) > votes.get(a) ? h : a), liste[0]) ?? null);
+}
+
+/**
+ * Anciennes positions des widgets : en % de .bj-widgets, qui change de hauteur et de
+ * place selon le contenu (widgets envoyés hors de l'écran à certains chargements).
+ * Converties une fois pour toutes vers la page : left en %, top en pixels.
+ */
+function migrerPositionsEnPourcent() {
+    const zone = document.querySelector(".bj-widgets");
+    const page = document.querySelector(".main-layout");
+    if (!zone || !page) return;
+    const positions = JSON.parse(localStorage.getItem("ui-positions") || "{}");
+    const cles = Object.keys(positions).filter(cle => {
+        const { left, top } = positions[cle];
+        return zone.contains(document.getElementById(cle)) && /%$/.test(top) && /%$/.test(left);
+    });
+    if (cles.length === 0) return;
+
+    const hauteurs = hauteursEnregistrees(cles.map(cle => parseFloat(positions[cle].top)));
+    const hauteurActuelle = zone.offsetHeight;
+    const rectPage = page.getBoundingClientRect();
+    const rectZone = zone.getBoundingClientRect();
+    cles.forEach((cle, i) => {
+        const hauteur = hauteurs[i] ?? hauteurActuelle;
+        // La place de la zone dépend de sa hauteur : on la rejoue pour la mesurer
+        zone.style.height = hauteur + "px";
+        const hautZone = zone.getBoundingClientRect().top - rectPage.top;
+        const top = hautZone + parseFloat(positions[cle].top) * hauteur / 100;
+        const left = rectZone.left - rectPage.left + parseFloat(positions[cle].left) * rectZone.width / 100;
+        positions[cle].top = Math.max(0, Math.round(top)) + "px";
+        positions[cle].left = (left / (rectPage.width || 1) * 100) + "%";
+    });
+    zone.style.height = "";
+    localStorage.setItem("ui-positions", JSON.stringify(positions));
+}
+
 function loadElementPositions() {
     let positions = JSON.parse(localStorage.getItem("ui-positions") || "{}");
 
@@ -311,8 +364,8 @@ function loadElementPositions() {
                     if (computed.margin) placeholder.style.margin = computed.margin;
                     el.parentNode.insertBefore(placeholder, el);
 
+                    // Largeur seulement : le contenu n'est pas encore chargé, la hauteur suit
                     if (cssWidth > 0) el.style.width = cssWidth + "px";
-                    if (cssHeight > 0) el.style.height = cssHeight + "px";
                     el.style.boxSizing = "border-box";
 
                     el.style.position = "absolute";

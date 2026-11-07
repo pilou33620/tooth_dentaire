@@ -101,6 +101,39 @@ describe('économiseur d\'écran', () => {
         expect(voile().classList.contains('hidden')).toBe(true);
     });
 
+    test('la souris qui continue de bouger ne retarde pas la fin du fondu', () => {
+        screensaver.initScreensaver();
+        jest.advanceTimersByTime(30 * 60 * 1000 + 20);
+
+        for (let i = 0; i < 5; i++) {
+            document.dispatchEvent(new MouseEvent('mousemove', { bubbles: true }));
+            jest.advanceTimersByTime(200);
+        }
+        expect(voile().classList.contains('hidden')).toBe(true);
+    });
+
+    test('le voile ne bloque plus les clics dès le début du fondu', () => {
+        screensaver.initScreensaver();
+        jest.advanceTimersByTime(30 * 60 * 1000 + 20);
+        expect(voile().style.pointerEvents).toBe('');
+
+        document.dispatchEvent(new MouseEvent('mousemove', { bubbles: true }));
+        expect(voile().style.pointerEvents).toBe('none');
+        expect(voile().classList.contains('hidden')).toBe(false);
+    });
+
+    test('la veille suivante bloque de nouveau et se referme encore', () => {
+        screensaver.initScreensaver();
+        for (let i = 0; i < 2; i++) {
+            jest.advanceTimersByTime(30 * 60 * 1000 + 20);
+            expect(voile().classList.contains('hidden')).toBe(false);
+            expect(voile().style.pointerEvents).toBe('');
+            document.dispatchEvent(new MouseEvent('mousemove', { bubbles: true }));
+            jest.advanceTimersByTime(1000);
+            expect(voile().classList.contains('hidden')).toBe(true);
+        }
+    });
+
     test('l\'absence de voile dans la page ne fait rien planter', () => {
         document.getElementById('screensaver-overlay').remove();
         expect(() => {
@@ -258,6 +291,73 @@ describe('mode personnalisation', () => {
         expect(cible.style.position).toBe('absolute');
         expect(cible.style.left).toBe('120px');
         expect(cible.style.top).toBe('80px');
+    });
+
+    test('les anciennes positions en % du journal retrouvent leur place sur la page', () => {
+        // Positions réelles d'un poste : trois widgets enregistrés quand la zone
+        // faisait 166 px, deux quand elle en faisait 463
+        const anciennes = {
+            'notes-widget': { left: '-5.55556%', top: '-361.446%', scaleX: '1', scaleY: '1' },
+            'postit-wrapper': { left: '86.1111%', top: '-204.819%', scaleX: '1', scaleY: '1' },
+            'team-planning-container': { left: '-11.1111%', top: '-34.5572%', scaleX: '1', scaleY: '1' },
+            'tasks-planning-container': { left: '76.3889%', top: '-373.494%', scaleX: '1', scaleY: '1' },
+            'checklist-widget': { left: '86.1111%', top: '8.63931%', scaleX: '1', scaleY: '1' }
+        };
+        document.body.innerHTML = `<main class="main-layout"><section class="bj-widgets">
+            ${Object.keys(anciennes).map(id => `<div id="${id}"></div>`).join('')}
+        </section></main>`;
+        localStorage.setItem('ui-positions', JSON.stringify(anciennes));
+        const zone = document.querySelector('.bj-widgets');
+        // Comme sur la page : la zone est poussée en bas, au-dessous de l'horloge et des boutons
+        zone.getBoundingClientRect = () => ({
+            top: Math.max(553, 923 - parseFloat(zone.style.height || '0')), left: 240, width: 1440
+        });
+        document.querySelector('.main-layout').getBoundingClientRect = () => ({ top: 0, left: 0, width: 1920 });
+
+        custom.initCustomizationMode();
+
+        const positions = JSON.parse(localStorage.getItem('ui-positions'));
+        expect(positions['tasks-planning-container'].top).toBe('137px');
+        expect(positions['notes-widget'].top).toBe('157px');
+        expect(positions['postit-wrapper'].top).toBe('417px');
+        expect(positions['team-planning-container'].top).toBe('393px');
+        expect(positions['checklist-widget'].top).toBe('593px');
+        expect(parseFloat(positions['team-planning-container'].left)).toBeCloseTo(4.1667, 3);
+        expect(parseFloat(positions['checklist-widget'].left)).toBeCloseTo(77.0833, 3);
+        expect(zone.style.height).toBe('');
+    });
+
+    test('une position déjà en pixels n\'est pas convertie une seconde fois', () => {
+        document.body.innerHTML = `<main class="main-layout"><section class="bj-widgets">
+            <div id="notes-widget"></div></section></main>`;
+        const position = { left: '20%', top: '157px', scaleX: 1, scaleY: 1 };
+        localStorage.setItem('ui-positions', JSON.stringify({ 'notes-widget': position }));
+        custom.initCustomizationMode();
+        expect(JSON.parse(localStorage.getItem('ui-positions'))['notes-widget']).toEqual(position);
+    });
+
+    test('un % hors de la grille reste à l\'écran', () => {
+        document.body.innerHTML = `<main class="main-layout"><section class="bj-widgets">
+            <div id="notes-widget"></div></section></main>`;
+        localStorage.setItem('ui-positions', JSON.stringify({
+            'notes-widget': { left: '10%', top: '-333.3%', scaleX: 1, scaleY: 1 }
+        }));
+        expect(custom.hauteursEnregistrees([-333.3])).toEqual([null]);
+        custom.initCustomizationMode();
+        expect(JSON.parse(localStorage.getItem('ui-positions'))['notes-widget'].top).toBe('0px');
+    });
+
+    test('la hauteur d\'un widget replacé n\'est pas figée avant le chargement de son contenu', () => {
+        localStorage.setItem('ui-positions', JSON.stringify({
+            'postit-wrapper': { left: '120px', top: '80px', scaleX: 1, scaleY: 1 }
+        }));
+        const cible = document.getElementById('postit-wrapper');
+        Object.defineProperty(cible, 'offsetHeight', { value: 91 });
+        Object.defineProperty(cible, 'offsetWidth', { value: 330 });
+        custom.initCustomizationMode();
+        appliquerPositionsDifferees();
+        expect(cible.style.width).toBe('330px');
+        expect(cible.style.height).toBe('');
     });
 
     test('une échelle enregistrée est réappliquée', () => {

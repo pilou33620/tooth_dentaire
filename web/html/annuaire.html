@@ -290,7 +290,7 @@
             <div class="page left">
                 <h1>Carnets d'Adresses</h1>
                 <div class="search-container" style="margin-bottom: 15px;">
-                    <input type="text" id="search-input" placeholder="Rechercher un contact..." onkeyup="filterContacts()" style="width: 100%; padding: 8px; border: none; border-bottom: 1px dashed #999; background: transparent; font-size: 14px; outline: none; color: var(--text-color); font-family: inherit;">
+                    <input type="text" id="search-input" placeholder="Rechercher un contact..." oninput="filterContacts()" style="width: 100%; padding: 8px; border: none; border-bottom: 1px dashed #999; background: transparent; font-size: 14px; outline: none; color: var(--text-color); font-family: inherit;">
                 </div>
                 <ul class="contact-list" id="contact-list"></ul>
                 <button class="btn-add" onclick="showAddForm()">+ Nouveau Contact</button>
@@ -562,5 +562,6 @@
 
         rechargerContacts();
     </script>
+    <script type="module" src="../js/ui/effacer-saisie.js"></script>
 </body>
 </html>

@@ -605,7 +605,8 @@ body.bj {
     width: 100%;
     max-width: 1440px;
     margin-top: 4vh;
-    position: relative;
+    /* Pas de position ici : les widgets déplacés se repèrent sur la page, car
+       cette zone change de hauteur et de place selon son contenu. */
 }
 
 .bj-widget {

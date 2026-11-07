@@ -37,6 +37,7 @@ import { initPostitHover, updatePostitListHeight } from './features/alerts.js';
 import { getStock } from './features/stock.js';
 import { showMessage } from './core/utils.js';
 import './features/barcode-scanner.js';
+import './ui/effacer-saisie.js';
 
 // Expose functions needed by other modules (clock.js, settings.js, animation.js)
 window.updateTeamPlanning = updateTeamPlanning;

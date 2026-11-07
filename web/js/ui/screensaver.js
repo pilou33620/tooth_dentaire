@@ -12,10 +12,17 @@ export function initScreensaver() {
     function resetInactivityTimer() {
         clearTimeout(inactivityTimer);
         const screensaver = document.getElementById('screensaver-overlay');
-        if (screensaver && !screensaver.classList.contains('hidden')) {
+        if (screensaver && !screensaver.classList.contains('hidden') && !hideScreensaverTimeout) {
             screensaver.style.opacity = '0';
-            clearTimeout(hideScreensaverTimeout);
-            hideScreensaverTimeout = setTimeout(() => screensaver.classList.add('hidden'), 1000);
+            // Le voile, déjà invisible, ne doit plus bloquer les clics pendant le fondu.
+            // Et le fondu n'est lancé qu'une fois : sinon, tant que la souris bouge, il
+            // ne finit jamais et l'accueil semble figé.
+            screensaver.style.pointerEvents = 'none';
+            hideScreensaverTimeout = setTimeout(() => {
+                screensaver.classList.add('hidden');
+                hideScreensaverTimeout = null;
+            }, 1000);
+            window.noterJournal?.("sortie de veille");
         }
         inactivityTimer = setTimeout(showScreensaver, INACTIVITY_LIMIT);
     }
@@ -23,7 +30,8 @@ export function initScreensaver() {
     function showScreensaver() {
         const screensaver = document.getElementById('screensaver-overlay');
         if (screensaver) {
-            clearTimeout(hideScreensaverTimeout);
+            screensaver.style.pointerEvents = '';
+            window.noterJournal?.("entrée en veille");
             // L'animation lit le planning à son chargement : la recharger pour la demi-journée en cours
             try {
                 screensaver.querySelector('iframe')?.contentWindow?.location.reload();
