@@ -55,4 +55,6 @@ jobs:
 
       - name: Python et Rust côte à côte
         shell: bash
+        env:
+          PYTHONIOENCODING: utf-8
         run: python scripts/differentiel.py target/release/tooth$([ "$RUNNER_OS" = Windows ] && echo .exe)

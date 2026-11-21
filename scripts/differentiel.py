@@ -280,7 +280,7 @@ def suite(py, rs):
     def les_deux(nom, methode, chemin, corps=None, entetes=None, **options):
         nonlocal n
         n += 1
-        comparer_reponses("%s %s (%s)" % (methode, chemin, nom), py.requete(methode, chemin, corps, entetes),
+        comparer_reponses("#%d %s %s (%s)" % (n, methode, chemin, nom), py.requete(methode, chemin, corps, entetes),
                           rs.requete(methode, chemin, corps, entetes), dossiers, **options)
 
     # --- lectures
@@ -539,6 +539,9 @@ def main():
         print(__doc__)
         return 2
     exe = os.path.abspath(sys.argv[1])
+    # la comparaison elle-même voit bien une valeur, un ordre de clés ou un type différents
+    assert egal({"a": 1, "b": [1, "x"]}, {"a": 1, "b": [1, "y"]}) and egal({"a": 1, "b": 2}, {"b": 2, "a": 1})
+    assert egal([True], [1]) and egal({"a": None}, {"a": 0}) and not egal({"a": 1.0}, {"a": 1})
     dossier = tempfile.mkdtemp(prefix="tooth-differentiel-")
     ref = os.path.join(dossier, "reference.db")
     remplir(ref)
@@ -561,6 +564,8 @@ def main():
             if s is not None:
                 s.arreter()
     nb_exports = comparer_exports()
+    if nb_exports != 5:  # stock, liste de courses, deux consommations, chirurgie
+        ecart("exports Excel comparés : %d au lieu de 5" % nb_exports)
     nb_tables = comparer_bases(os.path.join(dossiers["python"], "stock.db"), os.path.join(dossiers["rust"], "stock.db"),
                                "bases finales")
     # copie « avant-rust » : faite une fois, avec la base d'origine
