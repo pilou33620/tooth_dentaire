@@ -1,0 +1,67 @@
+name: exécutables
+
+# Compile l'exécutable de l'outil pour chaque système et le dépose dans la publication « binaires » :
+# tooth-<système>.tar.gz (.zip sous Windows) et son empreinte SHA-256, que binaires.sh et
+# binaires.cmd prennent sur un poste sans cargo (Raspberry Pi, PC sans Rust).
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  compiler:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # musl : exécutables statiques, indépendants de la glibc du poste (Raspberry Pi OS)
+          - { os: ubuntu-latest, cible: x86_64-unknown-linux-musl, nom: linux-x86_64 }
+          - { os: ubuntu-24.04-arm, cible: aarch64-unknown-linux-musl, nom: linux-aarch64 }
+          - { os: macos-latest, cible: aarch64-apple-darwin, nom: macos-aarch64 }
+          - { os: windows-latest, cible: x86_64-pc-windows-msvc, nom: windows-x86_64 }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - run: rustup target add ${{ matrix.cible }}
+
+      - if: contains(matrix.cible, 'musl')
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+
+      - run: cargo build --release -p tooth --bins --target ${{ matrix.cible }}
+
+      - name: Archive (les exécutables et le commit dont ils viennent)
+        shell: bash
+        run: |
+          mkdir bin
+          cd target/${{ matrix.cible }}/release
+          if [ "${{ runner.os }}" = Windows ]; then
+            cp ./*.exe ../../../bin/
+          else
+            find . -maxdepth 1 -type f -perm -u+x -exec cp {} ../../../bin/ \;
+          fi
+          cd ../../..
+          git rev-parse HEAD > bin/commit
+          if [ "${{ runner.os }}" = Windows ]; then
+            (cd bin && 7z a ../tooth-${{ matrix.nom }}.zip .)
+          else
+            tar -czf tooth-${{ matrix.nom }}.tar.gz -C bin .
+          fi
+
+      - name: Publication
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # les quatre compilations arrivent ensemble : une seule crée la publication
+          gh release view binaires >/dev/null 2>&1 \
+            || gh release create binaires --title "Exécutables" \
+                 --notes "Exécutables de tooth_dentaire, recompilés à chaque envoi sur main, pris par binaires.sh et binaires.cmd." \
+            || true
+          for f in tooth-${{ matrix.nom }}.*; do
+            (sha256sum "$f" 2>/dev/null || shasum -a 256 "$f") | cut -d" " -f1 > "$f.sha256"
+          done
+          gh release upload binaires tooth-${{ matrix.nom }}.* --clobber

@@ -1,0 +1,26 @@
+name: bancs d'essai
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  essais:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # base, conflits entre postes, péremption, exports, météo, sauvegardes, mises à jour, reprise, serveur
+      - name: Base et serveur (Rust)
+        run: cargo test -p tooth
+
+      # l'interface : chaque module JavaScript doit au moins se lire
+      - name: Interface (syntaxe)
+        run: for f in $(find web -name '*.js' -not -path '*/node_modules/*' -not -path '*/vendor/*' -not -path '*/tests/*'); do node --check "$f" || exit 1; done

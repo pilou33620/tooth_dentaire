@@ -40,3 +40,7 @@ Thumbs.db
 
 # git portable pose par installation/Installer.bat
 .mingit/
+
+# Rust : compilation et exécutables (compilés ici ou téléchargés)
+/target/
+/bin/

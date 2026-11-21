@@ -4,3 +4,4 @@
 *.png binary
 # Bibliotheques fournies : conservees octet pour octet
 web/vendor/** -text
+*.cmd text eol=crlf

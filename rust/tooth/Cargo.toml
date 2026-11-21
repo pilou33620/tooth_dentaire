@@ -1,0 +1,25 @@
+[package]
+name = "tooth"
+version = "3.0.0"
+edition = "2021"
+description = "tooth_dentaire : stock et quotidien du cabinet dentaire, serveur local et base SQLite"
+
+[lib]
+doctest = false
+
+[dependencies]
+serde_json = { version = "1", features = ["preserve_order"] }
+# Serveur HTTP/HTTPS et appairage : communs aux web tools (dépôt web_suite)
+web_tools_commun = { git = "https://github.com/pilou33620/web_suite", rev = "d40186eebfe11773b92a497c69d25b641264cd0d" }
+# Base stock.db (SQLite compilé dans l'exécutable) ; « backup » : copies quotidiennes cohérentes
+rusqlite = { version = "0.32", features = ["bundled", "backup"] }
+# Exports Excel (stock, liste de courses, consommation avec graphiques, chirurgie)
+rust_xlsxwriter = "0.79"
+# Météo (api.met.no), recherche de commune, tickets GitHub : rustls et racines webpki-roots
+ureq = "2"
+# Dates : péremption, sauvegardes, journal (déjà tiré par la caisse commune)
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+# Fichiers Excel rendus en base64 au navigateur
+base64 = "0.22"
+# Révision de la base : préfixe aléatoire à chaque démarrage (déjà tiré par la caisse commune)
+getrandom = "0.2"
