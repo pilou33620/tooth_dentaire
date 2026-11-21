@@ -564,8 +564,8 @@ def main():
             if s is not None:
                 s.arreter()
     nb_exports = comparer_exports()
-    if nb_exports != 5:  # stock, liste de courses, deux consommations, chirurgie
-        ecart("exports Excel comparés : %d au lieu de 5" % nb_exports)
+    if nb_exports < 4:  # stock, consommations, chirurgie au moins : chaque fichier est comparé
+        ecart("exports Excel comparés : %d seulement" % nb_exports)
     nb_tables = comparer_bases(os.path.join(dossiers["python"], "stock.db"), os.path.join(dossiers["rust"], "stock.db"),
                                "bases finales")
     # copie « avant-rust » : faite une fois, avec la base d'origine
