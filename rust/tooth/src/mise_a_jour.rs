@@ -316,12 +316,13 @@ mod essais {
         let origine = d.join("github.git");
         let (dev, poste) = (d.join("dev"), d.join("cabinet"));
         run(&d, &["init", "-q", "--bare", "-b", "main", origine.to_str().unwrap()]);
-        run(&d, &["clone", "-q", origine.to_str().unwrap(), dev.to_str().unwrap()]);
+        // sans conversion des fins de ligne (git pour Windows les convertit par défaut)
+        run(&d, &["clone", "-q", "-c", "core.autocrlf=false", origine.to_str().unwrap(), dev.to_str().unwrap()]);
         run(&dev, &["checkout", "-q", "-b", "main"]);
         std::fs::write(dev.join(".gitignore"), "donnees/\n").unwrap();
         run(&dev, &["add", ".gitignore"]);
         publier(&dev, "serveur.txt", "v1\n", "Première version");
-        run(&d, &["clone", "-q", origine.to_str().unwrap(), poste.to_str().unwrap()]);
+        run(&d, &["clone", "-q", "-c", "core.autocrlf=false", origine.to_str().unwrap(), poste.to_str().unwrap()]);
         std::fs::create_dir_all(poste.join("donnees")).unwrap();
         std::fs::write(poste.join("donnees").join("stock.db"), "base du cabinet").unwrap();
         (dev, poste)

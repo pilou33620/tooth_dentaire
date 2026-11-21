@@ -9,6 +9,8 @@ doctest = false
 
 [dependencies]
 serde_json = { version = "1", features = ["preserve_order"] }
+# Sérialiser au format de json.dumps de Python (déjà tiré par serde_json)
+serde = "1"
 # Serveur HTTP/HTTPS et appairage : communs aux web tools (dépôt web_suite)
 web_tools_commun = { git = "https://github.com/pilou33620/web_suite", rev = "d40186eebfe11773b92a497c69d25b641264cd0d" }
 # Base stock.db (SQLite compilé dans l'exécutable) ; « backup » : copies quotidiennes cohérentes

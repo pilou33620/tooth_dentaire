@@ -10,6 +10,7 @@ donnees/
 *.sqlite
 *.sqlite3
 *.avant-import-*
+*.avant-rust*
 *.xlsx
 *.csv
 *.pdf

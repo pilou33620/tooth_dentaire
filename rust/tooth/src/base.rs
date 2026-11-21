@@ -202,6 +202,29 @@ fn exiger_objet(v: &Value) -> Res<&Map<String, Value>> {
     v.as_object().ok_or_else(|| Erreur::Donnees("Format de donnees invalide (objet attendu).".into()))
 }
 
+/// json.dumps de Python (séparateurs « , » et « : »), pour écrire en base le même texte que
+/// l'ancienne version : une base reste identique, quel que soit le serveur qui l'a écrite.
+pub fn json_python(v: &Value) -> String {
+    use serde::Serialize;
+    struct Format;
+    impl serde_json::ser::Formatter for Format {
+        fn begin_array_value<W: ?Sized + std::io::Write>(&mut self, w: &mut W, premier: bool) -> std::io::Result<()> {
+            if premier { Ok(()) } else { w.write_all(b", ") }
+        }
+        fn begin_object_key<W: ?Sized + std::io::Write>(&mut self, w: &mut W, premier: bool) -> std::io::Result<()> {
+            if premier { Ok(()) } else { w.write_all(b", ") }
+        }
+        fn begin_object_value<W: ?Sized + std::io::Write>(&mut self, w: &mut W) -> std::io::Result<()> {
+            w.write_all(b": ")
+        }
+    }
+    let mut o = Vec::new();
+    let mut s = serde_json::Serializer::with_formatter(&mut o, Format);
+    // écrire un Value en mémoire n'échoue pas
+    let _ = v.serialize(&mut s);
+    String::from_utf8(o).unwrap_or_default()
+}
+
 /// Une valeur lue en base, telle quelle en JSON.
 pub fn valeur(v: ValueRef) -> Value {
     match v {
@@ -443,7 +466,7 @@ impl Base {
         if v.is_null() {
             return donnees("Document vide.");
         }
-        let texte_json = v.to_string();
+        let texte_json = json_python(v);
         self.ecrire(|tx| {
             let actuelle = tx
                 .query_row("SELECT version FROM documents WHERE cle = ?1", [cle], |l| Ok(valeur(l.get_ref(0)?)))
@@ -758,7 +781,7 @@ fn maj_stock(conn: &Connection, s: &Value, deja: &mut HashSet<(String, String)>)
     let lots = match m.get("lots_details") {
         None => "[]".to_string(),
         Some(Value::String(t)) => t.clone(),
-        Some(v) => v.to_string(),
+        Some(v) => json_python(v),
     };
     let lots = if lots.is_empty() { "[]".to_string() } else { lots };
     let drapeau = |k: &str| if safe_int(champ(m, k), 0) != 0 { 1 } else { 0 };
@@ -1221,6 +1244,12 @@ mod essais {
         assert!((s["prix_unitaire_ht"].as_f64().unwrap() - 1234.5).abs() < 1e-9);
         assert_eq!(s["prix_unitaire_ttc"].as_f64(), Some(0.0));
         assert_eq!(s["delai_peremption"], 30);
+    }
+
+    #[test]
+    fn json_comme_python() {
+        assert_eq!(json_python(&json!([{"lot": "L1", "qte": 5}, "é", null])), r#"[{"lot": "L1", "qte": 5}, "é", null]"#);
+        assert_eq!(json_python(&json!({})), "{}");
     }
 
     #[test]

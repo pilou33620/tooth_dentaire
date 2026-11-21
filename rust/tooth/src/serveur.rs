@@ -382,11 +382,12 @@ fn developper(chemin: &str) -> PathBuf {
 
 fn type_mime(p: &Path) -> Option<&'static str> {
     Some(match p.extension()?.to_str()? {
-        "html" => "text/html; charset=utf-8",
+        // mêmes types que l'ancien serveur Python (mimetypes)
+        "html" => "text/html",
         "js" | "mjs" => "application/javascript",
-        "css" => "text/css; charset=utf-8",
+        "css" => "text/css",
         "json" => "application/json",
-        "ico" => "image/x-icon",
+        "ico" => "image/vnd.microsoft.icon",
         "png" => "image/png",
         "jpg" | "jpeg" => "image/jpeg",
         "gif" => "image/gif",
@@ -394,7 +395,7 @@ fn type_mime(p: &Path) -> Option<&'static str> {
         "webp" => "image/webp",
         "woff" => "font/woff",
         "woff2" => "font/woff2",
-        "txt" => "text/plain; charset=utf-8",
+        "txt" => "text/plain",
         _ => return None,
     })
 }
@@ -599,6 +600,13 @@ pub fn main() {
         Some(b) => absolu(Path::new(b)),
         None => chemin_base_configure(&config),
     };
+    // Première ouverture par la version Rust : copie de la base telle que la version Python
+    // l'a laissée, avant toute écriture (ouvrir la base peut compléter son schéma).
+    match sauvegarde::copie_avant_rust(&chemin, sauvegarde::maintenant()) {
+        Ok(Some(c)) => journal::dire(&format!("[*] Première ouverture par la version Rust : base copiée dans {}", c.display())),
+        Ok(None) => {}
+        Err(e) => sortir(1, &format!("[X] Copie de sécurité de la base impossible ({e}) : l'outil ne démarre pas, rien n'est modifié.")),
+    }
     if let Some(d) = &args.importer {
         match migration::importer(Path::new(d), &chemin, args.forcer) {
             Ok(rapport) => journal::dire(&format!("{rapport}\n")),

@@ -87,6 +87,56 @@ pub fn lister(dossier: &Path) -> Vec<Copie> {
     copies
 }
 
+/// Copie cohérente `source` -> `fin` par l'API de sauvegarde de SQLite, en passant par
+/// `temporaire` : une copie interrompue (disque plein…) ne laisse aucun fichier partiel.
+fn copier_sqlite(source: &Path, temporaire: &Path, fin: &Path) -> Res<()> {
+    let faite = (|| -> Res<()> {
+        {
+            let source = Connection::open(source)?;
+            source.busy_timeout(Duration::from_secs(15))?;
+            let mut cible = Connection::open(temporaire)?;
+            let copie = Backup::new(&source, &mut cible)?;
+            copie.run_to_completion(i32::MAX, Duration::from_millis(50), None)?;
+        }
+        std::fs::rename(temporaire, fin).map_err(|e| Erreur::Interne(e.to_string()))
+    })();
+    if faite.is_err() {
+        let _ = std::fs::remove_file(temporaire);
+    }
+    faite
+}
+
+fn suffixe(chemin: &Path, fin: &str) -> PathBuf {
+    let mut s = chemin.as_os_str().to_owned();
+    s.push(fin);
+    PathBuf::from(s)
+}
+
+/// Au premier démarrage de la version Rust, avant toute écriture : une copie de la base laissée
+/// par la version Python, `<base>.avant-rust-AAAAMMJJ-HHMMSS`. Une seule fois : le fichier
+/// témoin `<base>.avant-rust.fait` s'en souvient (il est posé aussi quand la base n'existe pas
+/// encore : rien à protéger). Rend la copie faite, s'il y en a une.
+pub fn copie_avant_rust(chemin: &Path, quand: NaiveDateTime) -> Res<Option<PathBuf>> {
+    let temoin = suffixe(chemin, ".avant-rust.fait");
+    if temoin.exists() {
+        return Ok(None);
+    }
+    let io = |e: std::io::Error| Erreur::Interne(e.to_string());
+    let copie = if chemin.is_file() {
+        let copie = suffixe(chemin, &format!(".avant-rust-{}", quand.format("%Y%m%d-%H%M%S")));
+        copier_sqlite(chemin, &suffixe(&copie, ".partiel"), &copie)?;
+        Some(copie)
+    } else {
+        if let Some(d) = chemin.parent() {
+            std::fs::create_dir_all(d).map_err(io)?;
+        }
+        None
+    };
+    let note = copie.as_ref().map(|c| c.to_string_lossy().into_owned()).unwrap_or_default();
+    std::fs::write(&temoin, note + "\n").map_err(io)?;
+    Ok(copie)
+}
+
 /// Copie cohérente de la base ; rend la description de la copie.
 pub fn sauvegarder(base: &Base, dossier: Option<&Path>, garder: usize, quand: NaiveDateTime) -> Res<Copie> {
     let chemin_base = base.chemin();
@@ -101,22 +151,10 @@ pub fn sauvegarder(base: &Base, dossier: Option<&Path>, garder: usize, quand: Na
     let temporaire = dossier.join(format!("{nom}.partiel"));
 
     let _copie = VERROU_COPIE.lock().unwrap_or_else(|e| e.into_inner());
-    let faite = (|| -> Res<()> {
-        {
-            // Sous le verrou d'écriture : aucun poste n'écrit pendant la copie (quelques ms).
-            let _g = base.verrouiller();
-            let source = Connection::open(&chemin_base)?;
-            source.busy_timeout(Duration::from_secs(15))?;
-            let mut cible = Connection::open(&temporaire)?;
-            let copie = Backup::new(&source, &mut cible)?;
-            copie.run_to_completion(-1, Duration::ZERO, None)?;
-        }
-        std::fs::rename(&temporaire, &fin).map_err(io)
-    })();
-    if let Err(e) = faite {
-        // copie interrompue (disque plein…) : pas de fichier partiel laissé
-        let _ = std::fs::remove_file(&temporaire);
-        return Err(e);
+    {
+        // Sous le verrou d'écriture : aucun poste n'écrit pendant la copie (quelques ms).
+        let _g = base.verrouiller();
+        copier_sqlite(&chemin_base, &temporaire, &fin)?;
     }
     nettoyer(&dossier, garder);
     let taille = std::fs::metadata(&fin).map(|m| m.len()).unwrap_or(0);
@@ -270,6 +308,24 @@ mod essais {
         // Horloge du poste reculée : une copie « dans le futur » ne bloque pas tout
         sauvegarder(&b, None, GARDER, maintenant() + chrono::Duration::days(3)).unwrap();
         assert!(sauvegarde_due(maintenant(), &d));
+    }
+
+    #[test]
+    fn copie_avant_rust_une_seule_fois() {
+        let (b, chemin) = base_temp();
+        b.update_produit(&produit("REF1", json!({}))).unwrap();
+        let c = copie_avant_rust(&chemin, t(2026, 11, 21, 8, 0, 0)).unwrap().unwrap();
+        assert!(c.to_string_lossy().ends_with("stock.db.avant-rust-20261121-080000"));
+        let conn = Connection::open(&c).unwrap();
+        let r: String = conn.query_row("SELECT reference FROM produits", [], |l| l.get(0)).unwrap();
+        assert_eq!(r, "REF1");
+        assert!(suffixe(&chemin, ".avant-rust.fait").is_file());
+        // déjà faite : plus jamais
+        assert!(copie_avant_rust(&chemin, t(2026, 11, 22, 8, 0, 0)).unwrap().is_none());
+        // base pas encore créée : rien à copier, mais le témoin est posé
+        let neuve = crate::dossier_essai("neuve").join("donnees").join("stock.db");
+        assert!(copie_avant_rust(&neuve, maintenant()).unwrap().is_none());
+        assert!(suffixe(&neuve, ".avant-rust.fait").is_file() && !neuve.exists());
     }
 
     #[test]
