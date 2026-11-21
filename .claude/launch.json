@@ -3,9 +3,9 @@
   "configurations": [
     {
       "name": "serveur stock cabinet",
-      "runtimeExecutable": "python",
+      "runtimeExecutable": "sh",
       "runtimeArgs": [
-        "serveur.py",
+        "lancer.sh",
         "--port",
         "8150",
         "--local",

@@ -11,8 +11,11 @@ if not errorlevel 1 (
   copy /y target\release\*.exe bin\ >nul 2>nul
   exit /b 0
 )
+rem git portable (MinGit) pose par installation\Installer.bat, sinon le git du PATH
+set GIT=git
+if exist .mingit\cmd\git.exe set GIT=.mingit\cmd\git.exe
 set ICI=
-for /f %%c in ('git rev-parse HEAD 2^>nul') do set ICI=%%c
+for /f %%c in ('%GIT% rev-parse HEAD 2^>nul') do set ICI=%%c
 set LA=
 if exist bin\commit set /p LA=<bin\commit
 if exist bin\tooth.exe if defined ICI if "%ICI%"=="%LA%" exit /b 0

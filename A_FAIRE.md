@@ -5,8 +5,8 @@
 - [ ] Montant du stock : remonter les totaux tout en haut
 
 ## Mise en place
-- [ ] Installer sur le PC serveur du cabinet (`pip install -r requirements.txt`, autoriser Python dans le pare-feu)
-- [ ] Reprendre les données réelles du cabinet (`python serveur.py --importer "<ancien dossier>"`), puis vérifier les couleurs du planning (onglet 🎨)
+- [ ] Installer sur le PC serveur du cabinet (`installation/Installer.bat`, autoriser `tooth.exe` dans le pare-feu)
+- [ ] Reprendre les données réelles du cabinet (`Lancer.bat --importer "<ancien dossier>"`), puis vérifier les couleurs du planning (onglet 🎨)
 - [ ] Copier régulièrement `donnees/sauvegardes/` hors du poste serveur (clé USB, NAS)
 
 ## Idées d'amélioration

@@ -6,7 +6,7 @@ Outil de gestion du cabinet : stock et lots, import de factures PDF, alertes,
 maintenance des équipements, rappels mire / fauteuils / dosimètres, planning des
 binômes, tâches des assistantes, carnet d'adresses.
 
-Un **serveur Python** (`serveur.py`) tourne sur un poste du cabinet ; l'interface
+Un **serveur** (`bin/tooth`, écrit en Rust) tourne sur un poste du cabinet ; l'interface
 s'ouvre dans le **navigateur**, sur ce poste comme sur tous les autres postes du
 réseau (accueil, stérilisation, tablette…). Toutes les données sont dans une base
 SQLite partagée : une modification faite sur un poste apparaît sur les autres en
@@ -15,43 +15,50 @@ quelques secondes.
 ## Démarrage
 
 ```bash
-pip install -r requirements.txt
-python serveur.py
+./lancer.sh            # Linux, macOS, Raspberry Pi
+Lancer.bat             :: Windows (double-clic)
 ```
 
-Sous Windows, un double-clic sur `Lancer.bat` (ou sur `serveur.py`) suffit.
-Le navigateur s'ouvre et la console affiche l'adresse à utiliser depuis les autres
-postes, par exemple `http://192.168.1.20:8150/`. Cette adresse est aussi visible
+`lancer.sh` / `Lancer.bat` prennent l'exécutable dans `bin/` : avec Rust (`cargo`) sur le
+poste, il est compilé ici ; sinon il est téléchargé depuis la publication « binaires » du
+dépôt (compilée par la CI à chaque envoi sur `main`, empreinte SHA-256 vérifiée), une fois
+par version. Le navigateur s'ouvre et la console affiche l'adresse à utiliser depuis les
+autres postes, par exemple `http://192.168.1.20:8150/`. Cette adresse est aussi visible
 dans **Réglages**.
 
 | Option | Effet |
 |---|---|
+| `--port 9000` (ou `--port=9000`) | change le port (8150 par défaut ; port suivant libre sinon) |
 | `--local` | n'accepte que ce poste (aucun accès réseau) |
-| `--port 9000` | change le port (8150 par défaut) |
+| `--host ADRESSE` | accepté pour compatibilité : `127.0.0.1` vaut `--local`, sinon toutes les interfaces |
 | `--base D:\stock.db` | utilise une autre base |
-| `--importer "C:\...\ancien dossier"` | reprend les données de l'ancienne application |
+| `--importer "C:\...\ancien dossier"` (`--forcer`) | reprend les données de l'ancienne application |
 | `--sans-navigateur` | n'ouvre pas le navigateur |
+| `--sans-pause` | accepté (la pause sur erreur est faite par `Lancer.bat`) |
+| `--sans-maj` | pas de mise à jour au démarrage |
+
+`serveur.py` n'est plus qu'un relais de transition : `python serveur.py …` (ancienne
+commande, raccourcis, web_launcher, relance par l'ancienne mise à jour automatique) passe
+la main à `lancer.sh` / `Lancer.bat` avec les mêmes options.
 
 ### Installer sur un poste du cabinet
 
 Un seul fichier à donner : [`installation/Installer.bat`](installation/Installer.bat).
 Double-clic, sans question ni droits administrateur, il faut seulement internet :
 
-1. Python : celui du poste s'il est en 3.8+, sinon **Python 3.14.8** téléchargé sur
-   python.org (signature de la Python Software Foundation vérifiée) ;
-2. git : celui du poste, sinon **MinGit** (git portable officiel, empreinte SHA-256
+1. git : celui du poste, sinon **MinGit** (git portable officiel, empreinte SHA-256
    vérifiée) dans `.mingit/` ;
-3. **clone** de ce dépôt (branche `main`) dans `C:\tooth_dentaire` : c'est ce qui
+2. **clone** de ce dépôt (branche `main`) dans `C:\tooth_dentaire` : c'est ce qui
    permet les mises à jour automatiques ; `donnees/` n'est jamais touché ;
-4. environnement `.venv` avec les bibliothèques de `requirements.txt` ;
-5. raccourci « Lancer tooth_dentaire » dans le dossier de l'installateur (et sur le
+3. l'exécutable `bin\tooth.exe` (publication « binaires », empreinte vérifiée) ;
+4. raccourci « Lancer tooth_dentaire » dans le dossier de l'installateur (et sur le
    Bureau), puis **l'installateur se supprime** : il ne reste que le lanceur.
 
 En cas d'erreur, rien n'est supprimé. Relancer `Installer.bat` sur un poste déjà
 installé répare l'installation (code remis sur `main`, base conservée). Pour
 reprendre une base existante : copier son `stock.db` dans `C:\tooth_dentaire\donnees\`.
 
-Au premier lancement en réseau, Windows demande d'autoriser Python dans le
+Au premier lancement en réseau, Windows demande d'autoriser `tooth.exe` dans le
 pare-feu : accepter pour les **réseaux privés**.
 
 ### Utiliser depuis un autre poste (code d'appairage)
@@ -100,8 +107,9 @@ la base (`donnees/stock.db` par défaut), et le dossier `donnees/` est exclu de 
   (fond, horloge…), prénom proposé dans la checklist, minuteurs qui sonnent sur ce
   poste.
 - **Règle pour les évolutions** : une nouvelle donnée du cabinet va dans la base
-  (un document : `DOCUMENTS_DEFAUT` dans `python/base.py`, `getDocument` /
-  `setDocument` côté navigateur). Le test `tests/test_stockage.py` échoue si du
+  (un document : `CLES` et `defaut()` dans `rust/tooth/src/base.rs`, `getDocument` /
+  `setDocument` côté navigateur). L'essai `donnees_du_cabinet_jamais_dans_le_navigateur`
+  (`cargo test`) échoue si du
   code JavaScript écrit dans le navigateur ailleurs que pour ces préférences.
 
 ## Mises à jour
@@ -110,7 +118,7 @@ Sur un poste installé par `Installer.bat` (ou `git clone`), **au démarrage**,
 avant de lancer le serveur et l'interface, l'outil installe d'office la nouvelle
 version de `main` s'il y en a une, puis se relance (sans internet, il démarre
 normalement après 20 s au plus). Ensuite, le serveur vérifie toutes les 4 heures si
-la branche `main` a changé sur GitHub (`python/mise_a_jour.py`). Si oui, un
+la branche `main` a changé sur GitHub (`rust/tooth/src/mise_a_jour.rs`). Si oui, un
 bandeau propose « Mettre à jour » sur l'accueil : le serveur avance la copie
 locale (`git merge --ff-only`, jamais d'écrasement), réinstalle les dépendances
 si `requirements.txt` a changé, puis redémarre ; les pages se rechargent seules.
@@ -121,7 +129,7 @@ branche ou si des fichiers de l'outil ont été modifiés sur le poste.
 ## Signaler un bug / proposer une idée
 
 Réglages > « Signaler un bug ou proposer une idée » : le serveur en fait un
-ticket (issue) GitHub du dépôt (`python/signalements.py`), étiqueté `bug` ou
+ticket (issue) GitHub du dépôt (`rust/tooth/src/signalements.rs`), étiqueté `bug` ou
 `enhancement`, avec la version de l'outil. **Le dépôt est public** : le
 formulaire rappelle de n'y mettre aucun nom de patient. Sans internet ou sans
 clé, le signalement est gardé (`donnees/signalements_en_attente.json`) et
@@ -169,7 +177,7 @@ Widgets partagés entre tous les postes (enregistrés en base) :
 ## Reprise de l'ancienne application (PySide6)
 
 ```bash
-python serveur.py --importer "C:\chemin\vers\ancienne-appli"
+./lancer.sh --importer "C:\chemin\vers\ancienne-appli"
 ```
 
 Sont repris :
@@ -190,25 +198,28 @@ prénoms : elles se règlent désormais dans le planning, onglet **🎨 Couleurs
 ## Structure
 
 ```
-serveur.py            serveur HTTP + API JSON (bibliothèque standard)
-python/
-  base.py             base SQLite (schéma, lecture, écritures, documents, contacts)
-  exports.py          exports Excel (openpyxl)
-  meteo.py            météo du fond (MET Norway) et recherche de commune (BAN)
-  migration.py        reprise de l'ancienne application
-  sauvegarde.py       sauvegarde automatique quotidienne de la base
-  leveldb_lecteur.py  lecture du stockage navigateur de l'ancienne appli
+rust/tooth/src/
+  serveur.rs          serveur HTTP + API JSON, options, lancement
+  base.rs             base SQLite (schéma, lecture, écritures, documents, contacts)
+  exports.rs          exports Excel
+  meteo.rs            météo du fond (MET Norway) et recherche de commune (BAN)
+  migration.rs        reprise de l'ancienne application
+  leveldb.rs          lecture du stockage navigateur de l'ancienne appli
+  sauvegarde.rs       sauvegarde automatique quotidienne de la base
+  mise_a_jour.rs      mises à jour depuis GitHub
+  signalements.rs     signalements de bug (tickets GitHub)
+lancer.sh, Lancer.bat lancement (et relance après une mise à jour)
+binaires.sh, .cmd     exécutable compilé ici ou téléchargé (publication « binaires »)
+serveur.py            relais de transition vers lancer.sh / Lancer.bat
 web/                  interface (HTML / CSS / JavaScript, sans framework)
   js/core/api.js      échanges avec le serveur + synchronisation entre postes
   js/ui/bonjourr.js   accueil : horloge, salutation, citation, fond, réglages d'apparence
   css/bonjourr.css    thème de l'interface (chargé après css/style.css)
   js/features/notes.js, checklist.js, minuteurs.js   widgets partagés de l'accueil
   vendor/             PDF.js (lecture des factures, hors ligne)
-tests/                tests Python (pytest)
 web/tests/            tests JavaScript (Jest)
 installation/         Installer.bat (installateur d'un poste, fichier unique)
-scripts/              lancement des tests
-  benchmark/          benchmarks de charge et audit (voir RAPPORT_BENCHMARK.md)
+scripts/              essai de passage d'un poste Python -> Rust (CI)
 donnees/              base et configuration — non versionné
 ```
 
@@ -245,9 +256,14 @@ Voir [A_FAIRE.md](A_FAIRE.md).
 ## Tests
 
 ```bash
-python scripts/run_tests.py      # tout
-python -m pytest tests           # Python
-cd web && npm install && npm test   # JavaScript (Node.js)
+cargo test -p tooth                 # base, conflits, péremption, exports, météo, sauvegardes, mises à jour, serveur
+cd web && npm install && npm test   # interface (Jest, Node.js)
 ```
 
-`run_tests.py` utilise le moteur Node intégré à VS Code si Node.js n'est pas installé.
+La CI (`.github/workflows/ci.yml`) lance `cargo test` sous Linux, Windows et macOS, et
+`scripts/essai_passage.py` : un poste resté sur l'ancien serveur Python se met à jour
+tout seul et arrive sur le serveur Rust, sur la même base. Le Raspberry Pi n'ayant pas
+cargo, les vérifications se lisent dans la CI (`gh run list`).
+
+Sauvegarde de passage : à sa première ouverture d'une base, le serveur Rust la copie dans
+`stock.db.avant-rust-AAAAMMJJ-HHMMSS` (une seule fois, témoin `stock.db.avant-rust.fait`).

@@ -15,15 +15,14 @@ exit /b
 # ==========================================
 # Installation de tooth_dentaire sur un poste Windows
 # ==========================================
-#   1. Python 3.8+ : celui du poste, sinon Python 3.14.8 telecharge sur
-#      python.org (signature verifiee), installe sans droits administrateur ;
-#   2. git : celui du poste, sinon MinGit (git portable officiel, empreinte
+#   1. git : celui du poste, sinon MinGit (git portable officiel, empreinte
 #      verifiee) dans <outil>\.mingit ;
-#   3. l'outil est clone depuis GitHub (branche main) dans C:\tooth_dentaire :
+#   2. l'outil est clone depuis GitHub (branche main) dans C:\tooth_dentaire :
 #      c'est ce qui permet au serveur de proposer les mises a jour ensuite ;
 #      donnees\ n'est jamais touche (reinstaller garde la base) ;
-#   4. environnement .venv avec les bibliotheques de requirements.txt ;
-#   5. lanceur "Lancer tooth_dentaire" dans ce dossier (et sur le Bureau),
+#   3. l'executable bin\tooth.exe (publication "binaires" du depot, empreinte
+#      SHA-256 verifiee par binaires.cmd) : plus besoin de Python ;
+#   4. lanceur "Lancer tooth_dentaire" dans ce dossier (et sur le Bureau),
 #      puis ce fichier d'installation se supprime.
 # En cas d'erreur, rien n'est supprime : relancer apres correction.
 #
@@ -43,8 +42,6 @@ $ProgressPreference = "SilentlyContinue"     # sinon Invoke-WebRequest est tres 
 $NomOutil = "tooth_dentaire"
 $Depot = "https://github.com/pilou33620/tooth_dentaire.git"
 $Branche = "main"
-$VersionPython = "3.14.8"
-$VersionMin = [version]"3.8"
 
 $Installateur = $env:INSTALLATEUR
 $Ici = Split-Path -Parent $Installateur
@@ -76,42 +73,6 @@ function Telecharger($url, $fichier) {
     catch { Echec "Telechargement impossible ($($_.Exception.Message)). Ce poste a-t-il acces a internet ?" }
 }
 
-# --- Python ---------------------------------------------------------------
-
-function Version-Python($exe) {
-    # Version de l'interpreteur, ou $null (exe absent, alias du Microsoft Store...).
-    if (-not $exe -or -not (Test-Path -LiteralPath $exe)) { return $null }
-    try {
-        $sortie = & $exe -c "import sys; print('%d.%d' % sys.version_info[:2])" 2>$null
-        if ($LASTEXITCODE -ne 0 -or -not $sortie) { return $null }
-        return [version]("$sortie".Trim())
-    } catch { return $null }
-}
-
-function Trouver-Python {
-    $candidats = @()
-    foreach ($racine in @("HKCU:\Software\Python\PythonCore", "HKLM:\Software\Python\PythonCore",
-                          "HKLM:\Software\WOW6432Node\Python\PythonCore")) {
-        if (-not (Test-Path $racine)) { continue }
-        Get-ChildItem $racine -ErrorAction SilentlyContinue | Sort-Object PSChildName -Descending | ForEach-Object {
-            $cle = Join-Path $_.PSPath "InstallPath"
-            if (Test-Path $cle) {
-                $p = Get-ItemProperty $cle -ErrorAction SilentlyContinue
-                if ($p.ExecutablePath) { $candidats += $p.ExecutablePath }
-                elseif ($p.'(default)') { $candidats += (Join-Path $p.'(default)' "python.exe") }
-            }
-        }
-    }
-    # Python du PATH, hors alias du Microsoft Store (qui ouvre le Store)
-    $cmd = Get-Command python.exe -ErrorAction SilentlyContinue
-    if ($cmd -and $cmd.Source -notlike "*\WindowsApps\*") { $candidats += $cmd.Source }
-    foreach ($exe in ($candidats | Select-Object -Unique)) {
-        $v = Version-Python $exe
-        if ($v -and $v -ge $VersionMin) { return @{ Exe = $exe; Version = $v } }
-    }
-    return $null
-}
-
 # --- git ------------------------------------------------------------------
 
 $GitPortable = Join-Path $Destination ".mingit\cmd\git.exe"
@@ -130,43 +91,8 @@ Write-Host "  Installation de $NomOutil"
 Write-Host "  dans $Destination"
 Write-Host "=============================================="
 
-# 1. Python
-Etape "1/5 Python"
-$python = Trouver-Python
-$pythonTelecharge = $null
-if ($python) {
-    Ok "Python $($python.Version) deja installe : $($python.Exe)"
-} else {
-    $nom = "python-$VersionPython-$(if ($Arm) { 'arm64' } else { 'amd64' }).exe"
-    $local = Get-ChildItem -LiteralPath $Ici -Filter "python-3*.exe" -File -ErrorAction SilentlyContinue |
-        Sort-Object Name -Descending | Select-Object -First 1
-    if ($local) {
-        $exePython = $local.FullName
-        Info "Installateur trouve a cote : $($local.Name)"
-    } else {
-        $exePython = Join-Path $env:TEMP $nom
-        Telecharger "https://www.python.org/ftp/python/$VersionPython/$nom" $exePython
-        $pythonTelecharge = $exePython
-    }
-    $signature = Get-AuthenticodeSignature -LiteralPath $exePython
-    if ($signature.Status -ne "Valid" -or $signature.SignerCertificate.Subject -notlike "*Python Software Foundation*") {
-        Echec "L'installateur Python n'est pas signe par la Python Software Foundation : installation annulee."
-    }
-    Info "Installation de Python (quelques minutes, sans fenetre)..."
-    $proc = Start-Process -FilePath $exePython -Wait -PassThru -ArgumentList @(
-        "/quiet", "InstallAllUsers=0", "PrependPath=1", "Include_launcher=1",
-        "Include_test=0", "Include_doc=0")
-    if ($pythonTelecharge) { Remove-Item -LiteralPath $pythonTelecharge -Force -ErrorAction SilentlyContinue }
-    if ($proc.ExitCode -ne 0 -and $proc.ExitCode -ne 3010) {
-        Echec "L'installation de Python a echoue (code $($proc.ExitCode))."
-    }
-    $python = Trouver-Python
-    if (-not $python) { Echec "Python a ete installe mais reste introuvable. Redemarrez le poste puis relancez Installer.bat." }
-    Ok "Python $($python.Version) installe : $($python.Exe)"
-}
-
-# 2. git
-Etape "2/5 git"
+# 1. git
+Etape "1/4 git"
 $gitPoste = Get-Command git.exe -ErrorAction SilentlyContinue
 if (Test-Path -LiteralPath $GitPortable) {
     $GitExe = $GitPortable
@@ -199,8 +125,8 @@ if (Test-Path -LiteralPath $GitPortable) {
     Ok "git portable installe ($($archive.name))"
 }
 
-# 3. L'outil, depuis GitHub
-Etape "3/5 Telechargement de l'outil depuis GitHub"
+# 2. L'outil, depuis GitHub
+Etape "2/4 Telechargement de l'outil depuis GitHub"
 New-Item -ItemType Directory -Force -Path $Destination | Out-Null
 if (-not (Test-Path -LiteralPath (Join-Path $Destination ".git"))) {
     # init + checkout plutot que clone : fonctionne aussi dans un dossier deja
@@ -211,30 +137,20 @@ if (-not (Test-Path -LiteralPath (Join-Path $Destination ".git"))) {
 Git @("fetch", "--quiet", "origin", $Branche)
 Git @("checkout", "--quiet", "--force", "-B", $Branche, "origin/$Branche")
 Git @("branch", "--quiet", "--set-upstream-to=origin/$Branche", $Branche)
-if (-not (Test-Path -LiteralPath (Join-Path $Destination "serveur.py"))) { Echec "serveur.py absent apres le telechargement." }
+if (-not (Test-Path -LiteralPath (Join-Path $Destination "Lancer.bat"))) { Echec "Lancer.bat absent apres le telechargement." }
 Ok "Outil a jour (branche $Branche) ; donnees\ conserve"
 
-# 4. Environnement Python et bibliotheques
-Etape "4/5 Bibliotheques Python"
-$venv = Join-Path $Destination ".venv"
-$venvPython = Join-Path $venv "Scripts\python.exe"
-if (-not (Version-Python $venvPython)) {
-    if (Test-Path -LiteralPath $venv) { Remove-Item -LiteralPath $venv -Recurse -Force }
-    & $python.Exe -m venv $venv
-    if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $venvPython)) {
-        Echec "Impossible de creer l'environnement Python dans $venv."
-    }
+# 3. L'executable
+Etape "3/4 Executable de l'outil"
+& cmd.exe /c "cd /d `"$Destination`" && binaires.cmd"
+if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath (Join-Path $Destination "bin\tooth.exe"))) {
+    Echec "Executable bin\tooth.exe non telecharge."
 }
-& {
-    $ErrorActionPreference = "Continue"
-    & $venvPython -m pip install --disable-pip-version-check --quiet -r (Join-Path $Destination "requirements.txt") 2>&1 |
-        ForEach-Object { Info "$_" }
-}
-if ($LASTEXITCODE -eq 0) { Ok "Bibliotheques installees" }
-else { Attention "Bibliotheques non installees : l'outil demarre, mais les exports Excel (et peut-etre la meteo) seront indisponibles." }
+Ok "Executable pret : $(Join-Path $Destination "bin\tooth.exe")"
 
-# 5. Lanceur
-Etape "5/5 Lanceur"
+
+# 4. Lanceur
+Etape "4/4 Lanceur"
 function Raccourci($dossier) {
     $lien = (New-Object -ComObject WScript.Shell).CreateShortcut((Join-Path $dossier "Lancer $NomOutil.lnk"))
     $lien.TargetPath = Join-Path $Destination "Lancer.bat"
@@ -251,7 +167,7 @@ if (-not $env:TOOTH_SANS_BUREAU -and $bureau -and ($bureau.TrimEnd("\") -ne $Ici
 Write-Host ""
 Write-Host "Installation terminee." -ForegroundColor Green
 Write-Host "Le serveur verifie lui-meme les mises a jour sur GitHub et les propose sur l'accueil."
-Write-Host "Au premier lancement, Windows demande d'autoriser Python dans le pare-feu :"
+Write-Host "Au premier lancement, Windows demande d'autoriser tooth.exe dans le pare-feu :"
 Write-Host "accepter pour les reseaux prives (acces depuis les autres postes du cabinet)."
 if (-not $env:TOOTH_GARDER) { Write-Host "Ce fichier d'installation va se supprimer." }
 Pause-Fin
@@ -260,8 +176,7 @@ if (-not $env:TOOTH_GARDER) {
     # Seuls les fichiers d'installation sont effaces (jamais le dossier : il
     # garde le lanceur). Installer.bat est encore ouvert par la console : un
     # PowerShell cache attend qu'elle se ferme.
-    $aEffacer = @($Installateur) + @(Get-ChildItem -LiteralPath $Ici -Filter "python-3*.exe" -File -ErrorAction SilentlyContinue |
-        ForEach-Object { $_.FullName })
+    $aEffacer = @($Installateur)
     $liste = ($aEffacer | ForEach-Object { "'" + $_.Replace("'", "''") + "'" }) -join ","
     $commande = "foreach (`$i in 1..30) { `$reste = @($liste) | Where-Object { Test-Path -LiteralPath `$_ }; " +
                 "if (-not `$reste) { break }; Start-Sleep -Seconds 1; " +
