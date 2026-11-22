@@ -64,7 +64,9 @@ def arreter_rust():
 def main():
     tmp = tempfile.mkdtemp(prefix="tooth-passage-")
     github, poste = os.path.join(tmp, "github.git"), os.path.join(tmp, "cabinet")
-    ancien = git("merge-base", "HEAD", "origin/main")
+    # le dernier commit qui a encore le serveur Python (le parent de celui qui retire python/base.py) :
+    # juste avant comme après la fusion du passage dans main
+    ancien = git("rev-parse", git("rev-list", "-1", "HEAD", "--", "python/base.py") + "^")
     nouveau = git("rev-parse", "HEAD")
     git("init", "-q", "--bare", "-b", "main", github, dossier=tmp)
     git("push", "-q", github, "HEAD:refs/heads/main")
