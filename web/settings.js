@@ -3,7 +3,7 @@
 /* ============================================================
    Réglages et exports (Excel)
 
-   Les exports sont générés par le serveur (python/exports.py) et
+   Les exports sont générés par le serveur (rust/tooth/src/exports.rs) et
    téléchargés par le navigateur du poste qui les demande.
    window.api / window.exporter sont fournis par js/core/api.js.
    ============================================================ */
@@ -258,7 +258,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const transactions = db.transactions || [];
 
             // Doit rester STRICTEMENT aligné sur est_consommation() dans
-            // python/exports.py : sinon l'aperçu annonce des lignes (transferts,
+            // rust/tooth/src/exports.rs : sinon l'aperçu annonce des lignes (transferts,
             // changements de réf/espace) que l'Excel exclut ensuite.
             const consumptions = transactions.filter(t => {
                 const typeTx = t.type_transaction || "";

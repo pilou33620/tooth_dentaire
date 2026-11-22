@@ -3,7 +3,7 @@
 /* ============================================================
    Signaler un bug / proposer une idée (Réglages)
 
-   Le serveur en fait un ticket GitHub (python/signalements.py). Sans
+   Le serveur en fait un ticket GitHub (rust/tooth/src/signalements.rs). Sans
    internet, il le garde et le renvoie plus tard. Sans clé GitHub (saisie
    seulement sur le poste serveur), il rend le ticket préparé et ce poste
    ouvre Gmail avec le message prêt pour le développeur.

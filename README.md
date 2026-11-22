@@ -75,9 +75,9 @@ code 75 et le script reprend l'exécutable de la nouvelle version, puis le relan
 | `--sans-pause` | accepté (la pause sur erreur est faite par `demarrer_TOOTH_DENTAIRE`) |
 | `--sans-maj` | pas de mise à jour au démarrage |
 
-**Anciens points d'entrée** : `Lancer.bat` (et les raccourcis qui le visent), `lancer.sh` et
-`serveur.py` (`python serveur.py …`, ancienne mise à jour automatique) restent, comme relais qui
-passent la main à `demarrer_TOOTH_DENTAIRE` avec les mêmes options. `binaires.cmd` à la racine
+**Anciens points d'entrée** : `Lancer.bat` (et les raccourcis qui le visent) et `lancer.sh`
+restent, comme relais qui passent la main à `demarrer_TOOTH_DENTAIRE` avec les mêmes options.
+Il n'y a plus de Python : l'ancien relais `serveur.py` a été retiré. `binaires.cmd` à la racine
 sert la boucle de l'ancien `Lancer.bat`, encore en mémoire juste après la mise à jour qui l'a
 remplacé ; l'exécutable lancé par cette ancienne boucle passe lui aussi la main à
 `demarrer_TOOTH_DENTAIRE`.
@@ -275,7 +275,7 @@ rust/tooth/src/
   mise_a_jour.rs      mises à jour depuis GitHub
   signalements.rs     signalements de bug (tickets GitHub)
 demarrer_TOOTH_DENTAIRE.sh, .cmd   lancement (et relance après une mise à jour)
-Lancer.bat, lancer.sh, serveur.py, binaires.cmd   anciens points d'entrée : relais
+Lancer.bat, lancer.sh, binaires.cmd   anciens points d'entrée : relais
 scripts/binaires.sh, .cmd   exécutable compilé ici ou téléchargé (publication « binaires »)
 scripts/archives.sh   archives de la publication (exécutable seul ; production)
 web/                  interface (HTML / CSS / JavaScript, sans framework)
@@ -286,7 +286,6 @@ web/                  interface (HTML / CSS / JavaScript, sans framework)
   vendor/             PDF.js (lecture des factures, hors ligne)
 web/tests/            tests JavaScript (Jest)
 installation/         Installer.bat (installateur d'un poste, fichier unique)
-scripts/essai_passage.py   essais de passage d'un poste et de la copie de production (CI)
 donnees/              base et configuration — non versionné
 ```
 
@@ -328,12 +327,8 @@ cd web && npm install && npm test   # interface (Jest, Node.js)
 ```
 
 La CI (`.github/workflows/ci.yml`) lance `cargo test --locked` sous Linux, Windows et macOS, et
-`scripts/essai_passage.py` (job `passage`, sur les trois systèmes) : un poste sans cargo resté
-sur l'ancien Python (`d3469e8`, `1b3fb88`) ou sur le Rust lancé par `lancer.sh` / `Lancer.bat`
-(`7878af4`), démarré comme d'habitude (`Lancer.bat` sous Windows), se met à jour tout seul et
-arrive sur l'exécutable du commit lancé par `demarrer_TOOTH_DENTAIRE`, sur la même base ;
-l'arrêt arrête l'exécutable. Et la copie de production décompressée démarre, puis se met à jour
-seule depuis une fausse publication locale. Le Raspberry Pi n'ayant pas
+le job `production` : sur les trois systèmes, l'archive de production décompressée dans un dossier
+vide démarre par `demarrer_TOOTH_DENTAIRE` et répond. Le Raspberry Pi n'ayant pas
 cargo, les vérifications se lisent dans la CI (`gh run list`).
 
 Sauvegarde de passage : à sa première ouverture d'une base, le serveur Rust la copie dans

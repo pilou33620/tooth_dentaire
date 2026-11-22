@@ -36,7 +36,7 @@ pub const CORPS_MAX: usize = 20 * 1024 * 1024; // 20 Mo : un planning ou un carn
 /// site ne peut pas l'ajouter sans pré-vol CORS, jamais accepté ici.
 pub const ENTETE_CSRF: &str = "X-Tooth";
 /// Posées à la relance qui suit une mise à jour : par demarrer_TOOTH_DENTAIRE, et (la seconde) par
-/// les anciens lancer.sh, Lancer.bat et serveur.py.
+/// les anciens lancer.sh et Lancer.bat.
 pub const VARIABLES_REDEMARRAGE: [&str; 2] = ["TOOTH_DENTAIRE_DEJA_MAJ", "TOOTH_DENTAIRE_REDEMARRAGE"];
 /// Posée par demarrer_TOOTH_DENTAIRE, qui relance l'outil quand il sort avec le code 75.
 pub const RELANCEUR: &str = "TOOTH_DENTAIRE_RELANCEUR";

@@ -1,7 +1,7 @@
 "use strict";
 
 /* ============================================================
-   Mises à jour de l'outil (python/mise_a_jour.py)
+   Mises à jour de l'outil (rust/tooth/src/mise_a_jour.rs)
 
    Le serveur vérifie GitHub toutes les 4 heures. Chaque poste lui demande
    l'état régulièrement (requête locale, sans internet) et, si une nouvelle

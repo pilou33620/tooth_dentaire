@@ -3,7 +3,7 @@
 /* ============================================================
    Database Layer - Gestion de la base de données
    Cache en mémoire de la base ; chaque modification est envoyée
-   au serveur (python/base.py) par persister() (voir api.js).
+   au serveur (rust/tooth/src/base.rs) par persister() (voir api.js).
 
    Structure :
    {
@@ -31,7 +31,7 @@ export function setDbCache(db) {
 }
 
 export function initDB() {
-    /* Les tables sont créées par le serveur (python/base.py). */
+    /* Les tables sont créées par le serveur (rust/tooth/src/base.rs). */
 }
 
 export function loadDB() {

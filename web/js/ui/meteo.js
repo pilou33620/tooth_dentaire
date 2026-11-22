@@ -5,7 +5,7 @@
    qu'il fait (nuages, pluie, neige, orage, brouillard, soleil, étoiles),
    et la température s'affiche à côté de la date.
 
-   Les prévisions sont demandées par le serveur (python/meteo.py,
+   Les prévisions sont demandées par le serveur (rust/tooth/src/meteo.rs,
    MET Norway) pour la commune du cabinet (document "meteo_lieu",
    la même pour tous les postes). Sans internet : fond selon l'heure.
    ============================================================ */

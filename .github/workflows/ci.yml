@@ -34,21 +34,13 @@ jobs:
         if: runner.os == 'Linux'
         run: for f in $(find web -name '*.js' -not -path '*/node_modules/*' -not -path '*/vendor/*' -not -path '*/tests/*'); do node --check "$f" || exit 1; done
 
-  # Le PC du cabinet, sans cargo, démarré comme d'habitude (Windows : Lancer.bat, comme son
-  # raccourci ; ailleurs : serveur.py ou lancer.sh) depuis chacun des commits où il peut être resté,
-  # se met à jour seul et arrive sur l'exécutable de ce commit lancé par demarrer_TOOTH_DENTAIRE,
-  # sur la même base ; l'arrêt arrête l'exécutable. La publication « binaires » est simulée par un
-  # faux serveur local qui sert les archives de ce commit (scripts/archives.sh).
-  #   d3469e8 : dernier commit Python pur ; 1b3fb88 : dernier Python, avec le Rust à côté ;
-  #   7878af4 : le Rust lancé par lancer.sh / Lancer.bat (main avant demarrer_TOOTH_DENTAIRE).
-  # Avec 7878af4 : aussi la copie de production (archive décompressée, sans git) qui démarre puis
-  # se met à jour seule depuis la fausse publication.
-  passage:
+  # La copie de production (archive décompressée dans un dossier vide, sans git ni sources) démarre
+  # par demarrer_TOOTH_DENTAIRE et répond, sur les trois systèmes. Sa mise à jour sans git est
+  # testée dans la caisse commune (web_tools_commun, module production).
+  production:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        depart: [d3469e8, 1b3fb88, 7878af4]
         include:
           - { os: ubuntu-latest, nom: linux-x86_64 }
           - { os: windows-latest, nom: windows-x86_64 }
@@ -56,34 +48,45 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      # l'exécutable du départ Rust, tel qu'il est déjà dans bin/ sur le poste (même dossier de
-      # compilation : seules les sources de l'outil sont recompilées ensuite)
-      - name: Exécutable du départ ${{ matrix.depart }}
-        if: matrix.depart == '7878af4'
-        shell: bash
-        run: |
-          git worktree add ../depart ${{ matrix.depart }}
-          cargo build --release --locked -p tooth --bins --manifest-path ../depart/Cargo.toml --target-dir target
-          mkdir depart-bin && cp target/release/tooth target/release/tooth.exe depart-bin/ 2>/dev/null || true
-          ls depart-bin
 
       - name: Exécutable et archives de ce commit
         shell: bash
         run: |
           cargo build --release --locked -p tooth --bins
           sh scripts/archives.sh target/release ${{ matrix.nom }}
-          mkdir publication && mv tooth-*.* publication/ && ls publication
 
-      - name: Passage depuis ${{ matrix.depart }}
-        run: python scripts/essai_passage.py --depart ${{ matrix.depart }} --publication publication ${{ matrix.depart == '7878af4' && '--exe-depart depart-bin' || '' }}
+      - name: Copie de production (Linux, macOS)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          mkdir essai && tar -xzf tooth-prod-${{ matrix.nom }}.tar.gz -C essai
+          cd essai/tooth_dentaire
+          test ! -e .git && test ! -e Cargo.toml && test ! -e rust && ! ls *.py 2>/dev/null
+          sh demarrer_TOOTH_DENTAIRE.sh --sans-maj --local --sans-navigateur --sans-pause --port 18150 > journal.txt 2>&1 < /dev/null &
+          code=000
+          for i in $(seq 30); do
+            code=$(curl -s -m 5 -o /dev/null -w '%{http_code}' http://127.0.0.1:18150/ || true)
+            [ "$code" = 200 ] && break
+            sleep 1
+          done
+          pkill -f "bin/tooth" || true
+          echo "réponse : $code"
+          [ "$code" = 200 ] || { tail -40 journal.txt; exit 1; }
 
-      - name: Copie de production
-        if: matrix.depart == '7878af4'
-        run: python scripts/essai_passage.py --prod --publication publication
+      - name: Copie de production (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Expand-Archive tooth-prod-windows-x86_64.zip -DestinationPath essai
+          Set-Location essai\tooth_dentaire
+          if ((Test-Path .git) -or (Test-Path Cargo.toml) -or (Test-Path rust) -or (Get-ChildItem *.py)) { throw "l'archive contient des sources" }
+          Start-Process cmd -ArgumentList '/c', 'demarrer_TOOTH_DENTAIRE.cmd', '--sans-maj', '--local', '--sans-navigateur', '--sans-pause', '--port', '18150' -RedirectStandardOutput journal.txt -NoNewWindow
+          $code = 0
+          for ($i = 0; $i -lt 30; $i++) {
+            try { $code = (Invoke-WebRequest -UseBasicParsing -TimeoutSec 5 http://127.0.0.1:18150/).StatusCode } catch { }
+            if ($code -eq 200) { break }
+            Start-Sleep 1
+          }
+          Stop-Process -Name tooth -Force -ErrorAction SilentlyContinue
+          "réponse : $code"
+          if ($code -ne 200) { Get-Content journal.txt -Tail 40; exit 1 }
