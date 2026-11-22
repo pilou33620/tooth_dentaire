@@ -3,6 +3,7 @@
 //!     tooth                          écoute sur le réseau local, port 8150
 //!     tooth --local                  ce poste uniquement
 //!     tooth --port 9000
+//!     tooth --host 192.168.1.20      écouter sur cette seule adresse du poste
 //!     tooth --base D:\stock.db       utiliser une autre base
 //!     tooth --importer "C:\…"        reprendre l'ancienne application (--forcer : écraser)
 //!     tooth --sans-navigateur        ne pas ouvrir le navigateur
@@ -11,6 +12,8 @@
 //! même temps. Chaque autre poste saisit une fois le code d'appairage à 6 chiffres affiché dans
 //! la console (web_tools_commun). --local coupe l'accès depuis les autres postes.
 
+use std::io::ErrorKind;
+use std::net::IpAddr;
 use std::path::{Component, Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::{Arc, OnceLock};
@@ -18,7 +21,7 @@ use std::time::{Duration, Instant};
 
 use serde_json::{json, Map, Value};
 use web_tools_commun::appairage::{self, Garde};
-use web_tools_commun::serveur::{decoder_url, ErreurCorps, Reponse, Requete, Serveur};
+use web_tools_commun::serveur::{decoder_chemin, ErreurCorps, Reponse, Requete, Serveur};
 
 use crate::base::{absolu, safe_int, texte, vrai, Base, Erreur, Res, NUL};
 use crate::meteo::Meteo;
@@ -102,6 +105,8 @@ pub struct App {
     pub config: PathBuf,
     /// N'écoute que sur ce poste (--local) : pas d'adresse réseau.
     pub local: bool,
+    /// --host ADRESSE précise (ni boucle locale, ni 0.0.0.0 / ::) : l'adresse donnée aux autres postes.
+    pub hote: Option<IpAddr>,
     pub port: u16,
     pub corps_max: usize,
 }
@@ -192,8 +197,7 @@ impl App {
         let adresses: Vec<String> = if self.local {
             Vec::new()
         } else {
-            let ip = appairage::adresse_reseau().map(|i| i.to_string()).unwrap_or_else(|| "127.0.0.1".into());
-            vec![garde().adresse(&ip, self.port)]
+            vec![garde().adresse(&ip_reseau(self.hote), self.port)]
         };
         json!({"version": VERSION, "adresses_reseau": adresses, "commit": self.maj.version_locale()})
     }
@@ -409,7 +413,7 @@ fn fichier(chemin: &str) -> Reponse {
     if chemin == "/favicon.ico" {
         return Reponse::new(204, "text/plain", Vec::new());
     }
-    let rel = if chemin == "/" { "index.html".to_string() } else { decoder_url(chemin.trim_start_matches('/')) };
+    let rel = if chemin == "/" { "index.html".to_string() } else { decoder_chemin(chemin.trim_start_matches('/')) };
     let p = Path::new(&rel);
     let sur = p.components().all(|c| matches!(c, Component::Normal(n) if !n.to_string_lossy().starts_with('.')));
     let Some(mime) = type_mime(p).filter(|_| sur) else { return introuvable() };
@@ -559,7 +563,29 @@ fn ouvrir_navigateur(url: &str) {
 }
 
 fn boucle_locale(hote: &str) -> bool {
-    hote == "localhost" || hote.trim_matches(['[', ']']).parse::<std::net::IpAddr>().is_ok_and(|i| i.is_loopback())
+    hote == "localhost" || hote.trim_matches(['[', ']']).parse::<IpAddr>().is_ok_and(|i| i.to_canonical().is_loopback())
+}
+
+/// --local / --host : (adresse pour Serveur::ouvrir_sur, mode réseau). Pas d'adresse : l'habituel
+/// Serveur::ouvrir (sans --host, ou boucle locale). Hors boucle locale, mode réseau : Garde active.
+fn mode_ecoute(args: &Args) -> Result<(Option<IpAddr>, bool), String> {
+    let hote = args.host.as_deref().unwrap_or("");
+    if args.local || boucle_locale(hote) {
+        return Ok((None, false));
+    }
+    if hote.is_empty() {
+        return Ok((None, true));
+    }
+    let ip: IpAddr = hote
+        .trim_matches(['[', ']'])
+        .parse()
+        .map_err(|_| format!("--host attend une adresse IP de ce poste (par exemple 192.168.1.20), pas « {hote} »"))?;
+    Ok((Some(ip), !ip.to_canonical().is_loopback()))
+}
+
+/// L'adresse à donner aux autres postes : celle de --host si elle est précise, sinon celle du poste.
+fn ip_reseau(precise: Option<IpAddr>) -> String {
+    precise.or_else(appairage::adresse_reseau).map(|i| i.to_string()).unwrap_or_else(|| "127.0.0.1".into())
 }
 
 fn sortir(code: i32, message: &str) -> ! {
@@ -580,6 +606,12 @@ pub fn main() {
         println!("{USAGE}");
         return;
     }
+    let (ecoute, reseau) = mode_ecoute(&args).unwrap_or_else(|e| {
+        eprintln!("{USAGE}\ntooth: {e}");
+        std::process::exit(2);
+    });
+    let local = !reseau;
+    let precise = ecoute.map(|i| i.to_canonical()).filter(|i| !i.is_unspecified());
     let _ = std::env::set_current_dir(racine());
     let config = fichier_config();
     journal::demarrer(config.parent().unwrap_or(Path::new(".")));
@@ -615,22 +647,26 @@ pub fn main() {
     }
     let base = Base::ouvrir(&chemin).unwrap_or_else(|e| sortir(1, &format!("[X] Base {} illisible : {e}", chemin.display())));
 
-    let local = args.local || args.host.as_deref().is_some_and(boucle_locale);
-    if let Some(h) = args.host.as_deref().filter(|h| !h.is_empty() && !boucle_locale(h)) {
-        journal::dire(&format!("[*] --host {h} : le serveur écoute sur toutes les interfaces du poste."));
-    }
-    let reseau = !local;
     // Après une mise à jour, l'ancien serveur libère le port à l'instant : on l'attend un peu
     // plutôt que de partir sur un autre port (les postes ont l'adresse habituelle en favori).
     let attente = Instant::now() + Duration::from_secs(if relance { 20 } else { 0 });
-    let mut srv = Serveur::ouvrir(args.port, reseau, 1);
-    while srv.is_err() && Instant::now() < attente {
+    let ouvrir = |essais: u16| match ecoute {
+        Some(ip) => Serveur::ouvrir_sur(ip, args.port, essais),
+        None => Serveur::ouvrir(args.port, reseau, essais),
+    };
+    let absente = |e: &std::io::Error| e.kind() == ErrorKind::AddrNotAvailable;
+    let mut srv = ouvrir(1);
+    while srv.as_ref().is_err_and(|e| !absente(e)) && Instant::now() < attente {
         std::thread::sleep(Duration::from_millis(500));
-        srv = Serveur::ouvrir(args.port, reseau, 1);
+        srv = ouvrir(1);
     }
-    let srv = srv
-        .or_else(|_| Serveur::ouvrir(args.port, reseau, 10))
-        .unwrap_or_else(|e| sortir(1, &format!("[X] Impossible de demarrer le serveur : {e}")));
+    let srv = srv.or_else(|e| if absente(&e) { Err(e) } else { ouvrir(10) }).unwrap_or_else(|e| {
+        if absente(&e) {
+            let h = args.host.as_deref().unwrap_or("");
+            sortir(1, &format!("[X] --host {h} : cette adresse n'est pas une adresse de ce poste ({e}). Choisir une adresse du poste, ou lancer sans --host."));
+        }
+        sortir(1, &format!("[X] Impossible de demarrer le serveur : {e}"))
+    });
     let port = srv.port();
     if port != args.port {
         journal::dire(&format!("[!] Le port {} est indisponible (le port {} était occupé) : port {port}.", args.port, args.port));
@@ -639,7 +675,11 @@ pub fn main() {
     let afficher: appairage::Afficher = Arc::new(|t: &str| journal::dire(t));
     let _ = GARDE.set(Garde::new("tooth_dentaire", reseau, Some(afficher), None));
     garde().brancher(&srv);
-    let url = format!("http://127.0.0.1:{port}/");
+    // écoute sur une seule adresse du poste : 127.0.0.1 n'y répond pas
+    let url = match precise {
+        Some(ip) => garde().adresse(&ip.to_string(), port),
+        None => format!("http://127.0.0.1:{port}/"),
+    };
     let ligne = "=".repeat(62);
     journal::dire(&ligne);
     journal::dire(&format!("GESTION DE STOCK - CABINET DENTAIRE  (v{VERSION})"));
@@ -650,8 +690,7 @@ pub fn main() {
     if local {
         journal::dire("  reseau          : desactive (--local)");
     } else {
-        let ip = appairage::adresse_reseau().map(|i| i.to_string()).unwrap_or_else(|| "127.0.0.1".into());
-        journal::dire(&format!("  autres postes   : {}", garde().adresse(&ip, port)));
+        journal::dire(&format!("  autres postes   : {}", garde().adresse(&ip_reseau(precise), port)));
         journal::dire("  (au premier lancement, autoriser tooth dans le pare-feu Windows)");
     }
     journal::dire(&ligne);
@@ -664,6 +703,7 @@ pub fn main() {
         maj: maj.clone(),
         config,
         local,
+        hote: precise,
         port,
         corps_max: CORPS_MAX,
     });
@@ -718,6 +758,39 @@ mod essais {
         assert!(boucle_locale("127.0.0.1") && boucle_locale("::1") && boucle_locale("localhost") && !boucle_locale("0.0.0.0"));
     }
 
+    #[test]
+    fn host_ecoute_et_garde() {
+        fn mode(l: &[&str]) -> Result<(Option<IpAddr>, bool), String> {
+            mode_ecoute(&lire_args(&a(l)).unwrap())
+        }
+        fn ip(s: &str) -> Option<IpAddr> {
+            Some(s.parse().unwrap())
+        }
+        // boucle locale : l'habituel ouvrir(), sans mode réseau
+        let locales: [&[&str]; 7] = [
+            &["--local"],
+            &["--host", "127.0.0.1"],
+            &["--host=::1"],
+            &["--host", "[::1]"],
+            &["--host", "localhost"],
+            &["--host", "::ffff:127.0.0.1"],
+            &["--host", "192.168.1.20", "--local"],
+        ];
+        for l in locales {
+            assert_eq!(mode(l), Ok((None, false)), "{l:?}");
+        }
+        // sans --host : toutes les interfaces, mode réseau
+        assert_eq!(mode(&[]), Ok((None, true)));
+        assert_eq!(mode(&["--host", ""]), Ok((None, true)));
+        // une autre adresse : écoute sur elle seule, et la Garde (jeton, code d'appairage) est active
+        assert_eq!(mode(&["--host", "192.168.1.20"]), Ok((ip("192.168.1.20"), true)));
+        assert_eq!(mode(&["--host=0.0.0.0"]), Ok((ip("0.0.0.0"), true)));
+        assert_eq!(mode(&["--host", "[fd7a:115c:a1e0::1]"]), Ok((ip("fd7a:115c:a1e0::1"), true)));
+        assert_eq!(mode(&["--host", "::ffff:192.168.1.20"]), Ok((ip("::ffff:192.168.1.20"), true)));
+        assert!(mode(&["--host", "monposte"]).is_err());
+        assert_eq!(ip_reseau(ip("192.168.1.20")), "192.168.1.20");
+    }
+
     /// Un serveur d'essai sur un port libre de 127.0.0.1, avec sa base neuve.
     fn demarrer(corps_max: usize) -> (u16, Arc<App>) {
         let _ = GARDE.set(Garde::new("tooth_dentaire", false, None, None));
@@ -729,6 +802,7 @@ mod essais {
             maj: Arc::new(MiseAJour::new(&d)),
             config: d.join("config.json"),
             local: true,
+            hote: None,
             port: srv.port(),
             corps_max,
         });

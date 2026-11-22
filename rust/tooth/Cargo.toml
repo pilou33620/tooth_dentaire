@@ -12,7 +12,7 @@ serde_json = { version = "1", features = ["preserve_order"] }
 # Sérialiser au format de json.dumps de Python (déjà tiré par serde_json)
 serde = "1"
 # Serveur HTTP/HTTPS et appairage : communs aux web tools (dépôt web_suite)
-web_tools_commun = { git = "https://github.com/pilou33620/web_suite", rev = "d40186eebfe11773b92a497c69d25b641264cd0d" }
+web_tools_commun = { git = "https://github.com/pilou33620/web_suite", rev = "bc1f42ca77df7ccfc415a93018640058c82e2efe" }
 # Base stock.db (SQLite compilé dans l'exécutable) ; « backup » : copies quotidiennes cohérentes
 rusqlite = { version = "0.32", features = ["bundled", "backup"] }
 # Exports Excel (stock, liste de courses, consommation avec graphiques, chirurgie)

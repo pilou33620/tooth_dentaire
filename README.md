@@ -30,7 +30,7 @@ dans **Réglages**.
 |---|---|
 | `--port 9000` (ou `--port=9000`) | change le port (8150 par défaut ; port suivant libre sinon) |
 | `--local` | n'accepte que ce poste (aucun accès réseau) |
-| `--host ADRESSE` | accepté pour compatibilité : `127.0.0.1` vaut `--local`, sinon toutes les interfaces |
+| `--host ADRESSE` | écoute sur cette seule adresse du poste (`192.168.1.20`, ou une IPv6) : `127.0.0.1` vaut `--local`, `0.0.0.0` toutes les interfaces IPv4 ; une adresse absente du poste est refusée. Le poste serveur passe alors lui aussi par cette adresse (code d'appairage ; base et clé GitHub non modifiables) |
 | `--base D:\stock.db` | utilise une autre base |
 | `--importer "C:\...\ancien dossier"` (`--forcer`) | reprend les données de l'ancienne application |
 | `--sans-navigateur` | n'ouvre pas le navigateur |
