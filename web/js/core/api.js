@@ -1,7 +1,7 @@
 "use strict";
 
 /* ============================================================
-   API - Communication avec le serveur Python (serveur.py)
+   API - Communication avec le serveur (bin/tooth, Rust)
 
    - chargerEtat()      : charge toute la base + les documents (GET /api/etat)
    - persister(...)     : écrit une modification (file d'attente ordonnée).
@@ -75,7 +75,7 @@ export async function api(methode, route, corps, entetes = {}) {
     try {
         reponse = await fetch(route, options);
     } catch (e) {
-        throw new Error("Serveur injoignable. Vérifiez que serveur.py tourne sur le poste principal.");
+        throw new Error("Serveur injoignable. Vérifiez que tooth_dentaire tourne sur le poste principal.");
     }
     let data = {};
     try {

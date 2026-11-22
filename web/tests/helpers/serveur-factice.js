@@ -1,6 +1,6 @@
 /**
  * Serveur factice pour les tests : remplace fetch() et simule l'API de
- * serveur.py en mémoire (état, documents, écritures).
+ * bin/tooth en mémoire (état, documents, écritures).
  *
  *   const serveur = installerServeurFactice({ documents: { planning: {...} } });
  *   await chargerEtat();           // l'interface lit l'état factice

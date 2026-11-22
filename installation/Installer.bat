@@ -23,7 +23,10 @@ exit /b
 #   3. l'executable bin\tooth.exe (publication "binaires" du depot, empreinte
 #      SHA-256 verifiee par binaires.cmd) : plus besoin de Python ;
 #   4. lanceur "Lancer tooth_dentaire" dans ce dossier (et sur le Bureau),
-#      puis ce fichier d'installation se supprime.
+#      puis ce fichier d'installation se supprime ;
+#   5. pare-feu : lance en administrateur, regle entrante "Tooth Dentaire" pour
+#      bin\tooth.exe (reseaux prives et domaine) ; sinon un message dit comment
+#      relancer en administrateur, et ce fichier est garde pour cela.
 # En cas d'erreur, rien n'est supprime : relancer apres correction.
 #
 # Variables d'environnement (usage avance, tests) :
@@ -92,7 +95,7 @@ Write-Host "  dans $Destination"
 Write-Host "=============================================="
 
 # 1. git
-Etape "1/4 git"
+Etape "1/5 git"
 $gitPoste = Get-Command git.exe -ErrorAction SilentlyContinue
 if (Test-Path -LiteralPath $GitPortable) {
     $GitExe = $GitPortable
@@ -126,7 +129,7 @@ if (Test-Path -LiteralPath $GitPortable) {
 }
 
 # 2. L'outil, depuis GitHub
-Etape "2/4 Telechargement de l'outil depuis GitHub"
+Etape "2/5 Telechargement de l'outil depuis GitHub"
 New-Item -ItemType Directory -Force -Path $Destination | Out-Null
 if (-not (Test-Path -LiteralPath (Join-Path $Destination ".git"))) {
     # init + checkout plutot que clone : fonctionne aussi dans un dossier deja
@@ -141,7 +144,7 @@ if (-not (Test-Path -LiteralPath (Join-Path $Destination "Lancer.bat"))) { Echec
 Ok "Outil a jour (branche $Branche) ; donnees\ conserve"
 
 # 3. L'executable
-Etape "3/4 Executable de l'outil"
+Etape "3/5 Executable de l'outil"
 & cmd.exe /c "cd /d `"$Destination`" && binaires.cmd"
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath (Join-Path $Destination "bin\tooth.exe"))) {
     Echec "Executable bin\tooth.exe non telecharge."
@@ -150,7 +153,7 @@ Ok "Executable pret : $(Join-Path $Destination "bin\tooth.exe")"
 
 
 # 4. Lanceur
-Etape "4/4 Lanceur"
+Etape "4/5 Lanceur"
 function Raccourci($dossier) {
     $lien = (New-Object -ComObject WScript.Shell).CreateShortcut((Join-Path $dossier "Lancer $NomOutil.lnk"))
     $lien.TargetPath = Join-Path $Destination "Lancer.bat"
@@ -164,15 +167,48 @@ Raccourci $Ici
 $bureau = [Environment]::GetFolderPath("Desktop")
 if (-not $env:TOOTH_SANS_BUREAU -and $bureau -and ($bureau.TrimEnd("\") -ne $Ici.TrimEnd("\"))) { Raccourci $bureau }
 
+# 5. Pare-feu : sans regle, Windows demande d'autoriser tooth.exe au premier lancement
+# reseau, et un compte sans droits d'administrateur ne peut pas accepter (les autres
+# postes ne se connectent pas). Jamais de demande d'elevation : on le dit seulement.
+Etape "5/5 Pare-feu Windows"
+$NomRegle = "Tooth Dentaire"
+$Exe = Join-Path $Destination "bin\tooth.exe"
+$RegleOk = $false
+$Admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
+    [Security.Principal.WindowsBuiltInRole]::Administrator)
+if ($Admin) {
+    $ErrorActionPreference = "Continue"     # netsh : un code de retour, pas d'exception
+    $regle = (& netsh.exe advfirewall firewall show rule "name=$NomRegle" verbose 2>&1 | Out-String)
+    if ($LASTEXITCODE -eq 0 -and $regle.Contains($Exe)) {
+        Ok "Regle de pare-feu deja presente ($NomRegle)"
+        $RegleOk = $true
+    } else {
+        # regle d'une autre installation (autre dossier) : remplacee, jamais en double
+        if ($LASTEXITCODE -eq 0) { & netsh.exe advfirewall firewall delete rule "name=$NomRegle" 2>&1 | Out-Null }
+        & netsh.exe advfirewall firewall add rule "name=$NomRegle" dir=in action=allow "program=$Exe" enable=yes profile=private,domain 2>&1 | Out-Null
+        if ($LASTEXITCODE -eq 0) {
+            Ok "Regle de pare-feu creee : $NomRegle (reseaux prives et domaine)"
+            $RegleOk = $true
+        } else { Attention "Regle de pare-feu non creee (netsh code $LASTEXITCODE)." }
+    }
+    $ErrorActionPreference = "Stop"
+} else {
+    Attention "Sans droits d'administrateur, la regle de pare-feu n'a pas ete creee."
+}
+if (-not $RegleOk) {
+    Info "Les autres postes risquent de ne pas pouvoir se connecter a ce poste."
+    Info "Sur le poste qui fait tourner le serveur : clic droit sur Installer.bat,"
+    Info "puis 'Executer en tant qu'administrateur' (base conservee). Ce fichier est garde pour cela."
+}
+$Garder = [bool]$env:TOOTH_GARDER -or -not $RegleOk
+
 Write-Host ""
 Write-Host "Installation terminee." -ForegroundColor Green
 Write-Host "Le serveur verifie lui-meme les mises a jour sur GitHub et les propose sur l'accueil."
-Write-Host "Au premier lancement, Windows demande d'autoriser tooth.exe dans le pare-feu :"
-Write-Host "accepter pour les reseaux prives (acces depuis les autres postes du cabinet)."
-if (-not $env:TOOTH_GARDER) { Write-Host "Ce fichier d'installation va se supprimer." }
+if (-not $Garder) { Write-Host "Ce fichier d'installation va se supprimer." }
 Pause-Fin
 
-if (-not $env:TOOTH_GARDER) {
+if (-not $Garder) {
     # Seuls les fichiers d'installation sont effaces (jamais le dossier : il
     # garde le lanceur). Installer.bat est encore ouvert par la console : un
     # PowerShell cache attend qu'elle se ferme.

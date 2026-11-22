@@ -1,7 +1,7 @@
 {
   "name": "tooth_dentaire",
   "version": "3.0.0",
-  "description": "Interface web de l'outil de gestion de stock du cabinet (servie par serveur.py)",
+  "description": "Interface web de l'outil de gestion de stock du cabinet (servie par le serveur bin/tooth)",
   "type": "module",
   "scripts": {
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",

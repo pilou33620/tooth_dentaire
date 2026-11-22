@@ -44,7 +44,8 @@ la main à `lancer.sh` / `Lancer.bat` avec les mêmes options.
 ### Installer sur un poste du cabinet
 
 Un seul fichier à donner : [`installation/Installer.bat`](installation/Installer.bat).
-Double-clic, sans question ni droits administrateur, il faut seulement internet :
+Double-clic, sans question, il faut seulement internet (les droits d'administrateur ne
+servent qu'au pare-feu, étape 5) :
 
 1. git : celui du poste, sinon **MinGit** (git portable officiel, empreinte SHA-256
    vérifiée) dans `.mingit/` ;
@@ -52,14 +53,34 @@ Double-clic, sans question ni droits administrateur, il faut seulement internet 
    permet les mises à jour automatiques ; `donnees/` n'est jamais touché ;
 3. l'exécutable `bin\tooth.exe` (publication « binaires », empreinte vérifiée) ;
 4. raccourci « Lancer tooth_dentaire » dans le dossier de l'installateur (et sur le
-   Bureau), puis **l'installateur se supprime** : il ne reste que le lanceur.
+   Bureau), puis **l'installateur se supprime** : il ne reste que le lanceur ;
+5. **pare-feu** : lancé en administrateur (clic droit sur `Installer.bat`, « Exécuter en
+   tant qu'administrateur »), il crée la règle entrante « Tooth Dentaire » pour
+   `bin\tooth.exe` (réseaux privés et domaine), sans doublon si elle existe déjà. Sans ces
+   droits, il le dit, n'insiste pas, et **se garde** pour qu'on puisse le relancer en
+   administrateur.
 
 En cas d'erreur, rien n'est supprimé. Relancer `Installer.bat` sur un poste déjà
 installé répare l'installation (code remis sur `main`, base conservée). Pour
 reprendre une base existante : copier son `stock.db` dans `C:\tooth_dentaire\donnees\`.
 
-Au premier lancement en réseau, Windows demande d'autoriser `tooth.exe` dans le
-pare-feu : accepter pour les **réseaux privés**.
+**Pare-feu.** Seul le poste qui fait tourner le serveur en a besoin. Sans la règle,
+Windows demande d'autoriser `tooth.exe` au premier lancement en réseau : accepter pour les
+**réseaux privés**. Sur un compte sans droits d'administrateur, cette fenêtre ne peut pas
+être acceptée et les autres postes ne se connectent pas : relancer `Installer.bat` en
+administrateur (clic droit, « Exécuter en tant qu'administrateur » ; base conservée), ou
+créer la règle dans une invite de commandes administrateur, depuis `C:\tooth_dentaire` :
+
+```bat
+netsh advfirewall firewall add rule name="Tooth Dentaire" dir=in action=allow program="%CD%\bin\tooth.exe" profile=private,domain
+```
+
+**Antivirus.** Si l'antivirus met `bin\tooth.exe` en quarantaine (exécutable récent, peu
+connu de lui), l'outil ne démarre plus ou se retélécharge à chaque lancement. Restaurer le
+fichier depuis la quarantaine, puis ajouter une **exclusion du dossier**
+`C:\tooth_dentaire\bin` (Windows Defender : Sécurité Windows > Protection contre les virus
+et menaces > Gérer les paramètres > Exclusions). L'exécutable vient de la publication
+« binaires » du dépôt et son empreinte SHA-256 est vérifiée à chaque téléchargement.
 
 ### Utiliser depuis un autre poste (code d'appairage)
 
