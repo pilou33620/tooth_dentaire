@@ -135,8 +135,12 @@ def faux_curl(tmp, depot):
 def environnement(depot, faux=None):
     """Un poste sans cargo, qui prend la publication sur le faux GitHub."""
     env = {k: v for k, v in os.environ.items() if not k.upper().startswith(("TOOTH_", "CARGO", "RUSTUP"))}
-    chemins = [p for p in env.get("PATH", "").split(os.pathsep) if ".cargo" not in p]
+    # aucun dossier qui contienne cargo (~/.cargo/bin, mais aussi Homebrew sous macOS)
+    chemins = [p for p in env.get("PATH", "").split(os.pathsep)
+               if p and not any(os.path.isfile(os.path.join(p, c)) for c in ("cargo", "cargo.exe"))]
     env["PATH"] = os.pathsep.join(([faux] if faux else []) + chemins)
+    if not shutil.which("git", path=env["PATH"]):
+        raise SystemExit("git introuvable une fois cargo retiré du PATH : %s" % env["PATH"])
     env["PYTHONIOENCODING"] = "utf-8"
     env["TOOTH_DEPOT"] = depot
     return env
@@ -243,7 +247,10 @@ def bilan(titre, erreurs, tmp, journaux):
         print(" - " + e)
     for j in journaux:
         with open(j, "rb") as f:
-            print("\n--- %s (fin) ---\n%s" % (os.path.basename(j), f.read().decode("utf-8", "replace")[-3000:]))
+            lignes = [l for l in f.read().decode("utf-8", "replace").splitlines() if '"GET /api/' not in l]
+        texte = "\n".join(lignes)
+        print("\n--- %s ---\n%s" % (os.path.basename(j), texte if len(texte) < 6000 else
+                                       texte[:3000] + "\n[...]\n" + texte[-3000:]))
     return 1
 
 
