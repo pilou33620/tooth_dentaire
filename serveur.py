@@ -20,8 +20,12 @@ ICI = os.path.dirname(os.path.abspath(__file__))
 def main():
     options = sys.argv[1:]
     if os.name == "nt":
-        return subprocess.call(["cmd", "/c", "call", os.path.join(ICI, "demarrer_TOOTH_DENTAIRE.cmd")] + options,
-                               cwd=ICI)
+        # passer la main puis sortir : aucun Python ne reste en mémoire, demarrer_TOOTH_DENTAIRE.cmd
+        # garde cette console (Ctrl+C et fermeture de la fenêtre arrêtent l'outil). Popen plutôt
+        # qu'os.execv, qui ne met pas de guillemets autour d'un chemin avec des espaces.
+        subprocess.Popen(["cmd", "/c", "call", os.path.join(ICI, "demarrer_TOOTH_DENTAIRE.cmd")] + options,
+                         cwd=ICI)
+        return 0
     os.chdir(ICI)
     # même processus : arrêter son groupe de processus arrête aussi l'exécutable
     os.execvp("sh", ["sh", os.path.join(ICI, "demarrer_TOOTH_DENTAIRE.sh")] + options)

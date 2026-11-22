@@ -14,9 +14,10 @@ serveur Python (et, pour un départ Rust, l'exécutable de ce départ dans bin/,
 démarre comme sur le PC du cabinet : Lancer.bat sous Windows (comme son raccourci), sinon
 serveur.py (départ Python) ou lancer.sh (départ Rust). Vérifie qu'il se met à jour seul jusqu'à
 ce commit et arrive sur l'exécutable de ce commit, lancé par demarrer_TOOTH_DENTAIRE, sur la même
-base, avec une seule copie « avant-rust », sans pause ; que l'arrêt (fermer sa fenêtre ou son
-terminal : tout l'arbre) arrête l'exécutable ; qu'un nouveau démarrage par l'ancien point
-d'entrée marche ; et qu'une mise à jour suivante passe encore (lanceurs masqués compris).
+base, sans plus aucun processus Python de l'outil, avec une seule copie « avant-rust », sans
+pause ; que l'arrêt (fermer sa fenêtre ou son terminal : tout l'arbre) arrête l'exécutable ;
+qu'un nouveau démarrage par l'ancien point d'entrée marche ; et qu'une mise à jour suivante passe
+encore (lanceurs masqués compris).
 
 --prod : l'archive tooth-prod décompressée dans un dossier vide (sans git ni sources) démarre
 par demarrer_TOOTH_DENTAIRE, puis se met à jour seule quand une nouvelle archive est publiée,
@@ -170,9 +171,20 @@ def chaine(port):
     return [p for p in processus() if marque in p[2]]
 
 
-def est_executable(commande):
+def programme(commande):
     premier = commande.split()[0].strip('"').replace("\\", "/") if commande.split() else ""
-    return os.path.basename(premier) in ("tooth", "tooth.exe")
+    return os.path.basename(premier).lower()
+
+
+def est_executable(commande):
+    return programme(commande) in ("tooth", "tooth.exe")
+
+
+def sans_python(port, erreurs):
+    """Plus aucun Python de l'outil en mémoire (ancien serveur ou relais serveur.py) : seul le Rust tourne."""
+    restes = [p for p in chaine(port) if programme(p[2]).startswith("python") or "serveur.py" in p[2]]
+    if restes:
+        erreurs.append("un processus Python de l'outil tourne encore : %s" % restes)
 
 
 def lance_par_demarrer(port, erreurs):
@@ -326,6 +338,7 @@ def passage(depart, publication, exe_depart):
             if "AVANT-RUST" not in refs:
                 erreurs.append("la base existante n'a pas été reprise (produits : %s)" % refs)
             lance_par_demarrer(port, erreurs)
+            sans_python(port, erreurs)
         arreter(proc, port, erreurs)
     if git("rev-parse", "HEAD", dossier=poste) != nouveau:
         erreurs.append("la copie du poste n'a pas avancé jusqu'à ce commit")
