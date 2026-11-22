@@ -45,3 +45,11 @@ Thumbs.db
 # Rust : compilation et exécutables (compilés ici ou téléchargés)
 /target/
 /bin/
+# archives en cours (scripts/archives.sh), mise à jour d'une copie de production
+/.archives/
+/tooth-*.zip*
+/tooth-*.tar.gz*
+/.maj/
+/.maj.*
+# lanceurs de l'autre système masqués (demarrer_TOOTH_DENTAIRE.sh)
+.hidden

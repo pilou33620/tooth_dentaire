@@ -1,8 +1,13 @@
 name: exécutables
 
-# Compile l'exécutable de l'outil pour chaque système et le dépose dans la publication « binaires » :
-# tooth-<système>.tar.gz (.zip sous Windows) et son empreinte SHA-256, que binaires.sh et
-# binaires.cmd prennent sur un poste sans cargo (Raspberry Pi, PC sans Rust).
+# Compile l'exécutable de l'outil pour chaque système et le dépose dans la publication « binaires »,
+# en deux archives par système (.tar.gz, .zip sous Windows), chacune avec son empreinte SHA-256
+# (scripts/archives.sh) :
+# - tooth-<système> : l'exécutable seul, que scripts/binaires.sh et .cmd prennent sur un clone git
+#   sans cargo (Raspberry Pi, PC sans Rust) ;
+# - tooth-prod-<système> : la production, complète et sans git (exécutable, pages, scripts de
+#   démarrage, README), à décompresser puis lancer par demarrer_TOOTH_DENTAIRE ; elle se met
+#   ensuite à jour seule depuis cette même archive.
 on:
   push:
     branches: [main]
@@ -33,23 +38,9 @@ jobs:
 
       - run: cargo build --release -p tooth --bins --target ${{ matrix.cible }}
 
-      - name: Archive (les exécutables et le commit dont ils viennent)
+      - name: Archives (l'exécutable seul ; la production)
         shell: bash
-        run: |
-          mkdir bin
-          cd target/${{ matrix.cible }}/release
-          if [ "${{ runner.os }}" = Windows ]; then
-            cp ./*.exe ../../../bin/
-          else
-            find . -maxdepth 1 -type f -perm -u+x -exec cp {} ../../../bin/ \;
-          fi
-          cd ../../..
-          git rev-parse HEAD > bin/commit
-          if [ "${{ runner.os }}" = Windows ]; then
-            (cd bin && 7z a ../tooth-${{ matrix.nom }}.zip .)
-          else
-            tar -czf tooth-${{ matrix.nom }}.tar.gz -C bin .
-          fi
+        run: sh scripts/archives.sh target/${{ matrix.cible }}/release ${{ matrix.nom }}
 
       - name: Publication
         shell: bash
@@ -59,9 +50,7 @@ jobs:
           # les quatre compilations arrivent ensemble : une seule crée la publication
           gh release view binaires >/dev/null 2>&1 \
             || gh release create binaires --title "Exécutables" \
-                 --notes "Exécutables de tooth_dentaire, recompilés à chaque envoi sur main, pris par binaires.sh et binaires.cmd." \
+                 --notes "Exécutables de tooth_dentaire, recompilés à chaque envoi sur main. tooth-<système> : pris par scripts/binaires.sh et binaires.cmd. tooth-prod-<système> : la production complète, à décompresser puis lancer par demarrer_TOOTH_DENTAIRE." \
             || true
-          for f in tooth-${{ matrix.nom }}.*; do
-            (sha256sum "$f" 2>/dev/null || shasum -a 256 "$f") | cut -d" " -f1 > "$f.sha256"
-          done
-          gh release upload binaires tooth-${{ matrix.nom }}.* --clobber
+          # chaque archive a son empreinte (.sha256), faite par scripts/archives.sh
+          gh release upload binaires tooth-${{ matrix.nom }}.* tooth-prod-${{ matrix.nom }}.* --clobber

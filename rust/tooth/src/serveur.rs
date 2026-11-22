@@ -21,6 +21,7 @@ use std::time::{Duration, Instant};
 
 use serde_json::{json, Map, Value};
 use web_tools_commun::appairage::{self, Garde};
+use web_tools_commun::production;
 use web_tools_commun::serveur::{decoder_chemin, ErreurCorps, Reponse, Requete, Serveur};
 
 use crate::base::{absolu, safe_int, texte, vrai, Base, Erreur, Res, NUL};
@@ -34,8 +35,16 @@ pub const CORPS_MAX: usize = 20 * 1024 * 1024; // 20 Mo : un planning ou un carn
 /// En-tête maison exigé sur les requêtes qui modifient les données (CSRF) : une page d'un autre
 /// site ne peut pas l'ajouter sans pré-vol CORS, jamais accepté ici.
 pub const ENTETE_CSRF: &str = "X-Tooth";
-/// Posée par lancer.sh à la relance qui suit une mise à jour.
-pub const VARIABLE_REDEMARRAGE: &str = "TOOTH_DENTAIRE_REDEMARRAGE";
+/// Posées à la relance qui suit une mise à jour : par demarrer_TOOTH_DENTAIRE, et (la seconde) par
+/// les anciens lancer.sh, Lancer.bat et serveur.py.
+pub const VARIABLES_REDEMARRAGE: [&str; 2] = ["TOOTH_DENTAIRE_DEJA_MAJ", "TOOTH_DENTAIRE_REDEMARRAGE"];
+/// Posée par demarrer_TOOTH_DENTAIRE, qui relance l'outil quand il sort avec le code 75.
+pub const RELANCEUR: &str = "TOOTH_DENTAIRE_RELANCEUR";
+/// La même, posée par la boucle des anciens lancer.sh et Lancer.bat (avant demarrer_TOOTH_DENTAIRE).
+pub const ANCIEN_RELANCEUR: &str = "TOOTH_RELANCEUR";
+/// Le dépôt GitHub, dont la publication « binaires » met à jour une copie de production ;
+/// TOOTH_DEPOT le remplace (essais de la CI, sur un faux serveur local).
+pub const DEPOT: &str = "https://github.com/pilou33620/tooth_dentaire";
 
 /// La racine de l'outil (web/, donnees/) : le dossier courant s'il contient web/index.html, sinon
 /// le premier dossier au-dessus de l'exécutable qui le contient.
@@ -330,7 +339,7 @@ impl App {
                 "/api/signalements/cle" => self.enregistrer_cle_github(&d, local),
                 "/api/mise-a-jour/installer" => {
                     let resultat = self.maj.installer(DELAI_GIT)?;
-                    // Laisser partir la réponse, puis sortir avec le code 75 : lancer.sh reprend
+                    // Laisser partir la réponse, puis sortir avec le code 75 : demarrer_TOOTH_DENTAIRE reprend
                     // l'exécutable de la nouvelle version et relance l'outil.
                     std::thread::spawn(|| {
                         std::thread::sleep(Duration::from_secs(1));
@@ -588,6 +597,47 @@ fn ip_reseau(precise: Option<IpAddr>) -> String {
     precise.or_else(appairage::adresse_reseau).map(|i| i.to_string()).unwrap_or_else(|| "127.0.0.1".into())
 }
 
+/// Vrai si une nouvelle version vient d'être installée : par git sur un clone, par la
+/// publication « binaires » sur une copie de production (archive tooth-prod, sans git).
+fn maj_au_demarrage(maj: &MiseAJour) -> bool {
+    if !production::est_copie_prod(racine()) {
+        return maj.au_demarrage();
+    }
+    let depot = std::env::var("TOOTH_DEPOT").ok().filter(|d| !d.is_empty()).unwrap_or_else(|| DEPOT.to_string());
+    journal::dire("[*] Recherche de mises a jour...");
+    production::mettre_a_jour(&depot, "tooth", racine(), &|t: &str| journal::dire(t)).unwrap_or_else(|e| {
+        journal::dire(&format!("[X] {e}"));
+        false
+    })
+}
+
+/// Lancé par la boucle d'avant demarrer_TOOTH_DENTAIRE (l'ancien lancer.sh ou Lancer.bat, encore en
+/// mémoire juste après la mise à jour qui les a remplacés) : la main passe au script de démarrage,
+/// avec les mêmes options. Sous Windows, l'outil le lance puis sort aussitôt (code 0 : l'ancienne
+/// boucle s'arrête sans pause) pour ne pas garder bin\tooth.exe ouvert : la mise à jour suivante
+/// doit pouvoir le remplacer.
+fn passer_au_demarrage(argv: &[String]) {
+    if std::env::var_os(ANCIEN_RELANCEUR).is_none() || std::env::var_os(RELANCEUR).is_some() {
+        return;
+    }
+    let script = racine().join(if cfg!(windows) { "demarrer_TOOTH_DENTAIRE.cmd" } else { "demarrer_TOOTH_DENTAIRE.sh" });
+    if !script.is_file() {
+        return;
+    }
+    journal::dire("[*] Passage au script de demarrage demarrer_TOOTH_DENTAIRE...");
+    #[cfg(unix)]
+    let erreur = {
+        use std::os::unix::process::CommandExt;
+        Command::new("sh").arg(&script).args(argv).exec() // ne revient qu'en cas d'échec
+    };
+    #[cfg(not(unix))]
+    let erreur = match Command::new("cmd").arg("/c").arg("call").arg(&script).args(argv).spawn() {
+        Ok(_) => std::process::exit(0),
+        Err(e) => e,
+    };
+    journal::dire(&format!("[!] demarrer_TOOTH_DENTAIRE n'a pas pu etre lance ({erreur}) : l'outil demarre quand meme."));
+}
+
 fn sortir(code: i32, message: &str) -> ! {
     journal::dire(message);
     std::process::exit(code)
@@ -617,13 +667,16 @@ pub fn main() {
     journal::demarrer(config.parent().unwrap_or(Path::new(".")));
     std::panic::set_hook(Box::new(|info| journal::erreur(&format!("[!] {info}"))));
 
+    passer_au_demarrage(&argv);
+
     // Mise à jour installée avant de démarrer quoi que ce soit ; pas de nouvelle recherche
-    // juste après la relance qui la suit.
+    // juste après la relance qui la suit. Clone git : git ; copie de production : la publication.
     let maj = Arc::new(MiseAJour::new(racine()));
-    let relance = std::env::var_os(VARIABLE_REDEMARRAGE).is_some();
-    if !relance && !args.sans_maj && maj.au_demarrage() {
-        if std::env::var_os("TOOTH_RELANCEUR").is_some() {
-            sortir(75, "Nouvelle version installée : relance de l'outil…");
+    let variable = |n: &&str| std::env::var_os(n).is_some();
+    let relance = VARIABLES_REDEMARRAGE.iter().any(variable);
+    if !relance && !args.sans_maj && maj_au_demarrage(&maj) {
+        if [RELANCEUR, ANCIEN_RELANCEUR].iter().any(variable) {
+            sortir(production::CODE_MIS_A_JOUR, "Nouvelle version installée : relance de l'outil…");
         }
         journal::dire("[*] Nouvelle version téléchargée : relancez l'outil pour en profiter.");
     }

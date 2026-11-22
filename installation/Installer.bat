@@ -21,9 +21,9 @@ exit /b
 #      c'est ce qui permet au serveur de proposer les mises a jour ensuite ;
 #      donnees\ n'est jamais touche (reinstaller garde la base) ;
 #   3. l'executable bin\tooth.exe (publication "binaires" du depot, empreinte
-#      SHA-256 verifiee par binaires.cmd) : plus besoin de Python ;
-#   4. lanceur "Lancer tooth_dentaire" dans ce dossier (et sur le Bureau),
-#      puis ce fichier d'installation se supprime ;
+#      SHA-256 verifiee par scripts\binaires.cmd) : plus besoin de Python ;
+#   4. raccourci "Lancer tooth_dentaire" vers demarrer_TOOTH_DENTAIRE.cmd dans ce
+#      dossier (et sur le Bureau), puis ce fichier d'installation se supprime ;
 #   5. pare-feu : lance en administrateur, regle entrante "Tooth Dentaire" pour
 #      bin\tooth.exe (reseaux prives et domaine) ; sinon un message dit comment
 #      relancer en administrateur, et ce fichier est garde pour cela.
@@ -140,12 +140,12 @@ if (-not (Test-Path -LiteralPath (Join-Path $Destination ".git"))) {
 Git @("fetch", "--quiet", "origin", $Branche)
 Git @("checkout", "--quiet", "--force", "-B", $Branche, "origin/$Branche")
 Git @("branch", "--quiet", "--set-upstream-to=origin/$Branche", $Branche)
-if (-not (Test-Path -LiteralPath (Join-Path $Destination "Lancer.bat"))) { Echec "Lancer.bat absent apres le telechargement." }
+if (-not (Test-Path -LiteralPath (Join-Path $Destination "demarrer_TOOTH_DENTAIRE.cmd"))) { Echec "demarrer_TOOTH_DENTAIRE.cmd absent apres le telechargement." }
 Ok "Outil a jour (branche $Branche) ; donnees\ conserve"
 
 # 3. L'executable
 Etape "3/5 Executable de l'outil"
-& cmd.exe /c "cd /d `"$Destination`" && binaires.cmd"
+& cmd.exe /c "cd /d `"$Destination`" && scripts\binaires.cmd"
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath (Join-Path $Destination "bin\tooth.exe"))) {
     Echec "Executable bin\tooth.exe non telecharge."
 }
@@ -156,7 +156,7 @@ Ok "Executable pret : $(Join-Path $Destination "bin\tooth.exe")"
 Etape "4/5 Lanceur"
 function Raccourci($dossier) {
     $lien = (New-Object -ComObject WScript.Shell).CreateShortcut((Join-Path $dossier "Lancer $NomOutil.lnk"))
-    $lien.TargetPath = Join-Path $Destination "Lancer.bat"
+    $lien.TargetPath = Join-Path $Destination "demarrer_TOOTH_DENTAIRE.cmd"
     $lien.WorkingDirectory = $Destination
     $lien.IconLocation = Join-Path $Destination "web\logo.ico"
     $lien.Description = "Gestion du stock du cabinet"

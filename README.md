@@ -12,19 +12,57 @@ réseau (accueil, stérilisation, tablette…). Toutes les données sont dans un
 SQLite partagée : une modification faite sur un poste apparaît sur les autres en
 quelques secondes.
 
+## Installation
+
+### Le plus simple : l'archive de production (sans git, sans rien installer)
+
+Dans la [publication « binaires »](https://github.com/pilou33620/tooth_dentaire/releases/tag/binaires),
+prendre **une seule archive**, celle du système :
+
+| Système | Archive |
+|---|---|
+| Windows | `tooth-prod-windows-x86_64.zip` |
+| Linux x86_64 | `tooth-prod-linux-x86_64.tar.gz` |
+| Raspberry Pi (64 bits) | `tooth-prod-linux-aarch64.tar.gz` |
+| macOS (Apple) | `tooth-prod-macos-aarch64.tar.gz` |
+
+La décompresser où l'on veut (par exemple `C:\`) : elle donne un seul dossier `tooth_dentaire/`
+(l'exécutable, les pages, les scripts de démarrage), puis double-cliquer sur
+`demarrer_TOOTH_DENTAIRE.cmd` (Windows) ou lancer `./demarrer_TOOTH_DENTAIRE.sh`.
+
+**Mises à jour sans git** : à chaque démarrage, l'outil compare l'empreinte de l'archive publiée
+à celle de l'installation (`bin/prod.sha256`) ; si elle a changé, il télécharge l'archive (empreinte
+SHA-256 vérifiée), la recopie par-dessus et redémarre. Au tout premier démarrage, il retélécharge
+une fois la même archive (il n'en connaît pas encore l'empreinte). `donnees/` (la base, les
+sauvegardes, la configuration) et les fichiers `*.local.json` ne sont jamais touchés : seuls les
+fichiers de l'archive sont écrits.
+
+### Pour développer, ou un poste installé par git
+
+Prérequis : git. `demarrer_TOOTH_DENTAIRE` prend l'exécutable dans `bin/` : avec Rust (`cargo`)
+sur le poste, il est compilé ici ; sinon il est téléchargé depuis la publication « binaires »
+(compilée par la CI à chaque envoi sur `main`, empreinte SHA-256 vérifiée), une fois par version.
+
+```
+git clone https://github.com/pilou33620/tooth_dentaire.git
+```
+
+Sous Windows, [`installation/Installer.bat`](installation/Installer.bat) fait tout (voir
+ci-dessous). À la racine, un seul fichier à cliquer par système : le premier lancement masque
+celui de l'autre (`.sh` sous Windows ; `.cmd` et `.bat` sous Linux). Les autres scripts sont
+dans `scripts/` (`binaires.sh`, `binaires.cmd`).
+
 ## Démarrage
 
 ```bash
-./lancer.sh            # Linux, macOS, Raspberry Pi
-Lancer.bat             :: Windows (double-clic)
+./demarrer_TOOTH_DENTAIRE.sh       # Linux, macOS, Raspberry Pi
+demarrer_TOOTH_DENTAIRE.cmd        :: Windows (double-clic)
 ```
 
-`lancer.sh` / `Lancer.bat` prennent l'exécutable dans `bin/` : avec Rust (`cargo`) sur le
-poste, il est compilé ici ; sinon il est téléchargé depuis la publication « binaires » du
-dépôt (compilée par la CI à chaque envoi sur `main`, empreinte SHA-256 vérifiée), une fois
-par version. Le navigateur s'ouvre et la console affiche l'adresse à utiliser depuis les
-autres postes, par exemple `http://192.168.1.20:8150/`. Cette adresse est aussi visible
-dans **Réglages**.
+Le navigateur s'ouvre et la console affiche l'adresse à utiliser depuis les autres postes, par
+exemple `http://192.168.1.20:8150/`. Cette adresse est aussi visible dans **Réglages**. En cas
+d'erreur, la fenêtre reste ouverte avec la raison. Après une mise à jour, l'outil sort avec le
+code 75 et le script reprend l'exécutable de la nouvelle version, puis le relance.
 
 | Option | Effet |
 |---|---|
@@ -34,14 +72,17 @@ dans **Réglages**.
 | `--base D:\stock.db` | utilise une autre base |
 | `--importer "C:\...\ancien dossier"` (`--forcer`) | reprend les données de l'ancienne application |
 | `--sans-navigateur` | n'ouvre pas le navigateur |
-| `--sans-pause` | accepté (la pause sur erreur est faite par `Lancer.bat`) |
+| `--sans-pause` | accepté (la pause sur erreur est faite par `demarrer_TOOTH_DENTAIRE`) |
 | `--sans-maj` | pas de mise à jour au démarrage |
 
-`serveur.py` n'est plus qu'un relais de transition : `python serveur.py …` (ancienne
-commande, raccourcis, web_launcher, relance par l'ancienne mise à jour automatique) passe
-la main à `lancer.sh` / `Lancer.bat` avec les mêmes options.
+**Anciens points d'entrée** : `Lancer.bat` (et les raccourcis qui le visent), `lancer.sh` et
+`serveur.py` (`python serveur.py …`, ancienne mise à jour automatique) restent, comme relais qui
+passent la main à `demarrer_TOOTH_DENTAIRE` avec les mêmes options. `binaires.cmd` à la racine
+sert la boucle de l'ancien `Lancer.bat`, encore en mémoire juste après la mise à jour qui l'a
+remplacé ; l'exécutable lancé par cette ancienne boucle passe lui aussi la main à
+`demarrer_TOOTH_DENTAIRE`.
 
-### Installer sur un poste du cabinet
+### Installer sur un poste du cabinet (Windows, par git)
 
 Un seul fichier à donner : [`installation/Installer.bat`](installation/Installer.bat).
 Double-clic, sans question, il faut seulement internet (les droits d'administrateur ne
@@ -52,8 +93,9 @@ servent qu'au pare-feu, étape 5) :
 2. **clone** de ce dépôt (branche `main`) dans `C:\tooth_dentaire` : c'est ce qui
    permet les mises à jour automatiques ; `donnees/` n'est jamais touché ;
 3. l'exécutable `bin\tooth.exe` (publication « binaires », empreinte vérifiée) ;
-4. raccourci « Lancer tooth_dentaire » dans le dossier de l'installateur (et sur le
-   Bureau), puis **l'installateur se supprime** : il ne reste que le lanceur ;
+4. raccourci « Lancer tooth_dentaire » vers `demarrer_TOOTH_DENTAIRE.cmd`, dans le dossier de
+   l'installateur (et sur le Bureau), puis **l'installateur se supprime** : il ne reste que le
+   lanceur ;
 5. **pare-feu** : lancé en administrateur (clic droit sur `Installer.bat`, « Exécuter en
    tant qu'administrateur »), il crée la règle entrante « Tooth Dentaire » pour
    `bin\tooth.exe` (réseaux privés et domaine), sans doublon si elle existe déjà. Sans ces
@@ -69,7 +111,8 @@ Windows demande d'autoriser `tooth.exe` au premier lancement en réseau : accept
 **réseaux privés**. Sur un compte sans droits d'administrateur, cette fenêtre ne peut pas
 être acceptée et les autres postes ne se connectent pas : relancer `Installer.bat` en
 administrateur (clic droit, « Exécuter en tant qu'administrateur » ; base conservée), ou
-créer la règle dans une invite de commandes administrateur, depuis `C:\tooth_dentaire` :
+créer la règle dans une invite de commandes administrateur, depuis le dossier de l'outil
+(`C:\tooth_dentaire`, ou celui où l'archive de production a été décompressée) :
 
 ```bat
 netsh advfirewall firewall add rule name="Tooth Dentaire" dir=in action=allow program="%CD%\bin\tooth.exe" profile=private,domain
@@ -135,14 +178,16 @@ la base (`donnees/stock.db` par défaut), et le dossier `donnees/` est exclu de 
 
 ## Mises à jour
 
+Copie de production (archive `tooth-prod`) : voir *Installation* ; elle se met à jour au
+démarrage seulement, depuis la publication « binaires ».
+
 Sur un poste installé par `Installer.bat` (ou `git clone`), **au démarrage**,
 avant de lancer le serveur et l'interface, l'outil installe d'office la nouvelle
 version de `main` s'il y en a une, puis se relance (sans internet, il démarre
 normalement après 20 s au plus). Ensuite, le serveur vérifie toutes les 4 heures si
 la branche `main` a changé sur GitHub (`rust/tooth/src/mise_a_jour.rs`). Si oui, un
 bandeau propose « Mettre à jour » sur l'accueil : le serveur avance la copie
-locale (`git merge --ff-only`, jamais d'écrasement), réinstalle les dépendances
-si `requirements.txt` a changé, puis redémarre ; les pages se rechargent seules.
+locale (`git merge --ff-only`, jamais d'écrasement), puis redémarre ; les pages se rechargent seules.
 `donnees/` n'est jamais touché. Rien n'est proposé (raison dans Réglages >
 Mises à jour) si le dossier n'est pas un clone git, s'il est sur une autre
 branche ou si des fichiers de l'outil ont été modifiés sur le poste.
@@ -198,7 +243,7 @@ Widgets partagés entre tous les postes (enregistrés en base) :
 ## Reprise de l'ancienne application (PySide6)
 
 ```bash
-./lancer.sh --importer "C:\chemin\vers\ancienne-appli"
+./demarrer_TOOTH_DENTAIRE.sh --importer "C:\chemin\vers\ancienne-appli"
 ```
 
 Sont repris :
@@ -229,9 +274,10 @@ rust/tooth/src/
   sauvegarde.rs       sauvegarde automatique quotidienne de la base
   mise_a_jour.rs      mises à jour depuis GitHub
   signalements.rs     signalements de bug (tickets GitHub)
-lancer.sh, Lancer.bat lancement (et relance après une mise à jour)
-binaires.sh, .cmd     exécutable compilé ici ou téléchargé (publication « binaires »)
-serveur.py            relais de transition vers lancer.sh / Lancer.bat
+demarrer_TOOTH_DENTAIRE.sh, .cmd   lancement (et relance après une mise à jour)
+Lancer.bat, lancer.sh, serveur.py, binaires.cmd   anciens points d'entrée : relais
+scripts/binaires.sh, .cmd   exécutable compilé ici ou téléchargé (publication « binaires »)
+scripts/archives.sh   archives de la publication (exécutable seul ; production)
 web/                  interface (HTML / CSS / JavaScript, sans framework)
   js/core/api.js      échanges avec le serveur + synchronisation entre postes
   js/ui/bonjourr.js   accueil : horloge, salutation, citation, fond, réglages d'apparence
@@ -240,7 +286,7 @@ web/                  interface (HTML / CSS / JavaScript, sans framework)
   vendor/             PDF.js (lecture des factures, hors ligne)
 web/tests/            tests JavaScript (Jest)
 installation/         Installer.bat (installateur d'un poste, fichier unique)
-scripts/              essai de passage d'un poste Python -> Rust (CI)
+scripts/essai_passage.py   essais de passage d'un poste et de la copie de production (CI)
 donnees/              base et configuration — non versionné
 ```
 
@@ -281,9 +327,13 @@ cargo test -p tooth                 # base, conflits, péremption, exports, mét
 cd web && npm install && npm test   # interface (Jest, Node.js)
 ```
 
-La CI (`.github/workflows/ci.yml`) lance `cargo test` sous Linux, Windows et macOS, et
-`scripts/essai_passage.py` : un poste resté sur l'ancien serveur Python se met à jour
-tout seul et arrive sur le serveur Rust, sur la même base. Le Raspberry Pi n'ayant pas
+La CI (`.github/workflows/ci.yml`) lance `cargo test --locked` sous Linux, Windows et macOS, et
+`scripts/essai_passage.py` (job `passage`, sur les trois systèmes) : un poste sans cargo resté
+sur l'ancien Python (`d3469e8`, `1b3fb88`) ou sur le Rust lancé par `lancer.sh` / `Lancer.bat`
+(`7878af4`), démarré comme d'habitude (`Lancer.bat` sous Windows), se met à jour tout seul et
+arrive sur l'exécutable du commit lancé par `demarrer_TOOTH_DENTAIRE`, sur la même base ;
+l'arrêt arrête l'exécutable. Et la copie de production décompressée démarre, puis se met à jour
+seule depuis une fausse publication locale. Le Raspberry Pi n'ayant pas
 cargo, les vérifications se lisent dans la CI (`gh run list`).
 
 Sauvegarde de passage : à sa première ouverture d'une base, le serveur Rust la copie dans

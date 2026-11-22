@@ -20,7 +20,9 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Base et serveur (Rust)
-        run: cargo test -p tooth
+        # --locked : un Cargo.lock incomplet ferait échouer l'essai (sur un poste qui a cargo, il
+        # modifierait un fichier suivi et bloquerait la mise à jour suivante)
+        run: cargo test --locked -p tooth
 
       - uses: actions/setup-node@v4
         if: runner.os == 'Linux'
@@ -32,13 +34,25 @@ jobs:
         if: runner.os == 'Linux'
         run: for f in $(find web -name '*.js' -not -path '*/node_modules/*' -not -path '*/vendor/*' -not -path '*/tests/*'); do node --check "$f" || exit 1; done
 
-  # un poste resté sur l'ancien serveur Python, lancé sans le launcher et sans cargo, se met à
-  # jour tout seul et arrive sur le serveur Rust (téléchargé), sur la même base
+  # Le PC du cabinet, sans cargo, démarré comme d'habitude (Windows : Lancer.bat, comme son
+  # raccourci ; ailleurs : serveur.py ou lancer.sh) depuis chacun des commits où il peut être resté,
+  # se met à jour seul et arrive sur l'exécutable de ce commit lancé par demarrer_TOOTH_DENTAIRE,
+  # sur la même base ; l'arrêt arrête l'exécutable. La publication « binaires » est simulée par un
+  # faux serveur local qui sert les archives de ce commit (scripts/archives.sh).
+  #   d3469e8 : dernier commit Python pur ; 1b3fb88 : dernier Python, avec le Rust à côté ;
+  #   7878af4 : le Rust lancé par lancer.sh / Lancer.bat (main avant demarrer_TOOTH_DENTAIRE).
+  # Avec 7878af4 : aussi la copie de production (archive décompressée, sans git) qui démarre puis
+  # se met à jour seule depuis la fausse publication.
   passage:
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
+        depart: [d3469e8, 1b3fb88, 7878af4]
+        include:
+          - { os: ubuntu-latest, nom: linux-x86_64 }
+          - { os: windows-latest, nom: windows-x86_64 }
+          - { os: macos-latest, nom: macos-aarch64 }
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -49,5 +63,27 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Ancien serveur.py -> mise à jour -> serveur Rust
-        run: python scripts/essai_passage.py
+      # l'exécutable du départ Rust, tel qu'il est déjà dans bin/ sur le poste (même dossier de
+      # compilation : seules les sources de l'outil sont recompilées ensuite)
+      - name: Exécutable du départ ${{ matrix.depart }}
+        if: matrix.depart == '7878af4'
+        shell: bash
+        run: |
+          git worktree add ../depart ${{ matrix.depart }}
+          cargo build --release --locked -p tooth --bins --manifest-path ../depart/Cargo.toml --target-dir target
+          mkdir depart-bin && cp target/release/tooth target/release/tooth.exe depart-bin/ 2>/dev/null || true
+          ls depart-bin
+
+      - name: Exécutable et archives de ce commit
+        shell: bash
+        run: |
+          cargo build --release --locked -p tooth --bins
+          sh scripts/archives.sh target/release ${{ matrix.nom }}
+          mkdir publication && mv tooth-*.* publication/ && ls publication
+
+      - name: Passage depuis ${{ matrix.depart }}
+        run: python scripts/essai_passage.py --depart ${{ matrix.depart }} --publication publication ${{ matrix.depart == '7878af4' && '--exe-depart depart-bin' || '' }}
+
+      - name: Copie de production
+        if: matrix.depart == '7878af4'
+        run: python scripts/essai_passage.py --prod --publication publication

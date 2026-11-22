@@ -1,7 +1,7 @@
 //! Mises à jour de l'outil depuis GitHub (dossier installé par « git clone »).
 //!
 //! - Au démarrage, avant que le serveur ne se lance, la mise à jour éventuelle est installée
-//!   d'office ; l'outil sort alors avec le code 75 et `lancer.sh` (ou `Lancer.bat`) reprend
+//!   d'office ; l'outil sort alors avec le code 75 et `demarrer_TOOTH_DENTAIRE` reprend
 //!   l'exécutable de la nouvelle version puis le relance.
 //! - Ensuite, toutes les 4 heures, le serveur fait un « git fetch » de la branche suivie (main)
 //!   et retient s'il existe des commits plus récents.

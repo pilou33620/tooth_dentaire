@@ -971,7 +971,7 @@ dependencies = [
 [[package]]
 name = "web_tools_commun"
 version = "0.1.0"
-source = "git+https://github.com/pilou33620/web_suite?rev=bc1f42ca77df7ccfc415a93018640058c82e2efe#bc1f42ca77df7ccfc415a93018640058c82e2efe"
+source = "git+https://github.com/pilou33620/web_suite?rev=a9d9d90638718302b92ee862bbd415c16bb218fc#a9d9d90638718302b92ee862bbd415c16bb218fc"
 dependencies = [
  "base64",
  "chrono",
@@ -983,6 +983,8 @@ dependencies = [
  "sha1",
  "sha2",
  "socket2",
+ "ureq",
+ "zip",
 ]
 
 [[package]]

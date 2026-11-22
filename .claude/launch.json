@@ -5,7 +5,7 @@
       "name": "serveur stock cabinet",
       "runtimeExecutable": "sh",
       "runtimeArgs": [
-        "lancer.sh",
+        "demarrer_TOOTH_DENTAIRE.sh",
         "--port",
         "8150",
         "--local",

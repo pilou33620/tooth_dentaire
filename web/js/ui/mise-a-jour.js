@@ -106,7 +106,7 @@ async function attendreRedemarrage(versionAvant) {
             /* le serveur redémarre */
         }
     }
-    afficherBandeau("Le serveur ne répond pas après la mise à jour : relancez Lancer.bat sur le poste principal.",
+    afficherBandeau("Le serveur ne répond pas après la mise à jour : relancez demarrer_TOOTH_DENTAIRE sur le poste principal.",
                     { recharger: true });
     return false;
 }
