@@ -12,13 +12,15 @@
 //! même temps. Chaque autre poste saisit une fois le code d'appairage à 6 chiffres affiché dans
 //! la console (web_tools_commun). --local coupe l'accès depuis les autres postes.
 
-use std::io::ErrorKind;
+use std::io::{ErrorKind, Write};
 use std::net::IpAddr;
 use std::path::{Component, Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 
+use flate2::write::GzEncoder;
+use flate2::Compression;
 use serde_json::{json, Map, Value};
 use web_tools_commun::appairage::{self, Garde};
 use web_tools_commun::production;
@@ -267,7 +269,7 @@ impl App {
             "/api/revision" => return Reponse::json(200, &json!({"revision": self.base.revision()})),
             "/api/etat" => (|| -> Res<Value> {
                 Ok(json!({
-                    "base": self.base.charger_base()?,
+                    "base": self.base.charger_etat()?,
                     "documents": self.base.lire_documents()?,
                     "versions_documents": self.base.versions_documents()?,
                 }))
@@ -491,13 +493,32 @@ fn journaliser(methode: &str, cible: &str, code: u16) {
     journal::erreur(&format!("[{heure}] \"{methode} {}\" {code}", appairage::masquer(cible)));
 }
 
+/// Gzip si le navigateur l'accepte : /api/etat, index.html, style.css pèsent 5 à 10 fois moins.
+fn compresser(mut rep: Reponse, accepte_gzip: bool) -> Reponse {
+    let texte = rep.entetes.iter().any(|(k, v)| {
+        k.eq_ignore_ascii_case("Content-Type") && (v.starts_with("text/") || ["json", "javascript", "svg"].iter().any(|t| v.contains(t)))
+    });
+    if !accepte_gzip || !texte || rep.suite.is_some() || rep.corps.len() < 1024 {
+        return rep;
+    }
+    let mut gz = GzEncoder::new(Vec::new(), Compression::fast());
+    match gz.write_all(&rep.corps).and_then(|_| gz.finish()) {
+        Ok(c) => {
+            rep.corps = c;
+            rep.entete("Content-Encoding", "gzip").entete("Vary", "Accept-Encoding")
+        }
+        Err(_) => rep,
+    }
+}
+
 pub fn servir(r: &mut Requete, app: &App) -> Reponse {
     let (methode, cible) = (r.methode.clone(), r.cible.clone());
+    let gzip = r.entete("Accept-Encoding").is_some_and(|v| v.contains("gzip"));
     // une panique répond 500 sans arrêter le serveur
     let rep = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| traiter(r, app)))
         .unwrap_or_else(|_| Reponse::json(500, &json!({"status": "error", "message": "Erreur serveur (interne)."})));
     journaliser(&methode, &cible, rep.code);
-    rep.entete("X-Content-Type-Options", "nosniff").entete("Content-Security-Policy", "frame-ancestors 'self'")
+    compresser(rep, gzip).entete("X-Content-Type-Options", "nosniff").entete("Content-Security-Policy", "frame-ancestors 'self'")
 }
 
 // ---------------------------------------------------------------------- lancement
@@ -958,6 +979,37 @@ mod essais {
 
         let (_, d) = envoyer(port, "POST", "/api/transaction", &json!({"date": "d", "reference": "R", "utilisateur": "Commun", "type_transaction": "SORTIE_STOCK", "quantite": 1}));
         assert_eq!(d["id"], app.base.charger_base().unwrap()["transactions"][0]["id"]);
+
+        // /api/etat : sans les historiques, mais le prochain id de transaction reste juste
+        let b = get(port, "/api/etat").1["base"].clone();
+        assert_eq!((b["transactions"].clone(), b["historique_prix"].clone()), (json!([]), json!([])));
+        assert_eq!(b["nextTxId"], d["id"].as_i64().unwrap() + 1);
+    }
+
+    #[test]
+    fn gzip_si_accepte() {
+        use flate2::read::GzDecoder;
+        let (port, _) = demarrer(CORPS_MAX);
+        let brut = |accepte: &[(&str, &str)]| {
+            let mut t = format!("GET / HTTP/1.0\r\nHost: 127.0.0.1:{port}\r\n");
+            for (k, v) in accepte {
+                t += &format!("{k}: {v}\r\n");
+            }
+            let mut s = TcpStream::connect(("127.0.0.1", port)).unwrap();
+            s.write_all(format!("{t}\r\n").as_bytes()).unwrap();
+            let mut rep = Vec::new();
+            s.read_to_end(&mut rep).unwrap();
+            let i = rep.windows(4).position(|w| w == b"\r\n\r\n").unwrap();
+            (String::from_utf8_lossy(&rep[..i]).into_owned(), rep[i + 4..].to_vec())
+        };
+        let (tete, clair) = brut(&[]);
+        assert!(!tete.contains("Content-Encoding"));
+        let (tete, gz) = brut(&[("Accept-Encoding", "gzip, deflate, br")]);
+        assert!(tete.contains("Content-Encoding: gzip") && tete.contains(&format!("Content-Length: {}", gz.len())));
+        assert!(gz.len() * 3 < clair.len());
+        let mut d = Vec::new();
+        GzDecoder::new(gz.as_slice()).read_to_end(&mut d).unwrap();
+        assert_eq!(d, clair);
     }
 
     #[test]

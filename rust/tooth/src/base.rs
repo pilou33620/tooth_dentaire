@@ -330,8 +330,18 @@ impl Base {
 
     // ------------------------------------------------------------------ lecture complète
 
-    /// Toute la base au format attendu par l'interface.
+    /// Toute la base, historiques compris (exports).
     pub fn charger_base(&self) -> Res<Value> {
+        self.charger(true)
+    }
+
+    /// La base pour l'interface (/api/etat) : sans transactions ni historique_prix, qu'elle ne
+    /// relit jamais et qui grossissent sans fin ; renvoyées à chaque poste après chaque écriture.
+    pub fn charger_etat(&self) -> Res<Value> {
+        self.charger(false)
+    }
+
+    fn charger(&self, historiques: bool) -> Res<Value> {
         let conn = self.connexion()?;
         let produits = lignes(
             &conn,
@@ -343,16 +353,21 @@ impl Base {
              delai_peremption, date_peremption, date_import, fournisseur, en_commande, date_commande, lot, \
              prix_unitaire_ht, prix_unitaire_ttc, lots_details, version FROM stock",
         )?;
-        let transactions = lignes(
-            &conn,
-            "SELECT id, date, reference, utilisateur, type_transaction, quantite, lot, peremption_sortie \
-             FROM transactions ORDER BY id",
-        )?;
+        let (transactions, historique_prix) = if historiques {
+            (
+                lignes(
+                    &conn,
+                    "SELECT id, date, reference, utilisateur, type_transaction, quantite, lot, peremption_sortie \
+                     FROM transactions ORDER BY id",
+                )?,
+                lignes(&conn, "SELECT id, reference, date, prix_ht, prix_ttc, fournisseur FROM historique_prix ORDER BY id")?,
+            )
+        } else {
+            (Vec::new(), Vec::new())
+        };
         let autoclave = lignes(&conn, "SELECT id, date, machine, utilisateur, commentaire FROM autoclave ORDER BY id")?;
-        let historique_prix =
-            lignes(&conn, "SELECT id, reference, date, prix_ht, prix_ttc, fournisseur FROM historique_prix ORDER BY id")?;
-        let suivant = |l: &[Value]| l.iter().map(|x| x["id"].as_i64().unwrap_or(0)).max().unwrap_or(0) + 1;
-        let (tx, auto) = (suivant(transactions.as_slice()), suivant(autoclave.as_slice()));
+        let tx: i64 = conn.query_row("SELECT COALESCE(MAX(id), 0) + 1 FROM transactions", [], |r| r.get(0))?;
+        let auto = autoclave.iter().map(|x| x["id"].as_i64().unwrap_or(0)).max().unwrap_or(0) + 1;
         Ok(json!({
             "produits": produits,
             "stock": stock,

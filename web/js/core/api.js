@@ -3,7 +3,7 @@
 /* ============================================================
    API - Communication avec le serveur (bin/tooth, Rust)
 
-   - chargerEtat()      : charge toute la base + les documents (GET /api/etat)
+   - chargerEtat()      : charge la base (sans historiques) + les documents (GET /api/etat)
    - persister(...)     : écrit une modification (file d'attente ordonnée).
                           Les écritures d'une même action (sortie de stock +
                           ses transactions...) partent en un seul lot, tout
@@ -95,7 +95,8 @@ export async function api(methode, route, corps, entetes = {}) {
 /** Charge (ou recharge) toutes les données depuis le serveur. */
 export async function chargerEtat() {
     const data = await api("GET", "/api/etat");
-    setDbCache(data.base);
+    // Le serveur n'envoie plus les historiques (jamais relus ici) : tableaux vides pour les ajouts
+    setDbCache({ transactions: [], historique_prix: [], ...data.base });
     versionsSuivies = new Map();
     documents = data.documents || {};
     versionsDocuments = data.versions_documents || {};

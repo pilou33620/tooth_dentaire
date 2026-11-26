@@ -25,3 +25,5 @@ chrono = { version = "0.4", default-features = false, features = ["clock"] }
 base64 = "0.22"
 # Révision de la base : préfixe aléatoire à chaque démarrage (déjà tiré par la caisse commune)
 getrandom = "0.2"
+# Réponses gzip (déjà tiré par zip, via la caisse commune)
+flate2 = "1"

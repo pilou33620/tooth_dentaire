@@ -836,6 +836,7 @@ version = "3.0.0"
 dependencies = [
  "base64",
  "chrono",
+ "flate2",
  "getrandom",
  "rusqlite",
  "rust_xlsxwriter",
