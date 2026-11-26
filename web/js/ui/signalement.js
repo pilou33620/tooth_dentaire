@@ -6,7 +6,9 @@
    Le serveur en fait un ticket GitHub (rust/tooth/src/signalements.rs). Sans
    internet, il le garde et le renvoie plus tard. Sans clé GitHub (saisie
    seulement sur le poste serveur), il rend le ticket préparé et ce poste
-   ouvre Gmail avec le message prêt pour le développeur.
+   ouvre Gmail avec le message prêt pour le développeur ; ce qui ne tient pas
+   dans l'adresse Gmail est copié, à coller d'un Ctrl+V (une page ne peut pas
+   écrire dans Gmail elle-même).
    Infos du poste et journal du navigateur (js/journal.js) sont joints.
    ============================================================ */
 
@@ -16,7 +18,7 @@ const $ = (id) => document.getElementById(id);
 
 const DESTINATAIRE = "pilou33620@gmail.com";
 // shortcut: Gmail refuse les adresses trop longues ; au-delà, message coupé et
-// version complète téléchargée pour être jointe. Monter si Gmail l'accepte.
+// la suite copiée pour un Ctrl+V. Monter si Gmail l'accepte.
 const URL_MAX = 7000;
 
 // La clé se saisit sur le poste serveur ; tant qu'il n'y en a pas, le guide
@@ -68,18 +70,46 @@ export function journaux(doc = document) {
     ].join("\n");
 }
 
-/** Adresse Gmail « nouveau message » remplie ; coupe = message raccourci pour tenir. */
-export function lienGmail(ticket, max = URL_MAX) {
+export const SUITE_A_COLLER =
+    "\n\n⚠️ SUITE DU RAPPORT : elle est déjà copiée. Cliquez à la fin de cette ligne puis appuyez sur Ctrl+V (⌘+V sur Mac) → ";
+const SUITE_JOINTE = "\n\n[… suite dans le fichier joint]";
+
+/** Adresse Gmail « nouveau message » remplie ; coupe = message raccourci pour tenir, reste = la partie retirée. */
+export function lienGmail(ticket, max = URL_MAX, suite = SUITE_A_COLLER) {
     const debut = "https://mail.google.com/mail/?view=cm&fs=1" +
         `&to=${encodeURIComponent(DESTINATAIRE)}&su=${encodeURIComponent(ticket.title)}&body=`;
     let corps = ticket.body;
     let coupe = false;
-    while (corps && debut.length + encodeURIComponent(corps).length > max - 100) {
-        corps = corps.slice(0, Math.floor(corps.length * 0.9));
+    const tient = (t, marge) => debut.length + encodeURIComponent(t).length <= max - marge;
+    const marge = tient(corps, 0) ? 0 : encodeURIComponent(suite).length;
+    while (corps && !tient(corps, marge)) {
+        // sans couper un emoji en deux : encodeURIComponent refuse une moitié seule
+        corps = corps.slice(0, Math.floor(corps.length * 0.9)).replace(/[\uD800-\uDBFF]$/, "");
         coupe = true;
     }
-    if (coupe) corps += "\n\n[… suite dans le fichier joint]";
-    return { url: debut + encodeURIComponent(corps), coupe };
+    const reste = ticket.body.slice(corps.length);
+    if (coupe) corps += suite;
+    return { url: debut + encodeURIComponent(corps), coupe, reste };
+}
+
+/** Met le texte dans le presse-papiers ; false si le navigateur refuse. */
+async function copier(texte, doc = document) {
+    try {
+        await navigator.clipboard.writeText(texte);
+        return true;
+    } catch (e) {
+        // navigator.clipboard n'existe qu'en HTTPS ou sur le poste serveur : repli pour les autres postes
+        const zone = doc.createElement("textarea");
+        zone.value = texte;
+        zone.style.position = "fixed";
+        zone.style.opacity = "0";
+        doc.body.appendChild(zone);
+        zone.select();
+        let ok = false;
+        try { ok = doc.execCommand("copy"); } catch (err) { ok = false; }
+        zone.remove();
+        return ok;
+    }
 }
 
 function telecharger(nom, texte) {
@@ -90,10 +120,15 @@ function telecharger(nom, texte) {
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
-function envoyerParGmail(ticket) {
-    const { url, coupe } = lienGmail(ticket);
+async function envoyerParGmail(ticket) {
+    let { url, coupe, reste } = lienGmail(ticket);
+    const copie = coupe && await copier(reste);
     const nom = `signalement-${new Date().toISOString().slice(0, 16).replace(/[T:]/g, "-")}.txt`;
-    if (coupe) telecharger(nom, `${ticket.title}\n\n${ticket.body}`);
+    if (coupe && !copie) {
+        // presse-papiers refusé : repli sur le fichier à joindre
+        url = lienGmail(ticket, URL_MAX, SUITE_JOINTE).url;
+        telecharger(nom, `${ticket.title}\n\n${ticket.body}`);
+    }
     // Lien gardé à l'écran : un bloqueur de fenêtres peut empêcher l'ouverture automatique
     const lien = $("signalement-gmail");
     if (lien) {
@@ -101,9 +136,11 @@ function envoyerParGmail(ticket) {
         lien.classList.remove("hidden");
     }
     window.open(url, "_blank", "noopener");
-    afficherEtat(coupe
-        ? `📧 Gmail s'ouvre avec le message prêt : joindre le fichier téléchargé (${nom}) puis cliquer « Envoyer ».`
-        : "📧 Gmail s'ouvre avec le message prêt : il ne reste qu'à cliquer « Envoyer ».");
+    afficherEtat(!coupe
+        ? "📧 Gmail s'ouvre avec le message prêt : il ne reste qu'à cliquer « Envoyer »."
+        : copie
+            ? "📧 Gmail s'ouvre. Le rapport est trop long : la fin est déjà copiée. Dans Gmail, cliquez à la fin du message, faites Ctrl+V (⌘+V sur Mac), puis « Envoyer »."
+            : `📧 Gmail s'ouvre avec le message prêt : joindre le fichier téléchargé (${nom}) puis cliquer « Envoyer ».`);
 }
 
 function basculerFormulaire(ouvert) {

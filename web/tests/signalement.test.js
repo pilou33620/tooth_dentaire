@@ -131,12 +131,52 @@ test('sans clé GitHub : Gmail s\'ouvre avec le message prêt pour le développe
     expect($('signalement-etat').textContent).toContain('cliquer « Envoyer »');
 });
 
-test('message trop long pour Gmail : raccourci, la version complète sera jointe', async () => {
-    const { lienGmail } = await import('../js/ui/signalement.js');
+test('message trop long pour Gmail : raccourci, la suite est à coller', async () => {
+    const { lienGmail, SUITE_A_COLLER } = await import('../js/ui/signalement.js');
     const court = lienGmail({ title: 'T', body: 'court' });
     expect(court.coupe).toBe(false);
-    const long = lienGmail({ title: 'T', body: 'é'.repeat(20000) }, 3000);
+    const body = 'a'.repeat(5000) + 'é'.repeat(15000);
+    const long = lienGmail({ title: 'T', body }, 3000);
     expect(long.coupe).toBe(true);
     expect(long.url.length).toBeLessThanOrEqual(3000);
-    expect(new URL(long.url).searchParams.get('body')).toContain('suite dans le fichier joint');
+    const visible = new URL(long.url).searchParams.get('body');
+    expect(visible.endsWith(SUITE_A_COLLER)).toBe(true);
+    // ce qui est affiché + ce qui est collé = le rapport complet, sans doublon
+    expect(visible.slice(0, -SUITE_A_COLLER.length) + long.reste).toBe(body);
+    // emojis : jamais coupés en deux
+    const emojis = lienGmail({ title: 'T', body: '🦷'.repeat(5000) }, 3000);
+    expect(emojis.coupe).toBe(true);
+    expect(emojis.reste.startsWith('🦷')).toBe(true);
+});
+
+async function envoyerLong(presse) {
+    await charger({ status: 'ok', cle_configuree: false, en_attente: 0, cle_modifiable: false });
+    reponses['POST /api/signalements'] = { status: 'ok', envoye: false,
+        ticket: { title: '[Bug] Long', body: 'Début\n' + 'x'.repeat(20000) + 'FIN' } };
+    const ouvertes = [];
+    window.open = (url) => { ouvertes.push(url); return null; };
+    Object.defineProperty(navigator, 'clipboard', { value: presse, configurable: true });
+    URL.createObjectURL = () => 'blob:x';
+    URL.revokeObjectURL = () => {};
+    $('signalement-ouvrir').click();
+    $('signalement-description').value = 'Un long bug';
+    $('signalement-form').dispatchEvent(new Event('submit', { cancelable: true }));
+    await attendre();
+    await attendre();
+    return new URL(ouvertes[0]).searchParams.get('body');
+}
+
+test('rapport trop long : la fin est copiée automatiquement, Gmail dit de coller', async () => {
+    let copie = null;
+    const body = await envoyerLong({ writeText: async (t) => { copie = t; } });
+    expect(copie.endsWith('FIN')).toBe(true);
+    expect(body).toContain('Ctrl+V');
+    expect($('signalement-etat').textContent).toContain('déjà copiée');
+});
+
+test('presse-papiers refusé : repli sur le fichier à joindre', async () => {
+    document.execCommand = () => false;
+    const body = await envoyerLong({ writeText: async () => { throw new Error('refusé'); } });
+    expect(body).toContain('suite dans le fichier joint');
+    expect($('signalement-etat').textContent).toContain('joindre le fichier');
 });
